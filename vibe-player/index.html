@@ -5,219 +5,198 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vibe Player</title>
-    <!-- Add 98.css -->
     <link rel="stylesheet" href="css/98.css"/>
-    <!-- Your custom styles (load after 98.css) -->
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
 
-<!-- === File Loading Section === -->
-<section id="file-loader">
-    <h2>Load Audio File</h2>
-    <!-- Row for button, name, info -->
+<!-- === File Loading Section (Track 1) === -->
+<section id="file-loader-track-1">
+    <h2>Load Track 1</h2>
     <div class="field-row" style="align-items: baseline;">
-        <button id="chooseFileButton">Choose File...</button>
-        <span id="fileNameDisplay" style="margin-left: 5px; flex-shrink: 1; min-width: 5px;"></span>
-        <p id="fileInfo" style="margin-left: 10px; flex-grow: 1; color: grey;"></p>
+        <button id="chooseFileButton-track-1">Choose File...</button>
+        <span id="fileNameDisplay-track-1" class="file-name-display" style="margin-left: 5px; flex-shrink: 1; min-width: 5px;"></span>
+        <p id="fileInfo-track-1" class="file-info" style="margin-left: 10px; flex-grow: 1; color: grey;"></p>
+        <button id="removeTrackButton-track-1" style="display: none; margin-left: 10px;">Remove</button>
     </div>
     <!-- Hidden actual file input -->
-    <input type="file" id="hiddenAudioFile" accept="audio/*" style="display: none;">
+    <input type="file" id="hiddenAudioFile-track-1" accept="audio/*" style="display: none;">
 </section>
 
-<!-- === Controls Section === -->
+<!-- === File Loading Section (Track 2 - Initially Hidden) === -->
+<section id="file-loader-track-2" style="display: none;">
+    <h2>Load Track 2</h2>
+     <div class="field-row" style="align-items: baseline;">
+        <button id="chooseFileButton-track-2">Choose File...</button>
+        <span id="fileNameDisplay-track-2" class="file-name-display" style="margin-left: 5px; flex-shrink: 1; min-width: 5px;"></span>
+        <p id="fileInfo-track-2" class="file-info" style="margin-left: 10px; flex-grow: 1; color: grey;"></p>
+        <button id="removeTrackButton-track-2" style="display: none; margin-left: 10px;">Remove</button>
+    </div>
+    <input type="file" id="hiddenAudioFile-track-2" accept="audio/*" style="display: none;">
+</section>
+
+
+<!-- === Shared Controls Section === -->
 <section id="controls">
-    <h2>Controls</h2>
-
-
+    <h2>Controls (Shared)</h2>
     <!-- Horizontal Slider Container -->
     <div class="horizontal-sliders">
         <!-- Speed Control Unit -->
         <div class="control-group slider-unit">
-            <div class="slider-label-value">
-                <label for="playbackSpeed">Speed:</label>
-                <span id="speedValue">1.00x</span>
-            </div>
+            <div class="slider-label-value"> <label for="playbackSpeed">Speed:</label> <span id="speedValue">1.00x</span> </div>
             <input type="range" id="playbackSpeed" min="0.25" max="2.0" value="1.0" step="0.01" disabled>
-            <div class="slider-markers" id="speedMarkers">
-                <span data-value="0.5">0.5x</span>
-                <span data-value="1.0">1.0x</span>
-                <span data-value="1.5">1.5x</span>
-                <span data-value="2.0">2.0x</span>
-            </div>
+            <div class="slider-markers" id="speedMarkers"> <span data-value="0.5">0.5x</span> <span data-value="1.0">1.0x</span> <span data-value="1.5">1.5x</span> <span data-value="2.0">2.0x</span> </div>
         </div>
-
         <!-- Pitch Control Unit -->
         <div class="control-group slider-unit">
-            <div class="slider-label-value">
-                <label for="pitchControl">Pitch:</label>
-                <span id="pitchValue">1.00x</span>
-            </div>
+            <div class="slider-label-value"> <label for="pitchControl">Pitch:</label> <span id="pitchValue">1.00x</span> </div>
             <input type="range" id="pitchControl" min="0.25" max="2.0" value="1.0" step="0.01" disabled>
-            <div class="slider-markers" id="pitchMarkers">
-                <span data-value="0.5">0.5x</span>
-                <span data-value="1.0">1.0x</span>
-                <span data-value="1.5">1.5x</span>
-                <span data-value="2.0">2.0x</span>
-            </div>
+            <div class="slider-markers" id="pitchMarkers"> <span data-value="0.5">0.5x</span> <span data-value="1.0">1.0x</span> <span data-value="1.5">1.5x</span> <span data-value="2.0">2.0x</span> </div>
         </div>
-
-        <!-- Gain Control Unit -->
+        <!-- Gain Control Unit (Master Gain) -->
         <div class="control-group slider-unit">
-            <div class="slider-label-value">
-                <label for="gainControl">Gain:</label>
-                <span id="gainValue">1.00x</span>
-            </div>
+            <div class="slider-label-value"> <label for="gainControl">Master Gain:</label> <span id="gainValue">1.00x</span> </div>
             <input type="range" id="gainControl" min="1" max="5" value="1.0" step="0.01">
-            <!-- Gain enabled by default -->
-            <div class="slider-markers" id="gainMarkers">
-                <span data-value="1.0">1x</span>
-                <span data-value="2.0">2x</span>
-                <span data-value="3.0">3x</span>
-                <span data-value="4.0">4x</span>
-                <span data-value="5.0">5x</span>
-            </div>
+            <div class="slider-markers" id="gainMarkers"> <span data-value="1.0">1x</span> <span data-value="2.0">2x</span> <span data-value="3.0">3x</span> <span data-value="4.0">4x</span> <span data-value="5.0">5x</span> </div>
         </div>
     </div> <!-- End Horizontal Slider Container -->
-
     <!-- Jump Controls -->
     <div class="control-group jump-controls">
         <button id="playPause" disabled>Play</button>
         <button id="jumpBack" disabled>◀◀ Back</button>
-        <input type="number" id="jumpTime" value="5" min="1" step="1" title="Seconds to jump"> seconds <!-- Changed 's' to 'seconds' -->
+        <input type="number" id="jumpTime" value="5" min="1" step="1" title="Seconds to jump"> seconds
         <button id="jumpForward" disabled>Forward ▶▶</button>
     </div>
-
-    <!-- === Seek Bar and Time Display Section === -->
+    <!-- Seek Bar and Time Display Section -->
     <section id="playback-progress">
-        <label for="seekBar" class="visually-hidden">Seek:</label> <!-- Hidden label for accessibility -->
+        <label for="seekBar" class="visually-hidden">Seek:</label>
         <input type="range" id="seekBar" min="0" max="1" value="0" step="any" disabled>
         <div id="timeDisplay">0:00 / 0:00</div>
     </section>
-
 </section>
 
-<!-- === VAD Tuning Section === -->
-<section id="vad-tuning">
-    <h2>Voice Activity Detection (Silero)</h2>
-
-    <!-- NEW: VAD Progress Bar using 98.css structure -->
-    <div id="vadProgressContainer" class="progress-indicator segmented vad-progress-indicator-container" style="margin-top: 5px; margin-bottom: 5px;">
-        <span id="vadProgressBar" class="progress-indicator-bar" style="width: 0;"></span> <!-- Corrected width attribute -->
+<!-- === Track Controls Section (Initially Hidden) === -->
+<section id="track-controls" style="display: none;">
+    <h2>Track Controls</h2>
+     <div class="control-group track-management-controls" style="display: flex; justify-content: space-around; align-items: center;">
+         <button id="muteButton-track-1">Mute T1</button>
+         <button id="swapTracksButton">Swap L↔R</button>
+         <button id="muteButton-track-2">Mute T2</button>
+         <!-- Add Offset controls here later if desired -->
+         <!-- <label for="offsetInput">Offset T2:</label> -->
+         <!-- <input type="number" id="offsetInput" value="0.0" step="0.01" style="width: 60px;"> s -->
+         <!-- <button id="nudgeLeftButton">⏪</button> -->
+         <!-- <button id="nudgeRightButton">⏩</button> -->
     </div>
+</section>
 
-    <!-- Corrected Structure: Both VAD controls inside one horizontal container -->
+<!-- === VAD Tuning Section (Track 1 - For Now) === -->
+<!-- TODO: Decide how VAD tuning works with two tracks. Separate controls? Shared? -->
+<section id="vad-tuning-track-1">
+    <h2>Voice Activity Detection (Track 1)</h2>
+    <div id="vadProgressContainer-track-1" class="progress-indicator segmented vad-progress-indicator-container" style="margin-top: 5px; margin-bottom: 5px;">
+        <span id="vadProgressBar-track-1" class="progress-indicator-bar" style="width: 0;"></span>
+    </div>
     <div class="horizontal-sliders">
-        <div class="control-group slider-unit"> <!-- Unit for Positive -->
+        <div class="control-group slider-unit">
             <div class="control-group">
-                <div class="slider-label-value">
-                    <label for="vadThreshold"
-                           title="Probability above which a frame is considered speech.">Positive Threshold:</label>
-                    <span id="vadThresholdValue">N/A</span>
-                </div>
-                <input type="range" id="vadThreshold" min="0.01" max="0.99" value="0.5" step="0.01" disabled>
+                <div class="slider-label-value"> <label for="vadThreshold-track-1" title="Probability above which a frame is considered speech.">Positive Threshold:</label> <span id="vadThresholdValue-track-1">N/A</span> </div>
+                <input type="range" id="vadThreshold-track-1" min="0.01" max="0.99" value="0.5" step="0.01" disabled>
             </div>
         </div>
-        <div class="control-group slider-unit"> <!-- Unit for Negative -->
+        <div class="control-group slider-unit">
              <div class="control-group">
-                <div class="slider-label-value">
-                    <label for="vadNegativeThreshold"
-                           title="Probability below which non-speech frames trigger ending the segment (after redemption).">Negative Threshold:</label>
-                    <span id="vadNegativeThresholdValue">N/A</span>
-                </div>
-                <input type="range" id="vadNegativeThreshold" min="0.01" max="0.99" value="0.35" step="0.01" disabled>
+                <div class="slider-label-value"> <label for="vadNegativeThreshold-track-1" title="Probability below which non-speech frames trigger ending the segment (after redemption).">Negative Threshold:</label> <span id="vadNegativeThresholdValue-track-1">N/A</span> </div>
+                <input type="range" id="vadNegativeThreshold-track-1" min="0.01" max="0.99" value="0.35" step="0.01" disabled>
             </div>
         </div>
-    </div> <!-- End horizontal-sliders for VAD -->
-
-</section>
-
-
-<!-- === Visualizations Section === -->
-<section class="visualization">
-    <h3>Waveform <small>(Speech in Yellow)</small></h3>
-    <div class="canvas-container">
-        <canvas id="waveformCanvas"></canvas>
-        <div id="waveformProgressBar" class="progress-bar">
-            <div id="waveformProgressIndicator" class="playback-position-indicator"></div>
-        </div>
     </div>
 </section>
+<!-- Placeholder for Track 2 VAD - Add later if needed -->
+<!-- <section id="vad-tuning-track-2" style="display: none;"> ... </section> -->
 
-<section class="visualization">
-    <h3>Spectrogram <span id="spectrogramSpinner" class="spinner">(Computing...)</span></h3>
-    <div class="canvas-container">
-        <canvas id="spectrogramCanvas"></canvas>
-        <div id="spectrogramProgressBar" class="progress-bar">
-            <div id="spectrogramProgressIndicator" class="playback-position-indicator"></div>
+
+<!-- === Main Area for Track Visualizations === -->
+<div id="track-area" class="layout-state-0">
+
+    <!-- Visualizations Section (Track 1) -->
+    <section id="track-1-visuals" class="visualization-track">
+        <h3>Track 1: Waveform <small>(Speech in Yellow)</small></h3>
+        <div class="canvas-container">
+            <canvas id="waveformCanvas-track-1"></canvas>
+            <div id="waveformProgressBar-track-1" class="progress-bar">
+                <div id="waveformProgressIndicator-track-1" class="playback-position-indicator"></div>
+            </div>
         </div>
-    </div>
-</section>
+
+        <h3>Track 1: Spectrogram <span id="spectrogramSpinner-track-1" class="spinner">(Computing...)</span></h3>
+        <div class="canvas-container">
+            <canvas id="spectrogramCanvas-track-1"></canvas>
+            <div id="spectrogramProgressBar-track-1" class="progress-bar">
+                <div id="spectrogramProgressIndicator-track-1" class="playback-position-indicator"></div>
+            </div>
+        </div>
+    </section>
+
+     <!-- Visualizations Section (Track 2 - Initially Hidden) -->
+    <section id="track-2-visuals" class="visualization-track" style="display: none;">
+        <h3>Track 2: Waveform <small>(Speech in Yellow)</small></h3>
+        <div class="canvas-container">
+            <canvas id="waveformCanvas-track-2"></canvas>
+            <div id="waveformProgressBar-track-2" class="progress-bar">
+                <div id="waveformProgressIndicator-track-2" class="playback-position-indicator"></div>
+            </div>
+        </div>
+
+        <h3>Track 2: Spectrogram <span id="spectrogramSpinner-track-2" class="spinner">(Computing...)</span></h3>
+        <div class="canvas-container">
+            <canvas id="spectrogramCanvas-track-2"></canvas>
+            <div id="spectrogramProgressBar-track-2" class="progress-bar">
+                <div id="spectrogramProgressIndicator-track-2" class="playback-position-indicator"></div>
+            </div>
+        </div>
+    </section>
+
+</div> <!-- End #track-area -->
+
 
 <!-- === Keyboard Shortcuts Section === -->
 <section id="keybinds">
     <h2>Keyboard Shortcuts</h2>
     <table>
-        <thead>
-        <tr>
-            <th>Key</th>
-            <th>Action</th>
-        </tr>
-        </thead>
+        <thead> <tr> <th>Key</th> <th>Action</th> </tr> </thead>
         <tbody>
-        <tr>
-            <td>Space</td>
-            <td>Play / Pause</td>
-        </tr>
-        <tr>
-            <td>Left Arrow</td>
-            <td>Jump Back (by specified seconds)</td>
-        </tr>
-        <tr>
-            <td>Right Arrow</td>
-            <td>Jump Forward (by specified seconds)</td>
-        </tr>
+            <tr> <td>Space</td> <td>Play / Pause</td> </tr>
+            <tr> <td>Left Arrow</td> <td>Jump Back (by specified seconds)</td> </tr>
+            <tr> <td>Right Arrow</td> <td>Jump Forward (by specified seconds)</td> </tr>
         </tbody>
     </table>
 </section>
 
 
 <!-- === SCRIPT LOADING ORDER (CRITICAL!) === -->
-<!-- External Libs -->
-<script src="lib/ort.min.js"></script> <!-- ONNX Runtime -->
-<script src="lib/fft.js"></script> <!-- FFT for Visualizer -->
-
-<!-- Core App & Utils -->
-<script src="js/app.js"></script> <!-- Main App Orchestrator (defines AudioApp) -->
-<script src="js/constants.js"></script> <!-- Shared Constants -->
-<script src="js/utils.js"></script> <!-- Utility Functions -->
-
-<!-- App Modules -->
-<script src="js/uiManager.js"></script> <!-- UI Logic (Uses Utils) -->
-<script src="js/player/audioEngine.js"></script> <!-- Audio Backend (Uses Constants) -->
-
-<!-- VAD Modules -->
-<script src="js/vad/sileroWrapper.js"></script> <!-- VAD: ONNX Wrapper -->
-<script src="js/vad/sileroProcessor.js"></script> <!-- VAD: Frame Processor (Uses Wrapper, Constants, Utils) -->
-<script src="js/vad/vadAnalyzer.js"></script> <!-- VAD: State & Recalculation (Uses Processor, Constants) -->
-
-<!-- Visualizer Modules -->
-<script src="js/visualizers/waveformVisualizer.js"></script> <!-- Waveform Logic (Uses Constants, Utils) -->
-<script src="js/visualizers/spectrogramVisualizer.js"></script> <!-- Spectrogram Logic (Uses FFT, Constants, Utils) -->
-<!-- <script src="js/visualizers/visualizer.js"></script> --> <!-- REMOVED OLD COMBINED VISUALIZER -->
+<script src="lib/ort.min.js"></script>
+<script src="lib/fft.js"></script>
+<script src="js/app.js"></script>
+<script src="js/constants.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/uiManager.js"></script>
+<script src="js/player/audioEngine.js"></script>
+<script src="js/vad/sileroWrapper.js"></script>
+<script src="js/vad/sileroProcessor.js"></script>
+<script src="js/vad/vadAnalyzer.js"></script>
+<script src="js/visualizers/waveformVisualizer.js"></script>
+<script src="js/visualizers/spectrogramVisualizer.js"></script>
 
 <!-- App Initialization -->
 <script>
-    // Ensure DOM is fully loaded before initializing the application
     document.addEventListener('DOMContentLoaded', () => {
-        // Check if core AudioApp is defined before init
         if (window.AudioApp && typeof window.AudioApp.init === 'function') {
-            AudioApp.init(); // Call the main init function
+            AudioApp.init();
         } else {
-            console.error("CRITICAL: AudioApp or AudioApp.init not defined! Check script loading order and errors.");
-            // Optionally display error to user in the UI
-            const fileInfo = document.getElementById('fileInfo');
-            if (fileInfo) fileInfo.textContent = "Fatal Error: Application failed to load. Check console.";
+            console.error("CRITICAL: AudioApp or AudioApp.init not defined!");
+            const fileInfo = document.getElementById('fileInfo-track-1'); // Use track 1's info
+            if (fileInfo) fileInfo.textContent = "Fatal Error: App failed to load. Check console.";
         }
     });
 </script>

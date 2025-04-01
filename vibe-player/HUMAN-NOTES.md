@@ -11,6 +11,6 @@
 ## things i noticed
 
 * gemini gets kinda laggy past 400k tokens
-* chatgpt does not do well at refactoring a multi-file codebase
+* chatgpt does not do well at refactoring a multi-file codebase - to the point i've given up on it after the codebase grew to about 4 files
 * the first prompt should always ask it to read the contrib guide and familiarize itself with the codebase
 * it also seems to help to remind it to mentally run through the contrib guide one more time right before code gen
