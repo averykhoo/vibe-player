@@ -43,42 +43,61 @@ AudioApp = (function() {
     const SYNC_DEBOUNCE_WAIT_MS = 300;
 
     // --- Initialization ---
-    /** @public */
+        /** @public */
     function init() {
         console.log("AudioApp: Initializing...");
 
-        if (!AudioApp.uiManager || !AudioApp.audioEngine || !AudioApp.waveformVisualizer || !AudioApp.spectrogramVisualizer || !AudioApp.vadAnalyzer || !AudioApp.sileroWrapper || !AudioApp.Constants || !AudioApp.Utils) {
-             console.error("AudioApp: CRITICAL - Module dependencies missing!");
-             try { document.getElementById('fileInfo-track-1').textContent = "Fatal Error: App failed to load. Check console."; } catch (e) {}
-             return;
+        // Updated Dependency Check for Factory Functions
+        if (!AudioApp.uiManager ||
+            !AudioApp.audioEngine ||
+            !AudioApp.createWaveformVisualizer || // Check for factory function
+            !AudioApp.createSpectrogramVisualizer || // Check for factory function
+            !AudioApp.vadAnalyzer ||
+            !AudioApp.sileroWrapper ||
+            !AudioApp.Constants ||
+            !AudioApp.Utils) {
+             console.error("AudioApp: CRITICAL - Module dependencies missing! Check script loading order and module definitions.");
+             // Attempt to show error even if uiManager might be missing
+             try {
+                 const fileInfoEl = document.getElementById('fileInfo-track-1');
+                 if (fileInfoEl) fileInfoEl.textContent = "Fatal Error: App failed to load. Check console.";
+                 else console.error("Could not find fileInfo-track-1 to display error.");
+             } catch (e) {
+                 console.error("Error trying to display initialization error:", e);
+             }
+             return; // Stop initialization
         }
 
         debouncedSyncEngine = AudioApp.Utils.debounce(syncEngineToEstimatedTime, SYNC_DEBOUNCE_WAIT_MS);
 
+        // Initialize Modules
         AudioApp.uiManager.init();
         AudioApp.audioEngine.init();
 
+        // Create and Initialize Visualizer Instances using Factory Functions
         try {
-             if (!AudioApp.waveformVisualizer?.init || !AudioApp.spectrogramVisualizer?.init) {
-                  throw new Error("Visualizer modules or their init functions not found.");
+             // Factory functions checked above, proceed with creation
+             waveformVisualizers[0] = AudioApp.createWaveformVisualizer(0);
+             waveformVisualizers[1] = AudioApp.createWaveformVisualizer(1);
+             spectrogramVisualizers[0] = AudioApp.createSpectrogramVisualizer(0, window.FFT); // Pass FFT dependency
+             spectrogramVisualizers[1] = AudioApp.createSpectrogramVisualizer(1, window.FFT); // Pass FFT dependency
+
+             // Check if factory functions returned null (indicating internal init failure)
+             if (!waveformVisualizers[0] || !waveformVisualizers[1] || !spectrogramVisualizers[0] || !spectrogramVisualizers[1]) {
+                  throw new Error("One or more visualizer factory functions returned null.");
              }
-             waveformVisualizers[0] = Object.create(AudioApp.waveformVisualizer);
-             waveformVisualizers[1] = Object.create(AudioApp.waveformVisualizer);
-             spectrogramVisualizers[0] = Object.create(AudioApp.spectrogramVisualizer);
-             spectrogramVisualizers[1] = Object.create(AudioApp.spectrogramVisualizer);
-             waveformVisualizers[0].init(0);
-             waveformVisualizers[1].init(1);
-             spectrogramVisualizers[0].init(0);
-             spectrogramVisualizers[1].init(1);
+
         } catch (error) {
              console.error("AudioApp: Failed to initialize visualizers:", error);
               AudioApp.uiManager.setFileInfo("Init Error: Visualizers failed.", 0);
+             // Clear potentially half-created instances
              waveformVisualizers = [null, null]; spectrogramVisualizers = [null, null];
+             // Depending on the error, may want to stop further app init
         }
 
         setupAppEventListeners();
-        _resetAppState();
-        AudioApp.uiManager.setUILayoutState(0);
+        _resetAppState(); // Resets state variables
+        AudioApp.uiManager.setUILayoutState(0); // Set initial UI state
 
         console.log("AudioApp: Initialized. Waiting for file...");
     }
