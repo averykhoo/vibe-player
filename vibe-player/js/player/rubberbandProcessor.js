@@ -396,7 +396,7 @@ class RubberbandProcessor extends AudioWorkletProcessor {
     }
 
 
-    /**
+        /**
      * Main processing function called by the AudioWorklet system.
      * @param {Array<Array<Float32Array>>} inputs - Input audio data (not used).
      * @param {Array<Array<Float32Array>>} outputs - Output buffers to fill.
@@ -413,25 +413,17 @@ class RubberbandProcessor extends AudioWorkletProcessor {
         const outputChannelCount = outputBuffer.length;
         const requestedFrames = outputBuffer[0].length;
 
-        // Safety check: ensure output channel count matches our buffer setup
         if (outputChannelCount < this.channelCount) {
              console.error(`[RubberbandProcessor] Mismatch: Output expects ${outputChannelCount} channels, processor has ${this.channelCount}. Stopping.`);
-             this._outputSilence(outputs);
-             this.isPlaying = false;
-             this.port.postMessage({ type: 'error', message: 'Output channel count mismatch.'});
-             return true; // Keep alive but stop playing
+             this._outputSilence(outputs); this.isPlaying = false; this.port.postMessage({ type: 'error', message: 'Output channel count mismatch.'}); return true;
         }
-        // Safety check: ensure wasm buffers exist
-        if (this.wasmInputBuffers.length !== this.channelCount || this.wasmOutputBuffers.length !== this.channelCount) {
-            console.error(`[RubberbandProcessor] Mismatch: WASM buffers not allocated correctly for ${this.channelCount} channels. Stopping.`);
-             this._outputSilence(outputs);
-             this.isPlaying = false;
-             this.port.postMessage({ type: 'error', message: 'WASM buffer allocation error.'});
-             return true;
+        if (this.wasmInputBuffers.length !== this.channelCount || this.wasmOutputBuffers.length !== this.channelCount || this.wasmInputPtrs.length !== this.channelCount || this.wasmOutputPtrs.length !== this.channelCount) {
+            console.error(`[RubberbandProcessor] Mismatch: WASM buffers/pointers not allocated correctly for ${this.channelCount} channels. Stopping.`);
+             this._outputSilence(outputs); this.isPlaying = false; this.port.postMessage({ type: 'error', message: 'WASM buffer allocation error.'}); return true;
         }
-
 
         let framesWritten = 0;
+        const stackPtr = this.Module.stackSave(); // Save current stack pointer
 
         try {
              while (framesWritten < requestedFrames) {
@@ -444,55 +436,78 @@ class RubberbandProcessor extends AudioWorkletProcessor {
                       if (framesToRetrieve > this.inputBufferSize) { framesToRetrieve = this.inputBufferSize; }
                       if (framesToRetrieve <= 0) { break; }
 
+                     // --- Allocate stack for pointer array *inside* the loop ---
                      const outputPtrArray = this.Module.stackAlloc(this.channelCount * 4);
-                      for (let i = 0; i < this.channelCount; ++i) { this.Module.setValue(outputPtrArray + i * 4, this.wasmOutputPtrs[i], '*'); }
-
-                     const retrieved = this.Module._rubberband_retrieve(this.rubberbandState, outputPtrArray, framesToRetrieve);
-
-                     if (retrieved > 0) {
-                          for (let i = 0; i < this.channelCount; ++i) { outputBuffer[i].set(this.wasmOutputBuffers[i].subarray(0, retrieved), framesWritten); }
-                          for (let i = this.channelCount; i < outputChannelCount; ++i) { outputBuffer[i].fill(0, framesWritten, framesWritten + retrieved); }
-                         framesWritten += retrieved;
-                         this.availableFrames -= retrieved;
-                     } else { this.availableFrames = 0; break; }
-                 } else {
-                     if (this.sourcePosition >= this.sourceLength) {
-                           const inputPtrArray = this.Module.stackAlloc(this.channelCount * 4);
-                           for (let i = 0; i < this.channelCount; ++i) { this.Module.setValue(inputPtrArray + i * 4, this.wasmInputPtrs[i], '*'); }
-                          this.Module._rubberband_process(this.rubberbandState, inputPtrArray, 0, true); // Flush
-                          this.availableFrames = this.Module._rubberband_available(this.rubberbandState);
-                          if (this.availableFrames <= 0) {
-                               console.log('[RubberbandProcessor] End of source & flushed.');
-                               this.isPlaying = false;
-                               this.port.postMessage({ type: 'playbackEnded' });
-                               this._outputSilence(outputs, framesWritten);
-                               return true;
+                     try { // Wrap WASM call and stack usage
+                          for (let i = 0; i < this.channelCount; ++i) {
+                               this.Module.setValue(outputPtrArray + i * 4, this.wasmOutputPtrs[i], '*');
                           }
-                          continue; // Loop again to retrieve flushed frames
+
+                         const retrieved = this.Module._rubberband_retrieve(this.rubberbandState, outputPtrArray, framesToRetrieve);
+                         // Stack automatically restored after C call in typical Emscripten builds
+
+                         if (retrieved > 0) {
+                              // Copy data from WASM buffers to output
+                              for (let i = 0; i < this.channelCount; ++i) { outputBuffer[i].set(this.wasmOutputBuffers[i].subarray(0, retrieved), framesWritten); }
+                              // Fill extra output channels with silence
+                              for (let i = this.channelCount; i < outputChannelCount; ++i) { outputBuffer[i].fill(0, framesWritten, framesWritten + retrieved); }
+                             framesWritten += retrieved;
+                             this.availableFrames -= retrieved;
+                         } else {
+                              this.availableFrames = 0; // Assume no more available if retrieve fails
+                              break; // Break inner loop, might need more input
+                         }
+                     } finally {
+                          // Although stack is usually auto-restored, explicitly restoring ensures cleanup
+                          // NOTE: If _rubberband_retrieve itself allocates stack internally, this explicit restore might cause issues.
+                          // Let's keep it simple for now and rely on auto-restore. If problems persist, revisit stack management.
+                          // this.Module.stackRestore(stackPtr); // Potentially problematic, rely on Emscripten's handling
+                     }
+                     // --- End stack allocation block ---
+
+                 } else { // No frames available, need to process source
+                     if (this.sourcePosition >= this.sourceLength) {
+                           // --- Allocate stack for pointer array for process(final=true) ---
+                           const inputPtrArray = this.Module.stackAlloc(this.channelCount * 4);
+                           try {
+                                for (let i = 0; i < this.channelCount; ++i) { this.Module.setValue(inputPtrArray + i * 4, this.wasmInputPtrs[i], '*'); }
+                                this.Module._rubberband_process(this.rubberbandState, inputPtrArray, 0, true); // Flush
+                           } finally {
+                                // this.Module.stackRestore(stackPtr); // Rely on auto-restore
+                           }
+                           // --- End stack allocation block ---
+
+                           this.availableFrames = this.Module._rubberband_available(this.rubberbandState);
+                           if (this.availableFrames <= 0) {
+                               console.log('[RubberbandProcessor] End of source & flushed.');
+                               this.isPlaying = false; this.port.postMessage({ type: 'playbackEnded' }); this._outputSilence(outputs, framesWritten); return true; // Stop processing loop
+                           }
+                           continue; // Loop again to retrieve flushed frames
                      }
 
                      const framesToProcess = Math.min(this.inputBufferSize, this.sourceLength - this.sourcePosition);
-                      if (framesToProcess <= 0) { // Should be caught by sourcePosition check, but safety
-                           this.isPlaying = false;
-                           this.port.postMessage({ type: 'playbackEnded' });
-                           this._outputSilence(outputs, framesWritten);
-                           return true;
-                      }
+                     if (framesToProcess <= 0) { this.isPlaying = false; this.port.postMessage({ type: 'playbackEnded' }); this._outputSilence(outputs, framesWritten); return true; }
 
+                      // --- Allocate stack for pointer array for process(data) ---
                       const inputPtrArray = this.Module.stackAlloc(this.channelCount * 4);
-                      for (let i = 0; i < this.channelCount; ++i) {
-                           const channelData = this.audioDataChannels[i];
-                           const subArray = channelData.subarray(this.sourcePosition, this.sourcePosition + framesToProcess);
-                           this.wasmInputBuffers[i].set(subArray);
-                            if (framesToProcess < this.inputBufferSize) { this.wasmInputBuffers[i].fill(0, framesToProcess); }
-                           this.Module.setValue(inputPtrArray + i * 4, this.wasmInputPtrs[i], '*');
+                      try {
+                           for (let i = 0; i < this.channelCount; ++i) {
+                                const channelData = this.audioDataChannels[i];
+                                const subArray = channelData.subarray(this.sourcePosition, this.sourcePosition + framesToProcess);
+                                this.wasmInputBuffers[i].set(subArray);
+                                 if (framesToProcess < this.inputBufferSize) { this.wasmInputBuffers[i].fill(0, framesToProcess); }
+                                this.Module.setValue(inputPtrArray + i * 4, this.wasmInputPtrs[i], '*');
+                           }
+                          this.Module._rubberband_process(this.rubberbandState, inputPtrArray, framesToProcess, false);
+                      } finally {
+                           // this.Module.stackRestore(stackPtr); // Rely on auto-restore
                       }
+                      // --- End stack allocation block ---
 
-                     this.Module._rubberband_process(this.rubberbandState, inputPtrArray, framesToProcess, false);
                      this.sourcePosition += framesToProcess;
                      this.availableFrames = this.Module._rubberband_available(this.rubberbandState);
 
-                     if (this.availableFrames <= 0 && framesWritten === 0) { break; }
+                     if (this.availableFrames <= 0 && framesWritten === 0) { break; } // Avoid potential infinite loop if no frames produced
                  }
              } // End while
 
@@ -500,12 +515,16 @@ class RubberbandProcessor extends AudioWorkletProcessor {
 
         } catch(error) {
              console.error("[RubberbandProcessor] Error during process:", error);
-             this.port.postMessage({ type: 'error', message: `Processing error: ${error.message}`});
+             // Log stack trace if available
+              if (error.stack) { console.error(error.stack); }
+             this.port.postMessage({ type: 'error', message: `Processing error: ${error.message || error}`});
              this.isPlaying = false;
              this._outputSilence(outputs);
+        } finally {
+             this.Module.stackRestore(stackPtr); // Restore stack pointer once at the end of process
         }
 
-        return true;
+        return true; // Keep processor alive
     }
 
     /**

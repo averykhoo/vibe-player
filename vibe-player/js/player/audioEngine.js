@@ -496,13 +496,13 @@ AudioApp.audioEngine = (function() {
 
     // --- Cleanup ---
 
-    /**
+        /**
      * Cleans up resources for a specific track index.
-     * Terminates the worklet, disconnects nodes.
+     * Terminates the worklet, disconnects nodes. Public method.
      * @param {number} trackIndex - The index (0 or 1) of the track to clean up.
-     * @private
+     * @public
      */
-     function _cleanupTrack(trackIndex) {
+     function cleanupTrack(trackIndex) { // Renamed _cleanupTrack -> cleanupTrack
          const processor = trackProcessors[trackIndex];
          if (processor) {
              console.log(`AudioEngine: Cleaning up resources for track ${trackIndex}...`);
@@ -576,18 +576,17 @@ AudioApp.audioEngine = (function() {
     // === Public Interface ===
     return {
         init: init,
-        // loadAndProcessFile: loadAndProcessFile, // Replaced
         loadAndProcessTrack: loadAndProcessTrack,
         togglePlayPause: togglePlayPause,
-        seek: seek, // Public signature retained (for now), internal logic adapted
+        seek: seek,
         setSpeed: setSpeed,
         setPitch: setPitch,
         setGain: setGain, // Master gain
-        setTrackMuted: setTrackMuted, // New method for track-specific mute
+        setTrackMuted: setTrackMuted,
         resampleTo16kMono: resampleTo16kMono,
-        cleanup: cleanup,
-        getAudioContext: getAudioContext // Expose context for main thread timing
-        // getCurrentTime: getCurrentTime // Removed/Deprecated
+        cleanup: cleanup, // Cleanup all tracks
+        cleanupTrack: cleanupTrack, // Expose single track cleanup <--- ADDED
+        getAudioContext: getAudioContext
     };
 
 })(); // End of AudioApp.audioEngine IIFE
