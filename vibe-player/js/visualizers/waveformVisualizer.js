@@ -334,9 +334,9 @@ AudioApp.waveformVisualizer = (function() {
         } else if (wasResized) {
             clearVisuals(); // Clear if resized but no buffer
         }
-        // Always update progress indicator after resize
-        const { currentTime = 0, duration = 0 } = AudioApp.audioEngine?.getCurrentTime() || {};
-        updateProgressIndicator(currentTime, duration || (audioBuffer ? audioBuffer.duration : 0));
+        // NO LONGER UPDATING PROGRESS INDICATOR HERE - app.js handles it.
+        // const { currentTime = 0, duration = 0 } = AudioApp.audioEngine?.getCurrentTime() || {}; // REMOVED
+        // updateProgressIndicator(currentTime, duration || (audioBuffer ? audioBuffer.duration : 0)); // REMOVED
     }
 
     // === Public Interface ===
