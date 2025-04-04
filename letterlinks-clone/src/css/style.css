@@ -1,0 +1,555 @@
+/* File: src/css/style.css */
+
+/* --- Reset & Base Styles --- */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    font-size: 16px; /* Base font size */
+    line-height: 1.5;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+body {
+    background-color: var(--background-color, #f0f4f8); /* Use theme variable with fallback */
+    color: var(--text-color, #333);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+button {
+    font: inherit;
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 0.5em 1em;
+    border-radius: 4px;
+}
+
+/* --- Theme Variables (Defaults - Will be overridden by UIController.applyTheme) --- */
+:root {
+    --background-color: #f0f4f8;
+    --text-color: #333;
+    --primary-color: #007bff; /* Example */
+    --secondary-color: #6c757d; /* Example */
+    --header-bg: #ffffff;
+    --board-bg: #ffffff;
+    --square-border: #ccc;
+    --tile-bg: #fff8dc; /* Cream */
+    --tile-text: #000000;
+    --tile-border: #b8a98f;
+    --tile-selected-border: #007bff;
+    --pool-bg: #e9ecef;
+    --button-primary-bg: #007bff;
+    --button-primary-text: #ffffff;
+    --button-disabled-bg: #adb5bd;
+    --button-disabled-text: #6c757d;
+    --modal-backdrop-bg: rgba(0, 0, 0, 0.5);
+    --modal-content-bg: #ffffff;
+    --valid-word-border: #28a745; /* Green */
+    --invalid-submit-border: #dc3545; /* Red */
+    --bonus-dl-bg: #a7d7f9; /* Light Blue */
+    --bonus-tl-bg: #007bff; /* Darker Blue */
+    --bonus-dw-bg: #f8a7a7; /* Pink/Salmon */
+    --bonus-tw-bg: #ff6b6b; /* Red/Orange */
+    --bonus-star-bg: #ffeb3b; /* Yellow */
+    --bonus-text: #ffffff; /* Default text on colored bonuses */
+    --star-text: #e6a100;  /* Darker yellow/orange for star icon */
+
+    /* Define board size variable for grid */
+    --board-size: 5;
+    --tile-size: clamp(40px, 12vmin, 70px); /* Responsive tile size */
+    --gap-size: clamp(2px, 0.5vmin, 5px);
+}
+
+
+/* --- Main Layout --- */
+
+.app-container {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    padding: 0.5rem;
+}
+
+.game-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    background-color: var(--header-bg, #fff);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: relative; /* For menu positioning */
+    z-index: 10;
+}
+
+.score-display {
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.countdown-display {
+    font-size: 0.9rem;
+    color: var(--secondary-color, #666);
+}
+
+.menu-button {
+    padding: 0.3em;
+    line-height: 0; /* Align icon better */
+}
+.menu-button .material-symbols-outlined {
+    font-size: 1.8rem; /* Adjust icon size */
+}
+
+.menu-overlay {
+    display: none; /* Hidden by default */
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background-color: var(--header-bg, #fff);
+    border: 1px solid #ccc;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    z-index: 100;
+    min-width: 150px;
+    border-radius: 4px;
+    overflow: hidden; /* Ensure rounded corners */
+}
+.menu-overlay.visible {
+    display: block;
+}
+.menu-overlay ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.menu-overlay li {
+    border-bottom: 1px solid #eee;
+}
+.menu-overlay li:last-child {
+    border-bottom: none;
+}
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    padding: 0.8em 1em;
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    color: var(--text-color);
+}
+.menu-item:hover {
+    background-color: #f0f0f0;
+}
+.menu-item .material-symbols-outlined {
+    font-size: 1.2rem;
+}
+
+
+.game-area {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column; /* Mobile first layout */
+    align-items: center;
+    justify-content: center; /* Center content vertically */
+    padding: 1rem 0;
+    gap: 1rem;
+    overflow-y: auto; /* Allow scrolling if content overflows */
+}
+
+.board-area {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* Max width to prevent board getting huge on wide screens */
+    max-width: calc(var(--board-size) * var(--tile-size) + (var(--board-size) - 1) * var(--gap-size) + 20px);
+    width: 100%;
+}
+
+.game-board {
+    display: grid;
+    grid-template-columns: repeat(var(--board-size), var(--tile-size));
+    grid-template-rows: repeat(var(--board-size), var(--tile-size));
+    gap: var(--gap-size);
+    padding: var(--gap-size); /* Padding around the grid */
+    background-color: var(--board-bg, #eee);
+    border: 1px solid var(--square-border, #ccc);
+    border-radius: 4px;
+    aspect-ratio: 1 / 1; /* Keep board square */
+    width: 100%;
+    max-width: 100%; /* Prevent overflow */
+}
+
+.board-square {
+    background-color: var(--square-bg, #fff);
+    border: 1px solid var(--square-border, #ccc);
+    border-radius: 2px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative; /* For potential absolute positioning inside */
+    font-weight: bold;
+    font-size: 0.7em; /* For bonus text */
+    color: var(--bonus-text); /* Default text color for bonuses */
+    overflow: hidden; /* Ensure tiles fit */
+}
+
+/* Bonus Square Styles */
+.board-square.bonus-dl { background-color: var(--bonus-dl-bg); }
+.board-square.bonus-tl { background-color: var(--bonus-tl-bg); }
+.board-square.bonus-dw { background-color: var(--bonus-dw-bg); }
+.board-square.bonus-tw { background-color: var(--bonus-tw-bg); }
+.board-square.bonus-star { background-color: var(--bonus-star-bg); }
+.board-square.bonus-star::before { /* Add star icon */
+    content: '★';
+    font-size: 2em; /* Make star prominent */
+    color: var(--star-text, #cc0);
+    line-height: 1;
+}
+/* Add text labels for bonuses if needed */
+/* .board-square.bonus-dl::after { content: 'DL'; } ... etc */
+
+
+.tile-pool-area {
+    width: 100%;
+    max-width: 90vw; /* Limit width on desktop */
+    padding: 0.5rem;
+    background-color: var(--pool-bg, #ddd);
+    border-radius: 4px;
+    min-height: calc(var(--tile-size) + 1rem); /* Ensure it has some height */
+    overflow-x: auto; /* Allow horizontal scroll if tiles overflow */
+    overflow-y: hidden;
+}
+
+.tile-pool {
+    display: flex;
+    flex-wrap: wrap; /* Wrap tiles */
+    gap: var(--gap-size);
+    justify-content: center; /* Center tiles if they don't fill width */
+}
+
+.actions-area {
+    padding: 0.5rem 1rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    margin-top: auto; /* Push to bottom in flex column layout */
+}
+
+.submit-button {
+    padding: 0.8em 1.5em;
+    font-size: 1.1rem;
+    font-weight: bold;
+    background-color: var(--button-primary-bg, #007bff);
+    color: var(--button-primary-text, #fff);
+    border-radius: 25px; /* Pill shape */
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+    transition: background-color 0.2s ease;
+}
+.submit-button:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+.submit-button.submit-disabled {
+    background-color: var(--button-disabled-bg, #ccc);
+    color: var(--button-disabled-text, #888);
+    cursor: not-allowed;
+    filter: grayscale(50%);
+}
+
+
+/* --- Tile Styles --- */
+
+.letter-tile {
+    width: var(--tile-size);
+    height: var(--tile-size);
+    background-color: var(--tile-bg, #f8f0e3);
+    border: 1px solid var(--tile-border, #ccc);
+    border-radius: 4px;
+    box-shadow: 1px 1px 3px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    cursor: pointer; /* Indicate interactivity */
+    user-select: none; /* Prevent text selection */
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.tile-pool .letter-tile:hover {
+    transform: translateY(-2px);
+    box-shadow: 2px 4px 5px rgba(0,0,0,0.2);
+}
+
+.tile-letter {
+    font-size: calc(var(--tile-size) * 0.5); /* Adjust size relative to tile */
+    font-weight: bold;
+    line-height: 1;
+    color: var(--tile-text, #000);
+    text-transform: uppercase;
+}
+
+.tile-value {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-size: calc(var(--tile-size) * 0.25);
+    font-weight: normal;
+    line-height: 1;
+    color: var(--tile-text, #000);
+}
+
+/* Tile on board (might not need specific class if structure is always square > tile) */
+.tile-board {
+     box-shadow: none; /* Maybe remove shadow when placed */
+     /* cursor: grab; If draggable */
+}
+
+/* Tile selection in pool */
+.tile-selected-pool {
+    border: 2px solid var(--tile-selected-border, blue);
+    transform: scale(1.05);
+    box-shadow: 0 0 8px var(--tile-selected-border, blue);
+}
+
+/* Dragging state */
+.tile-dragging {
+    opacity: 0.6;
+    transform: scale(0.9); /* Slightly shrink while dragging */
+}
+
+/* Validation Highlights */
+.tile-valid-word {
+    outline: 2px solid var(--valid-word-border, green);
+    outline-offset: -2px; /* Outline inside the tile */
+}
+.tile-invalid-submit {
+     outline: 2px solid var(--invalid-submit-border, red);
+     outline-offset: -2px;
+}
+.star-invalid-submit { /* Apply to the square if star needs highlight */
+     outline: 3px dashed var(--invalid-submit-border, red);
+     outline-offset: 2px;
+}
+
+
+/* --- Modals --- */
+
+.modal-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--modal-backdrop-bg, rgba(0, 0, 0, 0.5));
+    z-index: 1000;
+    display: none; /* Hidden by default */
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out;
+}
+.modal-backdrop.visible {
+    display: block;
+    opacity: 1;
+}
+
+.modal-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.95);
+    background-color: var(--modal-content-bg, #fff);
+    border-radius: 8px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    z-index: 1001;
+    max-width: 90vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    display: none; /* Hidden by default */
+    opacity: 0;
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+    padding: 1.5rem;
+}
+.modal-container.visible {
+    display: block;
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+/* Prevent background scroll when modal is open */
+body.modal-open { /* Assuming class is added to body */
+    overflow: hidden;
+}
+
+
+.modal-content {
+    /* Styles for modal content area */
+}
+.modal-content h2 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    text-align: center;
+}
+.modal-content p {
+     margin-bottom: 0.8rem;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end; /* Or center, space-between */
+    gap: 1rem;
+    margin-top: 1.5rem;
+    border-top: 1px solid #eee;
+    padding-top: 1rem;
+}
+.modal-actions .cancel-button {
+    background-color: var(--secondary-color);
+    color: white;
+}
+.modal-actions .confirm-button,
+.modal-actions .close-button {
+     background-color: var(--primary-color);
+     color: white;
+}
+
+/* Wildcard Modal Specific */
+.wildcard-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(40px, 1fr));
+    gap: 0.5rem;
+    margin: 1rem 0;
+}
+.wildcard-button {
+    padding: 0.5em;
+    font-size: 1.2rem;
+    font-weight: bold;
+    border: 1px solid #ccc;
+    aspect-ratio: 1 / 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.wildcard-button:hover {
+    background-color: #eee;
+}
+
+/* Submit Confirm Modal Specific */
+.confirm-preview-board {
+     /* Scale down the board for preview */
+     --tile-size: clamp(25px, 8vmin, 40px);
+     --gap-size: clamp(1px, 0.3vmin, 3px);
+     margin: 1rem auto; /* Center it */
+     border: 1px solid #ccc; /* Add border */
+}
+
+/* Game Over Modal Specific */
+.gameover-score {
+    font-size: 2rem;
+    font-weight: bold;
+    color: var(--primary-color);
+    display: block; /* Or inline-block */
+    text-align: center;
+    margin: 0.5rem 0;
+}
+.gameover-board {
+    /* Similar scaling as confirm preview */
+    --tile-size: clamp(25px, 8vmin, 40px);
+    --gap-size: clamp(1px, 0.3vmin, 3px);
+    margin: 1rem auto;
+    border: 1px solid #ccc;
+}
+.achievement-display-gameover {
+    text-align: center;
+    margin-top: 1rem;
+    font-style: italic;
+    color: var(--secondary-color);
+}
+
+/* Loading / Error / Achievement Displays */
+.loading-modal .message { /* Ensure element exists in HTML */
+    text-align: center;
+    padding: 1rem;
+}
+.error-display {
+    position: fixed;
+    bottom: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--invalid-submit-border, red);
+    color: white;
+    padding: 0.8rem 1.5rem;
+    border-radius: 4px;
+    z-index: 2000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    display: none;
+}
+.error-display.visible {
+    display: block;
+    opacity: 1;
+}
+
+.achievement-display {
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--valid-word-border, green);
+    color: white;
+    padding: 0.8rem 1.5rem;
+    border-radius: 4px;
+    z-index: 2000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    display: none; /* Hidden by default */
+    text-align: center;
+}
+.achievement-display.visible {
+    display: block;
+    opacity: 1;
+}
+
+
+/* --- Responsive Adjustments --- */
+
+@media (min-width: 768px) { /* Example breakpoint for larger screens */
+    .game-area {
+        flex-direction: row; /* Side-by-side layout */
+        align-items: flex-start;
+        justify-content: center;
+        gap: 2rem;
+    }
+    .board-area {
+        /* Allow board to take up more space */
+        max-width: 500px; /* Example max width */
+    }
+    .tile-pool-area {
+        width: auto; /* Let it size based on content */
+        max-width: 300px; /* Example max width */
+        min-width: 200px;
+        max-height: 70vh; /* Limit height and allow vertical scroll if needed */
+        overflow-x: hidden;
+        overflow-y: auto;
+        padding: 1rem;
+    }
+    .tile-pool {
+        justify-content: flex-start; /* Align tiles left */
+    }
+}
+
+
+/* --- Animations (Placeholders) --- */
+
+/* Add keyframes for tile fly, bonus load etc. later */
+
+
+/* File: src/css/style.css */
