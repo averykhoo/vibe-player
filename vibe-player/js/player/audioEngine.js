@@ -1,3 +1,4 @@
+// --- START OF FILE js/player/audioEngine.js ---
 // --- /vibe-player/js/player/audioEngine.js ---
 // Manages Web Audio API, AudioWorkletNode lifecycle, decoding, resampling,
 // and communication with the Rubberband WASM processor.
@@ -36,6 +37,8 @@ AudioApp.audioEngine = (function() {
     let rubberbandLoader = null;
     /** @type {boolean} Flag indicating if the AudioWorklet module has been added. */
     let workletModuleAdded = false;
+    /** @type {string|null} Cached Rubberband loader script text. */
+    let loaderScriptText = null; // <-- Added cache for loader script text
 
     // === Initialization ===
 
@@ -55,6 +58,7 @@ AudioApp.audioEngine = (function() {
             workletModuleAdded = false;
             wasmBinary = null;
             rubberbandLoader = null;
+            loaderScriptText = null; // Initialize cached text
             console.log("AudioEngine: Initialized with AudioContext and Master Gain.");
         } catch (e) {
             console.error("AudioEngine: Error initializing Web Audio API:", e);
@@ -66,9 +70,6 @@ AudioApp.audioEngine = (function() {
     }
 
     // --- Resource Loading (WASM, Worklet Script) ---
-
-        /** @type {string|null} Cached Rubberband loader script text. */
-    let loaderScriptText = null;
 
     /**
      * Loads the Rubberband WASM binary, the custom loader script TEXT,
@@ -85,6 +86,7 @@ AudioApp.audioEngine = (function() {
         try {
             // Fetch WASM binary only if not already loaded
             if (wasmBinary === null) {
+                console.log("AudioEngine: Fetching WASM binary..."); // Log start
                 const wasmResponse = await fetch(Constants.WASM_BINARY_URL);
                 if (!wasmResponse.ok) throw new Error(`Failed to fetch WASM: ${wasmResponse.statusText}`);
                 wasmBinary = await wasmResponse.arrayBuffer();
@@ -93,6 +95,7 @@ AudioApp.audioEngine = (function() {
 
             // Fetch Loader Script Text only if not already loaded
             if (loaderScriptText === null) {
+                console.log("AudioEngine: Fetching loader script text..."); // Log start
                 const loaderResponse = await fetch(Constants.LOADER_SCRIPT_URL);
                 if (!loaderResponse.ok) throw new Error(`Failed to fetch Loader Script: ${loaderResponse.statusText}`);
                 loaderScriptText = await loaderResponse.text();
@@ -101,8 +104,9 @@ AudioApp.audioEngine = (function() {
 
             // Add the main processor module ONCE if not already added.
             if (!workletModuleAdded) {
-                 console.log(`AudioEngine: Adding AudioWorklet module: ${Constants.PROCESSOR_SCRIPT_URL}`);
+                 console.log(`AudioEngine: Adding AudioWorklet module: ${Constants.PROCESSOR_SCRIPT_URL}`); // Log start
                  if (audioContext.state === 'suspended') {
+                     console.log("AudioEngine: Resuming AudioContext before adding module..."); // Log context resume
                      await audioContext.resume();
                  }
                  await audioContext.audioWorklet.addModule(Constants.PROCESSOR_SCRIPT_URL);
@@ -124,7 +128,7 @@ AudioApp.audioEngine = (function() {
 
     // --- Track Loading and Processing ---
 
-        /**
+    /**
      * Loads an audio file, decodes it, and sets up the processing pipeline for a specific track.
      * @param {File} file - The audio file to load.
      * @param {number} trackIndex - The index (0 or 1) for this track.
@@ -146,29 +150,38 @@ AudioApp.audioEngine = (function() {
         console.log(`AudioEngine: Loading track ${trackIndex} from file: ${file.name}`);
 
         // Ensure resources are loaded (WASM binary, Loader Text, Worklet module added)
+        console.log(`AudioEngine: Track ${trackIndex} - Ensuring worklet resources...`); // <-- Add log
         const resourcesReady = await _loadWorkletResources();
         if (!resourcesReady || !wasmBinary || !loaderScriptText || !workletModuleAdded) {
-             console.error(`AudioEngine: Cannot load track ${trackIndex}, worklet resources failed to load.`);
+             console.error(`AudioEngine: Cannot load track ${trackIndex}, worklet resources failed to load or are missing.`); // <-- More specific error
              // Error potentially already dispatched by _loadWorkletResources
              return;
         }
+        console.log(`AudioEngine: Track ${trackIndex} - Worklet resources OK.`); // <-- Add log
 
         // Cleanup existing processor for this track index, if any
+        console.log(`AudioEngine: Track ${trackIndex} - Calling _cleanupTrack...`); // <-- ADDED
         _cleanupTrack(trackIndex);
+        console.log(`AudioEngine: Track ${trackIndex} - _cleanupTrack finished. Entering main try block...`);
 
         try {
             // 1. Decode Audio Data
-            console.log(`AudioEngine: Decoding audio data for track ${trackIndex}...`);
+            console.log(`AudioEngine: Track ${trackIndex} - Starting file read...`); // <-- MODIFIED
             const arrayBuffer = await file.arrayBuffer();
+            console.log(`AudioEngine: Track ${trackIndex} - File read complete (${arrayBuffer.byteLength} bytes). Starting decodeAudioData...`); // <-- MODIFIED
             const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-            console.log(`AudioEngine: Track ${trackIndex} decoded. Sample Rate: ${audioBuffer.sampleRate}, Duration: ${audioBuffer.duration.toFixed(2)}s`);
+            // If we don't see the next log, decodeAudioData is the issue
+            console.log(`AudioEngine: Track ${trackIndex} - decodeAudioData SUCCESS. Sample Rate: ${audioBuffer.sampleRate}, Duration: ${audioBuffer.duration.toFixed(2)}s`); // <-- MODIFIED
 
             // Dispatch audio loaded event WITH trackIndex
             _dispatchEvent('audioapp:audioLoaded', { audioBuffer: audioBuffer, trackIndex: trackIndex });
 
             // 2. Create Per-Track Gain Node
+            console.log(`AudioEngine: Track ${trackIndex} - Creating GainNode...`); // <-- MODIFIED
             const trackGainNode = audioContext.createGain();
             trackGainNode.connect(masterGainNode); // Connect track gain to master gain
+            console.log(`AudioEngine: Track ${trackIndex} - GainNode created and connected.`); // <-- MODIFIED
+
 
             // 3. Create AudioWorkletNode for this track
             const processorOptions = {
@@ -180,8 +193,9 @@ AudioApp.audioEngine = (function() {
                 loaderScriptText: loaderScriptText,
                 channelCount: audioBuffer.numberOfChannels
             };
+            console.log(`AudioEngine: Track ${trackIndex} - Preparing AudioWorkletNode options...`); // <-- MODIFIED
             // Avoid logging large binary/script text
-            console.log(`AudioEngine: Creating AudioWorkletNode for track ${trackIndex} with options:`, {
+            console.log(`AudioEngine: Track ${trackIndex} - Creating AudioWorkletNode with options:`, {
                  sampleRate: processorOptions.sampleRate,
                  channelCount: processorOptions.channelCount,
                  wasmBinary: '[binary]',
@@ -190,18 +204,27 @@ AudioApp.audioEngine = (function() {
 
             // Ensure context is running before creating node
             if (audioContext.state === 'suspended') {
+                 console.log(`AudioEngine: Track ${trackIndex} - Resuming AudioContext before creating node...`); // <-- MODIFIED
                  await audioContext.resume();
+                 console.log(`AudioEngine: Track ${trackIndex} - AudioContext resumed.`); // <-- MODIFIED
             }
 
+            console.log(`AudioEngine: Track ${trackIndex} - Calling new AudioWorkletNode(...)`); // <-- MODIFIED
             const workletNode = new AudioWorkletNode(audioContext, Constants.PROCESSOR_NAME, {
                  processorOptions: processorOptions,
                  numberOfInputs: 0, // The worklet generates audio
                  numberOfOutputs: 1,
                  outputChannelCount: [audioBuffer.numberOfChannels] // Match output channels to buffer
             });
+             // If we don't see the next log, the constructor failed/blocked
+             console.log(`AudioEngine: Track ${trackIndex} - AudioWorkletNode constructor finished.`); // <-- MODIFIED
+
 
             // 4. Connect nodes: Worklet -> Track Gain -> Master Gain -> Destination
+            console.log(`AudioEngine: Track ${trackIndex} - Connecting workletNode to trackGainNode...`); // <-- MODIFIED
             workletNode.connect(trackGainNode);
+            console.log(`AudioEngine: Track ${trackIndex} - workletNode connected.`); // <-- MODIFIED
+
 
             // 5. Store processor state
             trackProcessors[trackIndex] = {
@@ -210,6 +233,8 @@ AudioApp.audioEngine = (function() {
                 trackGainNode: trackGainNode,
                 sampleRate: audioBuffer.sampleRate // Store sample rate
             };
+            console.log(`AudioEngine: Track ${trackIndex} - Processor state stored.`); // <-- MODIFIED
+
 
             // 6. Setup Message & Error Handling (Pass trackIndex)
              workletNode.port.onmessage = (event) => {
@@ -218,21 +243,25 @@ AudioApp.audioEngine = (function() {
              workletNode.port.onerror = (event) => {
                   _handleWorkletError(event, trackIndex);
              };
-             console.log(`AudioEngine: Worklet node created and connected for track ${trackIndex}. Waiting for processor ready message...`);
+            console.log(`AudioEngine: Track ${trackIndex} - Worklet message/error handlers set.`); // <-- MODIFIED
+
 
             // 7. Send initial data to worklet
              const channels = [];
              for (let i = 0; i < audioBuffer.numberOfChannels; i++) {
                  channels.push(audioBuffer.getChannelData(i).slice());
              }
+             console.log(`AudioEngine: Track ${trackIndex} - Sending 'load' message to worklet...`); // <-- MODIFIED
              workletNode.port.postMessage({
                  type: 'load',
                  audioData: channels,
                  sampleRate: audioBuffer.sampleRate
              }, channels.map(c => c.buffer));
+             console.log(`AudioEngine: Track ${trackIndex} - 'load' message sent.`); // <-- MODIFIED
+
 
         } catch (error) {
-            console.error(`AudioEngine: Error processing track ${trackIndex}:`, error);
+             console.error(`AudioEngine: Track ${trackIndex} - Error during load/setup:`, error); // <-- MODIFIED
             if (error instanceof DOMException && error.name === 'DataCloneError') {
                 console.error("DataCloneError occurred. Check if WASM binary or loader script text exceed cloning limits.");
             }
@@ -491,12 +520,17 @@ AudioApp.audioEngine = (function() {
     function _dispatchError(type, error, trackIndex) {
         let detail = { type: type, error: error };
         if (trackIndex !== undefined) { detail.trackIndex = trackIndex; }
-        _dispatchEvent('audioapp:engineError', detail);
+        // Dispatch a more specific error type name if possible
+        const specificEvent = `audioapp:${type}Error`;
+        _dispatchEvent(specificEvent, detail); // e.g., audioapp:decodingError
+        // Also dispatch a generic engine error? Maybe not needed if specific is caught.
+        // _dispatchEvent('audioapp:engineError', detail);
     }
+
 
     // --- Cleanup ---
 
-        /**
+    /**
      * Cleans up resources for a specific track index.
      * Terminates the worklet, disconnects nodes. Public method.
      * @param {number} trackIndex - The index (0 or 1) of the track to clean up.
@@ -531,8 +565,8 @@ AudioApp.audioEngine = (function() {
      */
     function cleanup() {
         console.log("AudioEngine: Cleaning up all resources...");
-        _cleanupTrack(0);
-        _cleanupTrack(1);
+        cleanupTrack(0); // Use public method
+        cleanupTrack(1); // Use public method
 
         if (masterGainNode) {
             try { masterGainNode.disconnect(); } catch(e) {}
@@ -549,6 +583,7 @@ AudioApp.audioEngine = (function() {
         workletModuleAdded = false;
         wasmBinary = null;
         rubberbandLoader = null;
+        loaderScriptText = null; // Clear cached text
         console.log("AudioEngine: Cleanup complete.");
     }
 
@@ -585,9 +620,10 @@ AudioApp.audioEngine = (function() {
         setTrackMuted: setTrackMuted,
         resampleTo16kMono: resampleTo16kMono,
         cleanup: cleanup, // Cleanup all tracks
-        cleanupTrack: cleanupTrack, // Expose single track cleanup <--- ADDED
+        cleanupTrack: cleanupTrack, // Expose single track cleanup
         getAudioContext: getAudioContext
     };
 
 })(); // End of AudioApp.audioEngine IIFE
 // --- /vibe-player/js/player/audioEngine.js ---
+// --- END OF FILE js/player/audioEngine.js ---
