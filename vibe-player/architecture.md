@@ -3,8 +3,8 @@
 
 ## 1. Overview
 
-*   **Purpose:** Browser-based audio player focused on playback speed/pitch manipulation, voice activity detection (VAD) visualization, and waveform/spectrogram display. Designed for static file deployment.
-*   **Core Philosophy:** Prioritize simplicity and minimal dependencies by using Vanilla JS, HTML, and CSS. Leverage WebAssembly (WASM) via standardized Web APIs (`AudioWorklet`, `ONNX Runtime Web`) for computationally intensive tasks (audio processing, ML inference) that would otherwise be difficult or impossible client-side. The application follows an event-driven interaction flow managed by a central controller (`app.js`).
+*   **Purpose:** Browser-based audio player focused on playback speed/pitch manipulation, voice activity detection (VAD) visualization, and waveform/spectrogram display. Designed for static file deployment. Supports loading and concurrent playback/processing of up to two audio tracks.
+*   **Core Philosophy:** Prioritize simplicity and minimal dependencies by using Vanilla JS, HTML, and CSS. Leverage WebAssembly (WASM) via standardized Web APIs (`AudioWorklet`, `ONNX Runtime Web`) for computationally intensive tasks. A **single** `AudioWorklet` instance is used for audio processing (time/pitch shifting via Rubberband WASM) to avoid WASM memory conflicts observed with multiple instances, while managing state for both tracks internally. The application follows an event-driven interaction flow managed by a central controller (`app.js`).
 
 ## 2. Key Technologies
 
@@ -19,20 +19,20 @@
 
 ## 3. Code Structure (`js/` directory)
 
-*   **`app.js` (Controller):** Initializes modules, orchestrates loading/VAD/playback flow, handles events, manages core state, manages main-thread time updates using `AudioContext.currentTime`.
+*   **`app.js` (Controller):** Initializes modules, orchestrates loading (alternating tracks)/VAD/playback flow for up to two tracks, handles events, manages core state (buffers, VAD results, flags per track), manages main-thread time updates using `AudioContext.currentTime`. Handles temporary mute keybinds.
 *   **`constants.js`:** Defines shared constants (paths, parameters, colors, etc.).
-*   **`utils.js`:** Contains shared utility functions (e.g., `formatTime`, `yieldToMainThread`, `hannWindow`, `viridisColor`).
-*   **`uiManager.js` (View/UI Logic):** Handles all direct DOM manipulation, UI event listeners, and dispatches UI events. Manages VAD progress bar UI.
+*   **`utils.js`:** Contains shared utility functions (e.g., `formatTime`, `yieldToMainThread`, `hannWindow`, `viridisColor`, `debounce`).
+*   **`uiManager.js` (View/UI Logic):** Handles all direct DOM manipulation, UI event listeners, and dispatches UI events. Manages VAD progress bar UI. ***Note: Currently only displays information/visuals for Track 0.***
 *   **`js/player/`:**
-    *   **`audioEngine.js` (Audio Backend):** Manages Web Audio API, `AudioWorkletNode` lifecycle/communication, audio decoding, and resampling capability. Relays time updates from worklet but isn't the primary source for UI timing.
-    *   **`rubberbandProcessor.js` (AudioWorklet):** Runs in worklet thread. Interfaces with Rubberband WASM for time/pitch processing. Communicates via messages with `audioEngine.js`. Reports its consumed source time, acknowledging potential inaccuracies.
+    *   **`audioEngine.js` (Audio Backend):** Manages Web Audio API, **single `AudioWorkletNode` lifecycle/communication**, audio decoding, track-specific gain nodes (for mute), master gain, and resampling capability. Relays messages to/from the worklet.
+    *   **`rubberbandProcessor.js` (AudioWorklet):** Runs in **one** worklet thread. Interfaces with Rubberband WASM. **Crucially, manages multiple internal Rubberband state instances (`_rubberband_new`)**, one for each loaded audio track (up to 2). Handles processing requests for each active track, mixes their output, and performs manual memory management (`_malloc`/`_free`) for WASM buffers. Communicates via messages with `audioEngine.js`. Reports its consumed source time per track (acknowledging potential inaccuracies).
 *   **`js/vad/`:**
     *   **`sileroWrapper.js` (VAD ONNX Interface):** Wraps ONNX Runtime session for the Silero VAD model. Handles inference calls and state tensors.
     *   **`sileroProcessor.js` (VAD Frame Logic):** Iterates audio frames, calls `sileroWrapper`, calculates regions based on probabilities/thresholds, yields to main thread, reports progress.
-    *   **`vadAnalyzer.js` (VAD State Manager):** Bridges `app.js` and VAD processing. Holds VAD results/thresholds. Initiates analysis and recalculation.
+    *   **`vadAnalyzer.js` (VAD State Manager):** Bridges `app.js` and VAD processing. Holds VAD results/thresholds *per track*. Initiates analysis and recalculation.
 *   **`js/visualizers/`:**
-    *   **`waveformVisualizer.js`:** Computes and draws the waveform display, handles highlighting, resizing, progress indicator, and click-to-seek.
-    *   **`spectrogramVisualizer.js`:** Computes (using FFT.js) and draws the spectrogram display, manages caching, resizing, progress indicator, click-to-seek, and loading spinner.
+    *   **`waveformVisualizer.js`:** Computes and draws the waveform display, handles highlighting, resizing, progress indicator, and click-to-seek. ***Note: Currently only displays Track 0.***
+    *   **`spectrogramVisualizer.js`:** Computes (using FFT.js) and draws the spectrogram display, manages caching, resizing, progress indicator, click-to-seek, and loading spinner. ***Note: Currently only displays Track 0.***
 
 *(For detailed responsibilities, see previous full generation)*
 
@@ -40,55 +40,62 @@
 
 *   **Loading Sequence:**
     1.  `UI (Choose File)` -> `uiManager` dispatches `audioapp:fileSelected`.
-    2.  `app.js (handleFileSelected)`: Resets state/UI, shows spinner, calls `audioEngine.loadAndProcessFile`.
-    3.  `audioEngine`: Decodes audio, dispatches `audioapp:audioLoaded`. Sets up worklet asynchronously.
-    4.  `app.js (handleAudioLoaded)`: Stores `currentAudioBuffer`, updates time/seek UI, calls `visualizer.computeAndDrawVisuals([])` (triggers gray waveform + spectrogram draw), hides main spinner, calls `runVadInBackground` (async).
-    5.  `audioEngine`: When worklet setup is complete, dispatches `audioapp:workletReady`.
-    6.  `app.js (handleWorkletReady)`: Sets `workletPlaybackReady=true`, enables playback controls/seek bar. **Playback is now possible.**
-    7.  `app.js (runVadInBackground)` (Running concurrently):
+    2.  `app.js (handleFileSelected)`: Determines `targetTrackIndex` (alternating 0/1), pauses playback if active, resets state for `targetTrackIndex`, updates UI (`setFileInfo`), calls `audioEngine.loadAndProcessTrack(file, targetTrackIndex)`. Toggles `nextTrackIndexToLoad`.
+    3.  `audioEngine`: Decodes audio, dispatches `audioapp:audioLoaded` (with `trackIndex`). Initializes the **single** worklet node and loads WASM/loader script **only if not already done**. Sends `load` message with audio data and `trackIndex` to the worklet.
+    4.  `app.js (handleAudioLoaded)`: Stores `audioBuffer[trackIndex]`. If `trackIndex === 0`, updates time/seek UI, calls `visualizer.computeAndDrawVisuals([])` (gray waveform + spectrogram), hides main spinner. Triggers `runVadInBackground(audioBuffer, trackIndex)`.
+    5.  `audioEngine`: When worklet script/WASM loading completes (once), dispatches `audioapp:workletReady`.
+    6.  `app.js (handleWorkletReady)`: Sets `workletPlaybackReady=true`, enables playback controls/seek bar *only if all active tracks have also sent their 'load' confirmation or equivalent readiness signal* (logic adjusted based on single worklet). **Playback is now possible.**
+    7.  `app.js (runVadInBackground)` (Running concurrently per track):
         *   Initializes VAD model if needed (`sileroWrapper.create`).
-        *   Shows VAD progress bar (`uiManager`).
+        *   If `trackIndex === 0`, shows VAD progress bar (`uiManager`).
         *   Calls `audioEngine.resampleTo16kMono`.
         *   Calls `vadAnalyzer.analyze` (which calls `sileroProcessor.analyzeAudio` with progress callback).
-        *   `sileroProcessor`: Iterates frames, calls `sileroWrapper.process`, yields, calls progress callback -> `uiManager.updateVadProgress`.
-        *   On VAD completion/error: Updates VAD results in `app.js`, updates VAD slider UI (`uiManager`), redraws waveform highlights (`visualizer.redrawWaveformHighlight`), updates progress bar to 100% or 0%.
-*   **Playback Control:** `UI (Button Click)` -> `uiManager` dispatches event -> `app.js (handlePlayPause/Jump/Seek)` -> `audioEngine` (sends command message) -> `rubberbandProcessor`. Status feedback: `rubberbandProcessor` (sends state message) -> `audioEngine` (dispatches event) -> `app.js (handlePlaybackStateChange)` -> `uiManager` (updates button).
-*   **Parameter Control (Speed/Pitch/Gain):** `UI (Slider Input)` -> `uiManager` dispatches event -> `app.js (handleSpeed/Pitch/GainChange)` -> `audioEngine`. Gain applied directly via `GainNode`. Speed/Pitch command message sent to `rubberbandProcessor`.
-*   **VAD Threshold Tuning:** `UI (Slider Input)` -> `uiManager` dispatches `audioapp:thresholdChanged` -> `app.js (handleThresholdChange)` (checks if VAD done) -> `vadAnalyzer.handleThresholdUpdate` -> `sileroProcessor.recalculateSpeechRegions` -> `app.js` receives new regions -> `visualizer.redrawWaveformHighlight` & `uiManager.setSpeechRegionsText`.
-*   **State:** Core state (`currentAudioBuffer`, playback flags, `currentVadResults`) managed centrally in `app.js`. `audioEngine` manages worklet communication state. `vadAnalyzer` manages VAD results/thresholds. `uiManager` reflects state in the DOM. `sileroWrapper` and `rubberbandProcessor` manage internal WASM state.
-*   **Key Points:** Loading is now Decode -> Initial Visuals (Waveform+Spectrogram) -> Background VAD -> Waveform Highlight. Playback enabled after worklet ready, independent of VAD completion.
-*   **Time Synchronization:** UI progress indicator is driven by `app.js` using main-thread `AudioContext.currentTime` calculations, compensated for speed changes. Explicit seeks are sent to `audioEngine` on pause and after speed slider adjustments (debounced) to force engine synchronization with the main thread's estimate, mitigating drift from Rubberband's internal timing.
+        *   `sileroProcessor`: Iterates frames, calls `sileroWrapper.process`, yields, calls progress callback -> `uiManager.updateVadProgress` (only if track 0).
+        *   On VAD completion/error: Updates VAD results `vadResults[trackIndex]`, if `trackIndex === 0` updates VAD slider UI (`uiManager`), redraws waveform highlights (`visualizer.redrawWaveformHighlight`), updates progress bar.
+*   **Playback Control:** `UI (Button Click)` -> `uiManager` dispatches event -> `app.js (handlePlayPause/Jump/Seek)` -> `app.js` potentially pauses playback first (for seek/jump) -> `audioEngine` (sends command message to single worklet) -> `rubberbandProcessor` (applies command to internal state(s)). Status feedback: `rubberbandProcessor` (sends overall state message) -> `audioEngine` (dispatches event) -> `app.js (handlePlaybackStateChange)` -> `uiManager` (updates button).
+*   **Parameter Control (Speed/Pitch/Gain):** `UI (Slider Input)` -> `uiManager` dispatches event -> `app.js (handleSpeed/Pitch/GainChange)` -> `audioEngine`. Gain applied directly via `GainNode`. Speed/Pitch command message sent to the single `rubberbandProcessor`, which applies it to *all* active internal track states.
+*   **VAD Threshold Tuning:** `UI (Slider Input)` -> `uiManager` dispatches `audioapp:thresholdChanged` -> `app.js (handleThresholdChange)` (checks if VAD done for track 0) -> `vadAnalyzer.handleThresholdUpdate` (for track 0 results) -> `sileroProcessor.recalculateSpeechRegions` -> `app.js` receives new regions -> `visualizer.redrawWaveformHighlight` & `uiManager.setSpeechRegionsText`.
+*   **State:** Core state (`audioBuffers`, `vadResults`, playback flags, etc.) managed centrally in `app.js` using arrays indexed by track. `audioEngine` manages the single worklet communication state. `vadAnalyzer` manages VAD results/thresholds per track. `uiManager` reflects state in the DOM (currently mostly Track 0). `rubberbandProcessor` manages **multiple internal** WASM states and buffers.
+*   **Key Points:** Loading alternates between tracks 0 and 1. UI primarily reflects track 0. One worklet manages processing for both tracks. Seek/Jump pauses playback first.
+*   **Time Synchronization:** UI progress indicator is driven by `app.js` using main-thread `AudioContext.currentTime` calculations, compensated for speed changes. Explicit seeks/jumps pause playback and force engine synchronization. Speed slider adjustments trigger debounced sync.
 
 ## 5. Design Decisions, Constraints & Tradeoffs
 
 *   **Static Hosting:** Simplifies deployment, no backend required. Limits features requiring server interaction. (Constraint C1)
 *   **Vanilla JS:** Reduces dependency footprint, avoids framework overhead/learning curve. Requires manual implementation of patterns (modules, state management). (Constraint C2)
 *   **IIFE Module Pattern:** Provides simple namespacing (`AudioApp`) without requiring a build step. Relies on careful script loading order.
-*   **Custom Events (`audioapp:*`):** Decouples UI Manager and Audio Engine from the main App controller, allowing modules to signal state changes or requests without direct dependencies on `app.js`'s internal methods. (Constraint C3)
-*   **AudioWorklet for Rubberband:** Essential for performing complex audio processing (time-stretching) off the main thread without blocking UI or audio playback. Adds architectural complexity for message passing and state synchronization between main thread (`audioEngine`) and worklet thread (`rubberbandProcessor`). Required a **customized WASM loader** (`lib/rubberband-loader.js`).
-    *   **Alternative Considered (SoundTouchJS):** SoundTouchJS was evaluated, but the audio quality, especially at slower speeds, was significantly worse than Rubberband. Rubberband's computational cost was deemed acceptable for the quality improvement. Native Web Audio playback rate changes were also too choppy at low speeds.
-    *   **Rubberband Flags:** The primary goal for flag tuning was improving voice quality. The current flag set (`ProcessRealTime`, `PitchHighQuality`, `PhaseIndependent`, `TransientsCrisp`) represents a balance. `EngineFiner` was tested but resulted in stuttering playback, likely due to exceeding CPU limits on the test machine; the default (faster) engine is currently used.
-    *   **Rubberband Temporal Inaccuracy:** ***(RESTORED)*** Rubberband prioritizes audio quality, leading to potential drift in its output duration and time reporting relative to Web Audio clock. This necessitates **main-thread time calculation** for the UI indicator and periodic seek-based synchronization. Analogy: Cannot use a rubber band as a precise ruler.
+*   **Custom Events (`audioapp:*`):** Decouples UI Manager and Audio Engine from the main App controller. (Constraint C3)
+*   **Single AudioWorklet for Rubberband:**
+    *   **Motivation:** Essential for performing complex audio processing off the main thread.
+    *   **Initial Problem:** Attempting to use multiple `AudioWorkletNode` instances (one per track) each running the same `rubberbandProcessor.js` script resulted in crashes (`RuntimeError: table index is out of bounds`). Debugging revealed that both instances were being allocated overlapping or identical memory regions by the Emscripten runtime's `_malloc` within the shared WASM memory heap, leading to state corruption.
+    *   **Current Architecture:** Uses only **one** `AudioWorkletNode` instance running `rubberbandProcessor.js`. This single processor script is now responsible for:
+        *   Managing **multiple internal** Rubberband state instances (via separate `_rubberband_new` calls).
+        *   Handling track-specific state (audio data, playback position, buffer pointers).
+        *   Performing **manual memory management** (`_malloc`/`_free`) for WASM heap buffers required by each internal Rubberband instance.
+        *   Processing audio independently for each active track during its `process()` loop.
+        *   **Mixing** the processed output from active tracks into the single output buffer provided to the `AudioWorkletProcessor`.
+    *   **Tradeoffs:**
+        *   Solves the memory corruption/crash issue reliably.
+        *   Increases the complexity of `rubberbandProcessor.js`.
+        *   **Introduces a significant CPU scaling limitation:** Because all processing for *all* tracks occurs within the single worklet thread's tight time budget (`process` loop), the number of concurrent tracks is severely limited by CPU power (likely 2 stereo tracks max on typical hardware).
 *   **ONNX Runtime Web for VAD:** Enables use of standard ML models (like Silero VAD) directly in the browser via WASM. Avoids needing a dedicated VAD implementation.
-*   **Main-Thread VAD (Async):** VAD processing (`sileroProcessor`) runs on the main thread but uses `async/await` and `setTimeout(0)` to yield periodically.
-    *   **Tradeoff:** Simpler implementation for MVP compared to setting up a dedicated Web Worker for VAD. Avoids additional complexity of worker communication and state transfer.
-    *   **Downside:** Can still cause minor UI sluggishness during intense computation phases within `sileroWrapper.process`. Susceptible to browser throttling in background tabs (prevents VAD completion if tab is unfocused for a long time).
-    *   **(Clarification):** VAD processing currently does *not* run in a Web Worker. The idea was considered to allow completion even when the tab is backgrounded, but not implemented yet.
-*   **VAD Progress Updates:** Initial attempts at direct UI updates or simple `setTimeout(0)` from the VAD loop were unreliable for progress bar updates. The current solution uses a callback function passed down to `sileroProcessor` which calls `uiManager.updateVadProgress`.
-*   **JSDoc:** Chosen standard for JavaScript documentation in this project. (Constraint C7)
-*   **Manual Testing:** Adopted for rapid iteration during MVP phase. Lacks automated checks for regressions. (Constraint C5)
-*   **Visualizer Computation:** Waveform data calculated per-pixel. Spectrogram data computed entirely upfront (using **modified `lib/fft.js`**) before being drawn asynchronously chunk-by-chunk.
-    *   **Tradeoff:** Faster waveform display. Spectrogram has an initial computation delay before drawing starts, but avoids the complexity of streaming FFT computation. Async drawing prevents blocking during render.
-*   **File Structure:** Modular approach with separate files/folders for distinct responsibilities (UI, Player, VAD, Visualizers, Controller, Constants, Utils). Asset types (CSS, Fonts) organized into folders. (Constraint C6, Asset Reorg)
+*   **Main-Thread VAD (Async):** VAD processing (`sileroProcessor`) runs on the main thread but uses `async/await` and `yieldToMainThread` (`setTimeout(0)`) to yield periodically.
+    *   **Tradeoff:** Simpler implementation for MVP compared to setting up a dedicated Web Worker for VAD.
+    *   **Downside:** Can still cause minor UI sluggishness. Susceptible to browser throttling.
+*   **VAD Progress Updates:** Uses a callback passed down to `sileroProcessor` which calls `uiManager.updateVadProgress` (currently only for Track 0 UI).
+*   **JSDoc:** Chosen standard for JavaScript documentation. (Constraint C7)
+*   **Manual Testing:** Adopted for rapid iteration. Lacks automated checks. (Constraint C5)
+*   **Visualizer Computation:** Waveform data calculated per-pixel. Spectrogram data computed entirely upfront before async drawing. ***(Visualizers currently only display Track 0).***
+*   **File Structure:** Modular approach. (Constraint C6)
 
 ## 6. Known Issues & Development Log
 
-*   **Formant Shifting (Non-Functional):** Currently disabled/commented out.
-    *   **Details:** Attempts were made to enable formant scaling using `_rubberband_set_formant_scale`. Rubberband flags tested included permutations of `EngineFiner`, `PhaseIndependent`, `FormantPreserved`, and the current default flag set. Formant scaling was tested alone and in combination with phase/speed shifting (0.25x to 2.0x). Debugging confirmed the target scale value was successfully passed to the WASM function via the correct API call.
-    *   **Result:** No errors were thrown, but **no audible effect** from formant shifting was ever observed. The feature was abandoned as non-functional in the current Rubberband WASM build/configuration. It's uncertain if the issue is in the WASM compilation, the underlying library's formant preservation interaction with other flags, or a misunderstanding of the scale parameter (though multiplier is standard).
+*   **Formant Shifting (Non-Functional):** Currently disabled/commented out. No audible effect observed during testing. Issue might be in WASM build, library interaction, or parameter understanding.
 *   **VAD Performance & Backgrounding:** Runs on main thread; may cause minor UI jank and pauses when tab unfocused.
 *   **Spectrogram Latency:** Initial computation delay before drawing begins.
 *   **Rubberband Engine Choice:** `EngineFiner` caused stuttering; using default (faster) engine.
-*   **Playback Indicator Drift (Mitigated):** Reliance on main-thread calculation and sync-on-pause/speed-change significantly reduces drift compared to trusting worklet time reports, but minor visual discrepancies *during* rapid parameter changes might still occur due to inherent system latencies.
+*   **Playback Indicator Drift (Mitigated):** Reliance on main-thread calculation and sync-on-pause/speed-change reduces drift, but minor visual discrepancies *during* rapid parameter changes might still occur.
+*   **CPU Scaling Limitation:** The single AudioWorklet architecture limits the number of concurrent tracks that can be processed in real-time (likely 2 stereo tracks max) due to CPU constraints within the worklet thread. Exceeding this limit will likely cause audio glitches or crashes.
+*   **UI Multi-Track Support:** UI currently only displays visuals, VAD info, and file info for Track 0. Mute control is only via temporary keyboard shortcuts.
 
 <!-- /vibe-player/architecture.md -->
