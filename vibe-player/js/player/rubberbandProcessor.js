@@ -1,632 +1,333 @@
 // --- /vibe-player/js/player/rubberbandProcessor.js ---
 // AudioWorkletProcessor script for time/pitch shifting using Rubberband WASM.
-// Evaluates loader script text received via options.
-
-/**
- * @typedef {import("../constants.js").AudioApp.Constants} Constants
- */
+// *** Handles state for up to TWO tracks within ONE worklet instance. ***
 
 // Declare global variable that the loader script's IIFE will populate
 var Rubberband;
 
 /**
  * The main AudioWorkletProcessor class for Rubberband.
- * Runs off the main thread.
+ * Runs off the main thread, managing state for two potential tracks.
  */
 class RubberbandProcessor extends AudioWorkletProcessor {
     // --- Static Properties ---
-    static RENDER_QUANTUM_FRAMES = 128; // Defined by Web Audio API
+    static RENDER_QUANTUM_FRAMES = 128;
+    static MAX_TRACKS = 2; // Handle up to two tracks
 
     // --- Instance Properties ---
     /** @type {boolean} Flag indicating if initialization has started. */
     isLoading = false;
-    /** @type {boolean} Flag indicating if the WASM module is loaded and Rubberband initialized. */
-    isReady = false;
+    /** @type {boolean} Flag indicating if the WASM module is loaded (but not necessarily RB instances). */
+    isWasmReady = false;
     /** @type {any} The loaded Emscripten WASM module instance for Rubberband. */
     Module = null;
-     /** @type {Function|null} The Rubberband loader function obtained by evaluating script text. */
-     rubberbandLoaderFunc = null;
-    /** @type {number} Pointer to the RubberbandState instance in WASM memory. */
-    rubberbandState = 0;
-    /** @type {number} The sample rate provided during construction (critical!). */
-    sampleRate = 0;
-    /** @type {number} Number of audio channels specified during construction. */
-    initialChannelCount = 1;
-     /** @type {number} Actual number of audio channels from loaded data. */
-    channelCount = 1;
+    /** @type {Function|null} The Rubberband loader function. */
+    rubberbandLoaderFunc = null;
     /** @type {ArrayBuffer|null} Received WASM binary ArrayBuffer. */
     wasmBinary = null;
-    /** @type {Array<Float32Array>|null} Array holding audio data for each channel. */
-    audioDataChannels = null;
-    /** @type {number} Current playback position in source samples. */
-    sourcePosition = 0;
-    /** @type {number} Total length of the source audio in samples. */
-    sourceLength = 0;
-    /** @type {boolean} Playback state (playing or paused). */
-    isPlaying = false;
-    /** @type {number} Target playback speed ratio. */
+    /** @type {string|null} Received loader script text. */
+    loaderScriptText = null;
+    /** @type {number} Sample rate provided during construction (assumed same for both tracks). */
+    sampleRate = 0; // Set during construction
+
+    // --- Per-Track State (Arrays indexed by trackIndex 0 or 1) ---
+    /** @type {Array<number>} Pointers to RubberbandState instances [track0, track1]. */
+    rubberbandState = [0, 0];
+    /** @type {Array<number>} Number of channels for each track [track0, track1]. */
+    channelCount = [0, 0];
+    /** @type {Array<Array<Float32Array>|null>} Audio data [track0[ch0, ch1...], track1[ch0, ch1...]]. */
+    audioDataChannels = [null, null];
+    /** @type {Array<number>} Current playback position in source samples [track0, track1]. */
+    sourcePosition = [0, 0];
+    /** @type {Array<number>} Total length of source audio in samples [track0, track1]. */
+    sourceLength = [0, 0];
+    /** @type {Array<boolean>} Playback state per track [track0, track1]. */
+    isPlaying = [false, false];
+    /** @type {Array<number>} Input buffer size required by Rubberband [track0, track1]. */
+    inputBufferSize = [0, 0];
+    /** @type {Array<Array<Float32Array>>} Input buffers [[ch0, ch1...], [ch0, ch1...]]. */
+    wasmInputBuffers = [[], []];
+    /** @type {Array<Array<Float32Array>>} Output buffers [[ch0, ch1...], [ch0, ch1...]]. */
+    wasmOutputBuffers = [[], []];
+    /** @type {Array<Array<number>>} Pointers to WASM input buffers [[ptr0, ptr1...], [ptr0, ptr1...]]. */
+    wasmInputPtrs = [[], []];
+    /** @type {Array<Array<number>>} Pointers to WASM output buffers [[ptr0, ptr1...], [ptr0, ptr1...]]. */
+    wasmOutputPtrs = [[], []];
+    /** @type {Array<number>} Frames available in Rubberband output [track0, track1]. */
+    availableFrames = [0, 0];
+    /** @type {Array<boolean>} Whether the processor instance for a track is ready [track0, track1]. */
+    isTrackReady = [false, false];
+
+    // --- Shared State ---
+    /** @type {number} Target playback speed ratio (applied to both). */
     timeRatio = 1.0;
-    /** @type {number} Target pitch scale ratio. */
+    /** @type {number} Target pitch scale ratio (applied to both). */
     pitchScale = 1.0;
-    /** @type {number} Size of the input buffer required by Rubberband. */
-    inputBufferSize = 0;
-    /** @type {Array<Float32Array>} Buffers to hold input data for Rubberband processing. */
-    wasmInputBuffers = [];
-    /** @type {Array<Float32Array>} Buffers to hold output data from Rubberband processing. */
-    wasmOutputBuffers = [];
-    /** @type {Array<number>} Pointers to WASM memory for input buffers. */
-    wasmInputPtrs = [];
-    /** @type {Array<number>} Pointers to WASM memory for output buffers. */
-    wasmOutputPtrs = [];
-    /** @type {number} Number of frames available in Rubberband's output buffer. */
-    availableFrames = 0;
+    /** @type {boolean} Overall playback state (true if ANY track is playing). */
+    isOverallPlaying = false;
+
     /** @type {Array<MessageEvent['data']>|null} Queue for messages received during init. */
-     messageQueue = [];
-    /** @type {number} Unique ID for logging instance distinction */ // NEW: Instance ID
-    instanceId = Math.floor(Math.random() * 1000);
+    messageQueue = [];
 
 
-    /**
-     * Constructor: Called when the node is created.
-     * Receives options from the main thread (AudioWorkletNode constructor).
-     * Evaluates loader script text and kicks off asynchronous WASM initialization.
-     * @param {AudioWorkletNodeOptions} options
-     */
-    constructor(options) {
+    /** Constructor */
+    constructor(options) { /* ... unchanged ... */
         super(options);
-        console.log(`[RBProc-${this.instanceId}] Constructor called.`); // Added ID
-        this.isLoading = true; // Mark as loading
-        this.messageQueue = []; // Initialize queue
-
-        // --- Get Essential Options & Evaluate Loader ---
+        console.log(`[RBProc] Constructor called (Single Instance).`);
+        this.isLoading = true;
+        this.messageQueue = [];
         try {
-            if (!options.processorOptions) {
-                 throw new Error("processorOptions missing.");
-            }
+            if (!options.processorOptions) throw new Error("processorOptions missing.");
             this.sampleRate = options.processorOptions.sampleRate;
             this.wasmBinary = options.processorOptions.wasmBinary;
-            const loaderScriptText = options.processorOptions.loaderScriptText;
-            this.initialChannelCount = options.processorOptions.channelCount || 1;
-            this.channelCount = this.initialChannelCount;
-
+            this.loaderScriptText = options.processorOptions.loaderScriptText;
             if (!this.sampleRate) throw new Error("sampleRate missing or invalid.");
             if (!this.wasmBinary) throw new Error("wasmBinary missing.");
-            if (!loaderScriptText) throw new Error("loaderScriptText missing.");
-
-            console.log(`[RBProc-${this.instanceId}] Options received: SampleRate=${this.sampleRate}, Channels=${this.initialChannelCount}`);
-
-             // Evaluate the loader script text to get the loader function
-             console.log(`[RBProc-${this.instanceId}] Evaluating loader script text...`);
-             this.rubberbandLoaderFunc = new Function(loaderScriptText + '; return Rubberband;')();
-             if (typeof this.rubberbandLoaderFunc !== 'function') {
-                 throw new Error("Evaluating loader script text did not yield a function.");
-             }
-             console.log(`[RBProc-${this.instanceId}] Loader function obtained.`);
-
-            // Start async WASM initialization
+            if (!this.loaderScriptText) throw new Error("loaderScriptText missing.");
+            console.log(`[RBProc] Options received: SampleRate=${this.sampleRate}`);
+            console.log(`[RBProc] Evaluating loader script text...`);
+            this.rubberbandLoaderFunc = new Function(this.loaderScriptText + '; return Rubberband;')();
+            if (typeof this.rubberbandLoaderFunc !== 'function') {
+                throw new Error("Evaluating loader script text did not yield a function.");
+            }
+            console.log(`[RBProc] Loader function obtained.`);
             this._initializeWasm();
-
         } catch (error) {
-             console.error(`[RBProc-${this.instanceId}] FATAL: Error during constructor setup: ${error.message}`);
+             console.error(`[RBProc] FATAL: Error during constructor setup: ${error.message}`);
              this.port.postMessage({ type: 'error', message: `Processor construction failed: ${error.message}` });
-             this.isReady = false;
-             this.isLoading = false;
+             this.isWasmReady = false; this.isLoading = false;
         }
-
         this.port.onmessage = this.handleMessage.bind(this);
     }
 
-    /**
-     * Initializes the Rubberband WASM module using the evaluated loader function.
-     * @private
-     * @returns {Promise<void>}
-     */
-     async _initializeWasm() {
-        if (typeof this.rubberbandLoaderFunc !== 'function') {
-            this.port.postMessage({ type: 'error', message: 'Internal Error: Loader function not available for WASM init.' });
-            this.isReady = false; this.isLoading = false; return;
-        }
-        if (!this.wasmBinary) {
-             this.port.postMessage({ type: 'error', message: 'Internal Error: WASM binary not available for WASM init.' });
-             this.isReady = false; this.isLoading = false; return;
-        }
-
-        console.log(`[RBProc-${this.instanceId}] Initializing WASM...`);
+    /** Initializes WASM */
+     async _initializeWasm() { /* ... unchanged ... */
+        if (typeof this.rubberbandLoaderFunc !== 'function' || !this.wasmBinary) { this.port.postMessage({ type: 'error', message: 'Internal Error: Loader/Binary not available for WASM init.' }); this.isWasmReady = false; this.isLoading = false; return; }
+        console.log(`[RBProc] Initializing WASM...`);
         try {
-            // Instantiate WASM using the custom loader function
-            const moduleArg = {
-                wasmBinary: this.wasmBinary,
-                instantiateWasm: (info, receiveInstance) => {
-                    WebAssembly.instantiate(this.wasmBinary, info)
-                        .then(({ instance }) => receiveInstance(instance))
-                        .catch(error => {
-                             console.error(`[RBProc-${this.instanceId}] WASM Instantiation failed:`, error);
-                             this.port.postMessage({ type: 'error', message: `WASM Instantiation failed: ${error.message}` });
-                             this.isReady = false; this.isLoading = false; this.Module = null;
-                        });
-                }
-            };
+            const instantiateWasm = (info, receiveInstance) => { console.log("[RBProc] instantiateWasm hook called..."); WebAssembly.instantiate(this.wasmBinary, info).then(({ instance, module }) => { console.log("[RBProc] WebAssembly.instantiate successful."); receiveInstance(instance, module); }).catch(error => { console.error(`[RBProc] WASM Instantiation failed inside hook:`, error); this.port.postMessage({ type: 'error', message: `WASM Instantiation failed inside hook: ${error.message}` }); this.isWasmReady = false; this.isLoading = false; this.Module = null; }); return {}; };
+            const moduleArg = { wasmBinary: this.wasmBinary, instantiateWasm: instantiateWasm };
             this.Module = await this.rubberbandLoaderFunc(moduleArg);
-            console.log(`[RBProc-${this.instanceId}] WASM Module loaded.`);
-
-             if (!this.Module) {
-                  throw new Error("WASM Module object was not created after loader execution.");
-             }
-
-            // Initialize Rubberband state *after* WASM is loaded
-            this._initializeRubberband();
-
-        } catch (error) {
-            console.error(`[RBProc-${this.instanceId}] Error initializing WASM:`, error);
-            this.port.postMessage({ type: 'error', message: `WASM Initialization failed: ${error.message}` });
-            this.isReady = false;
-            this.isLoading = false;
-            this.Module = null;
-        } finally {
-             this.isLoading = false; // Finished loading attempt
-             if (this.messageQueue && this.messageQueue.length > 0) {
-                  console.log(`[RBProc-${this.instanceId}] Processing ${this.messageQueue.length} buffered messages post-init attempt...`);
-                  while (this.messageQueue.length > 0) {
-                       this._processMessage(this.messageQueue.shift());
-                  }
-                  this.messageQueue = null;
-             }
-        }
-    }
-
-    /**
-     * Initializes the Rubberband state using the loaded WASM module.
-     * Called after _initializeWasm completes successfully.
-     * @private
-     */
-    _initializeRubberband() {
-        if (!this.Module || !this.Module._rubberband_new) {
-             console.error(`[RBProc-${this.instanceId}] WASM Module or _rubberband_new not available for Rubberband init.`);
-             this.port.postMessage({ type: 'error', message: 'WASM Module methods not available post-load.' });
-             this.isReady = false;
-             return;
-        }
-        try {
-            const channels = this.initialChannelCount;
-            // --- SIMPLIFIED OPTIONS ---
-            // const options = this.Module.RubberbandOptions.ProcessRealTime |
-            //                 this.Module.RubberbandOptions.PitchHighQuality |
-            //                 this.Module.RubberbandOptions.PhaseIndependent |
-            //                 this.Module.RubberbandOptions.TransientsCrisp;
-            const options = this.Module.RubberbandOptions.ProcessRealTime; // Use minimal options
-            // const options = this.Module.RubberbandOptions.ProcessOffline; // Alternative minimal
-            // const options = 0; // Default options (equivalent to ProcessOffline)
-
-            console.log(`[RBProc-${this.instanceId}] Initializing Rubberband instance with Rate: ${this.sampleRate}, Channels: ${channels}, Options: ${options} (SIMPLIFIED)`);
-
-            this.rubberbandState = this.Module._rubberband_new(this.sampleRate, channels, options, this.timeRatio, this.pitchScale);
-
-            if (!this.rubberbandState) {
-                 throw new Error("_rubberband_new returned null or zero pointer.");
-            }
-
-            console.log(`[RBProc-${this.instanceId}] Rubberband instance created (State Ptr: ${this.rubberbandState}).`);
-
-            this.inputBufferSize = this.Module._rubberband_get_samples_required(this.rubberbandState);
-            console.log(`[RBProc-${this.instanceId}] Rubberband requires input buffer size: ${this.inputBufferSize} frames`);
-             if (this.inputBufferSize <= 0) {
-                  throw new Error(`_rubberband_get_samples_required returned invalid size: ${this.inputBufferSize}`);
-             }
-
-            this._allocateWasmBuffers(channels); // Will throw on error
-
-            this.isReady = true;
+            console.log(`[RBProc] WASM Module loading process initiated by loader function.`);
+            if (!this.Module) { console.error("[RBProc] WASM Module object is null after loader function finished."); this.isWasmReady = false; this.isLoading = false; return; }
+            this.isWasmReady = true;
+            console.log(`[RBProc] WASM Module ready. Waiting for track load messages...`);
             this.port.postMessage({ type: 'processorReady' });
-            console.log(`[RBProc-${this.instanceId}] Processor is ready.`);
-
-        } catch (error) {
-            console.error(`[RBProc-${this.instanceId}] Error initializing Rubberband state:`, error);
-            this.port.postMessage({ type: 'error', message: `Rubberband Initialization failed: ${error.message}` });
-            this.isReady = false;
-            this._freeWasmBuffers(); // Attempt cleanup
-        }
+        } catch (error) { console.error(`[RBProc] Error initializing WASM (loader function error):`, error); this.port.postMessage({ type: 'error', message: `WASM Initialization loader error: ${error.message}` }); this.isWasmReady = false; this.isLoading = false; this.Module = null;
+        } finally { this.isLoading = false; if (this.messageQueue && this.messageQueue.length > 0) { console.log(`[RBProc] Processing ${this.messageQueue.length} buffered messages post-WASM-init...`); while (this.messageQueue.length > 0) { this._processMessage(this.messageQueue.shift()); } this.messageQueue = null; } }
     }
 
-    /**
-     * Allocates input and output buffers in WASM memory.
-     * @param {number} channels - Number of channels.
-     * @private
-     */
-    _allocateWasmBuffers(channels) {
-        if (!this.Module || !this.Module._malloc || this.inputBufferSize <= 0) {
-             console.error(`[RBProc-${this.instanceId}] Cannot allocate buffers: Module/malloc not ready or invalid buffer size.`);
-             throw new Error("WASM module or buffer size invalid for allocation.");
-        }
-        this._freeWasmBuffers(); // Free existing buffers first
-
-        const bufferSizeBytes = this.inputBufferSize * Float32Array.BYTES_PER_ELEMENT;
-        console.log(`[RBProc-${this.instanceId}] Allocating ${channels} channel(s), ${bufferSizeBytes} bytes per buffer (${this.inputBufferSize} frames)`);
-
-        for (let i = 0; i < channels; i++) {
-            let inputPtr = 0; let outputPtr = 0;
-            try {
-                inputPtr = this.Module._malloc(bufferSizeBytes);
-                outputPtr = this.Module._malloc(bufferSizeBytes);
-                 if (!inputPtr || !outputPtr) {
-                      throw new Error(`_malloc returned null pointer for channel ${i}.`);
-                 }
-                this.wasmInputPtrs.push(inputPtr);
-                this.wasmOutputPtrs.push(outputPtr);
-                // Add pointer logging
-                console.log(`[RBProc-${this.instanceId}] Allocated ch ${i}: Input Ptr=${inputPtr}, Output Ptr=${outputPtr}`);
-                this.wasmInputBuffers.push(new Float32Array(this.Module.HEAPF32.buffer, inputPtr, this.inputBufferSize));
-                this.wasmOutputBuffers.push(new Float32Array(this.Module.HEAPF32.buffer, outputPtr, this.inputBufferSize));
-            } catch (allocError) {
-                 console.error(`[RBProc-${this.instanceId}] Error allocating WASM memory for ch ${i}: ${allocError.message}`);
-                  if(inputPtr) this.Module._free(inputPtr);
-                  if(outputPtr) this.Module._free(outputPtr);
-                 this._freeWasmBuffers(); // Free anything already in the arrays
-                 throw allocError;
-            }
-        }
-        console.log(`[RBProc-${this.instanceId}] Finished allocating WASM buffers for ${channels} channels.`);
+    /** Initializes Rubberband state for a track */
+    _initializeRubberbandTrack(trackIndex, numChannels) { /* ... unchanged ... */
+        if (!this.isWasmReady || !this.Module || !this.Module._rubberband_new) { console.error(`[RBProc] Cannot init track ${trackIndex}: WASM Module not ready.`); this.port.postMessage({ type: 'error', message: `Cannot init track ${trackIndex}: WASM Module not ready.` }); this.isTrackReady[trackIndex] = false; return false; }
+        this._cleanupTrack(trackIndex); // Ensure clean slate
+        try {
+            const options = this.Module.RubberbandOptions.ProcessRealTime;
+            console.log(`[RBProc] Initializing RB instance track ${trackIndex}: Rate=${this.sampleRate}, Chans=${numChannels}, Opts=${options}`);
+            this.rubberbandState[trackIndex] = this.Module._rubberband_new(this.sampleRate, numChannels, options, this.timeRatio, this.pitchScale);
+            if (!this.rubberbandState[trackIndex]) throw new Error("_rubberband_new failed.");
+            console.log(`[RBProc] RB instance track ${trackIndex} created (Ptr: ${this.rubberbandState[trackIndex]}).`);
+            this.channelCount[trackIndex] = numChannels;
+            this.inputBufferSize[trackIndex] = this.Module._rubberband_get_samples_required(this.rubberbandState[trackIndex]);
+            console.log(`[RBProc] RB track ${trackIndex} requires input buffer size: ${this.inputBufferSize[trackIndex]} frames`);
+            if (this.inputBufferSize[trackIndex] <= 0) throw new Error(`_rubberband_get_samples_required invalid size.`);
+            this._allocateWasmBuffers(trackIndex);
+            this.isTrackReady[trackIndex] = true;
+            console.log(`[RBProc] Track ${trackIndex} processor instance is ready.`);
+            return true;
+        } catch (error) { console.error(`[RBProc] Error initializing RB state for track ${trackIndex}:`, error); this.port.postMessage({ type: 'error', message: `RB Init track ${trackIndex} failed: ${error.message}`, trackIndex: trackIndex }); this._cleanupTrack(trackIndex); return false; }
     }
 
-    /**
-     * Frees previously allocated WASM memory for buffers.
-     * @private
-     */
-    _freeWasmBuffers() {
-        if (!this.Module || !this.Module._free) return;
-        console.log(`[RBProc-${this.instanceId}] Freeing ${this.wasmInputPtrs.length + this.wasmOutputPtrs.length} WASM buffers...`);
-        this.wasmInputPtrs.forEach((ptr, i) => {
-            try { if(ptr) { console.log(`[RBProc-${this.instanceId}] Freeing Input Ptr ch ${i}: ${ptr}`); this.Module._free(ptr); } } catch(e) {}
-        });
-        this.wasmOutputPtrs.forEach((ptr, i) => {
-            try { if(ptr) { console.log(`[RBProc-${this.instanceId}] Freeing Output Ptr ch ${i}: ${ptr}`); this.Module._free(ptr); } } catch(e) {}
-        });
-        this.wasmInputPtrs = [];
-        this.wasmOutputPtrs = [];
-        this.wasmInputBuffers = [];
-        this.wasmOutputBuffers = [];
-        console.log(`[RBProc-${this.instanceId}] Buffers freed.`);
+    /** Allocates WASM buffers */
+    _allocateWasmBuffers(trackIndex) { /* ... unchanged ... */
+        const numChannels = this.channelCount[trackIndex]; const bufferSize = this.inputBufferSize[trackIndex];
+        if (!this.Module || !this.Module._malloc || numChannels <= 0 || bufferSize <= 0) { throw new Error("Invalid state for buffer allocation."); }
+        this._freeWasmBuffers(trackIndex); const bufferSizeBytes = bufferSize * Float32Array.BYTES_PER_ELEMENT;
+        console.log(`[RBProc] Track ${trackIndex}: Allocating ${numChannels} chan(s), ${bufferSizeBytes} bytes/buf (${bufferSize} frames)`);
+        this.wasmInputPtrs[trackIndex] = []; this.wasmOutputPtrs[trackIndex] = []; this.wasmInputBuffers[trackIndex] = []; this.wasmOutputBuffers[trackIndex] = [];
+        for (let i = 0; i < numChannels; i++) { let inputPtr = 0; let outputPtr = 0; try { inputPtr = this.Module._malloc(bufferSizeBytes); outputPtr = this.Module._malloc(bufferSizeBytes); if (!inputPtr || !outputPtr) throw new Error(`_malloc failed track ${trackIndex} ch ${i}.`); this.wasmInputPtrs[trackIndex].push(inputPtr); this.wasmOutputPtrs[trackIndex].push(outputPtr); this.wasmInputBuffers[trackIndex].push(new Float32Array(this.Module.HEAPF32.buffer, inputPtr, bufferSize)); this.wasmOutputBuffers[trackIndex].push(new Float32Array(this.Module.HEAPF32.buffer, outputPtr, bufferSize)); } catch (allocError) { console.error(`[RBProc] Alloc Error track ${trackIndex} ch ${i}: ${allocError.message}`); if(inputPtr) this.Module._free(inputPtr); if(outputPtr) this.Module._free(outputPtr); this._freeWasmBuffers(trackIndex); throw allocError; } }
+        console.log(`[RBProc] Track ${trackIndex}: Finished allocating WASM buffers.`);
     }
 
-    /**
-     * Handles messages received from the main thread (AudioEngine).
-     * Buffers messages if initialization is still in progress.
-     * @param {MessageEvent} event
-     */
-    handleMessage(event) {
-         if (this.isLoading) {
-             console.log(`[RBProc-${this.instanceId}] Buffering message received during load:`, event.data.type);
-             this.messageQueue.push(event.data); // Queue the data part only
-             return;
-         }
+    /** Frees WASM buffers */
+    _freeWasmBuffers(trackIndex) { /* ... unchanged ... */
+        if (!this.Module || !this.Module._free) return; const numInput = this.wasmInputPtrs[trackIndex]?.length || 0; const numOutput = this.wasmOutputPtrs[trackIndex]?.length || 0; if (numInput === 0 && numOutput === 0) return;
+        (this.wasmInputPtrs[trackIndex] || []).forEach((ptr) => { try { if(ptr) this.Module._free(ptr); } catch(e) {} }); (this.wasmOutputPtrs[trackIndex] || []).forEach((ptr) => { try { if(ptr) this.Module._free(ptr); } catch(e) {} });
+        this.wasmInputPtrs[trackIndex] = []; this.wasmOutputPtrs[trackIndex] = []; this.wasmInputBuffers[trackIndex] = []; this.wasmOutputBuffers[trackIndex] = [];
+    }
+
+    /** Handles messages */
+    handleMessage(event) { /* ... unchanged ... */
+         if (this.isLoading) { console.log(`[RBProc] Buffering message:`, event.data.type); this.messageQueue.push(event.data); return; }
         this._processMessage(event.data);
     }
 
-     /**
-      * Internal message processing logic.
-      * @param {any} data - The message data object.
-      * @private
-      */
+          /** Internal message processing logic. */
      _processMessage(data) {
-        // console.log(`[RBProc-${this.instanceId}] Processing message:`, data.type); // Less verbose log
-
-        if (!this.isReady && !['load', 'reset'].includes(data.type)) {
-             console.warn(`[RBProc-${this.instanceId}] Ignoring command '${data.type}' because processor is not ready.`);
-             return;
-        }
-        if (!this.Module && data.type !== 'reset') {
-             console.warn(`[RBProc-${this.instanceId}] Ignoring command '${data.type}' because WASM Module not loaded.`);
-             return;
-        }
+        // console.log(`[RBProc] Processing message:`, data.type, data);
+        if (!this.isWasmReady && !['load', 'reset'].includes(data.type)) { console.warn(`[RBProc] Ignoring '${data.type}' - WASM not ready.`); return; }
+        if (!this.Module && data.type !== 'reset') { console.warn(`[RBProc] Ignoring '${data.type}' - WASM Module not loaded.`); return; }
 
         try {
+            const trackIndex = data.trackIndex;
+
             switch (data.type) {
                 case 'load':
-                    console.log(`[RBProc-${this.instanceId}] Load command processed.`);
-                     if (!this.Module || !this.rubberbandState) {
-                          console.error(`[RBProc-${this.instanceId}] Cannot process 'load': Module or Rubberband state not initialized.`);
-                          return;
-                     }
-                    this.audioDataChannels = data.audioData;
-                    const newChannelCount = this.audioDataChannels ? this.audioDataChannels.length : 0;
-                    this.sourceLength = newChannelCount > 0 ? this.audioDataChannels[0].length : 0;
-                    this.sourcePosition = 0;
-                    this.availableFrames = 0;
+                    if (trackIndex === undefined || trackIndex < 0 || trackIndex >= RubberbandProcessor.MAX_TRACKS) { console.error(`[RBProc] Load invalid trackIndex: ${trackIndex}`); return; }
+                    console.log(`[RBProc] Load command received for track ${trackIndex}.`);
 
-                    if (newChannelCount <= 0) {
-                         console.warn(`[RBProc-${this.instanceId}] Load received empty audio data.`);
-                         this.channelCount = 0;
-                         this._freeWasmBuffers(); // Free buffers if no channels
-                         this.Module._rubberband_reset(this.rubberbandState);
-                    } else if (newChannelCount !== this.channelCount) {
-                        console.warn(`[RBProc-${this.instanceId}] Channel count changed (${this.channelCount} -> ${newChannelCount}). Re-allocating buffers & resetting state.`);
-                        this.channelCount = newChannelCount;
-                        this._allocateWasmBuffers(this.channelCount); // Re-allocate (will free first)
-                        this.Module._rubberband_reset(this.rubberbandState);
-                        console.log(`[RBProc-${this.instanceId}] Buffers re-allocated for ${this.channelCount} channels.`)
-                    } else {
-                        // Channel count same, just reset state and buffers
-                        this.Module._rubberband_reset(this.rubberbandState);
-                        // Ensure buffers are valid (might have been freed on error)
-                        if(this.wasmInputPtrs.length !== this.channelCount) {
-                           console.warn(`[RBProc-${this.instanceId}] Buffers were invalid on load/reset. Re-allocating.`);
-                           this._allocateWasmBuffers(this.channelCount);
-                        }
-                    }
-                    console.log(`[RBProc-${this.instanceId}] Audio loaded. Channels: ${this.channelCount}, Source length: ${this.sourceLength} samples.`);
+                    const loadedAudioData = data.audioData;
+                    const numChannels = loadedAudioData?.length || 0;
+                    const calculatedSourceLength = numChannels > 0 ? (loadedAudioData[0]?.length || 0) : 0;
+                    console.log(`[RBProc] Track ${trackIndex} data length from message: ${calculatedSourceLength} samples.`);
+
+                    this.audioDataChannels[trackIndex] = loadedAudioData;
+                    this.sourceLength[trackIndex] = 0; // Reset before init
+                    this.sourcePosition[trackIndex] = 0;
+                    this.availableFrames[trackIndex] = 0;
+                    this.isPlaying[trackIndex] = false;
+
+                    if (numChannels > 0 && calculatedSourceLength > 0) {
+                        if (this._initializeRubberbandTrack(trackIndex, numChannels)) {
+                             this.sourceLength[trackIndex] = calculatedSourceLength; // Assign length AFTER init
+                             console.log(`[RBProc] Track ${trackIndex} initialized & loaded. Chans: ${this.channelCount[trackIndex]}, Len: ${this.sourceLength[trackIndex]} samples.`);
+                             this.port.postMessage({ type: 'trackLoadComplete', trackIndex: trackIndex });
+                        } else { console.error(`[RBProc] Failed to initialize track ${trackIndex} after load.`); }
+                    } else { console.warn(`[RBProc] Load track ${trackIndex} received empty/invalid audio data.`); this._cleanupTrack(trackIndex); }
                     break;
+
                 case 'togglePlayPause':
-                    this.isPlaying = !this.isPlaying;
-                    console.log(`[RBProc-${this.instanceId}] Playback state toggled to: ${this.isPlaying}`);
-                    this.port.postMessage({ type: 'playbackStateChanged', isPlaying: this.isPlaying });
+                    // Removed state recreation from here - just toggle flags
+                    this.isOverallPlaying = !this.isOverallPlaying;
+                    let actuallyPlayingCount = 0;
+                    console.log(`[RBProc] Toggle received. Target overall state: ${this.isOverallPlaying}`);
+                    for (let i = 0; i < RubberbandProcessor.MAX_TRACKS; i++) {
+                         if(this.isTrackReady[i]) {
+                             this.isPlaying[i] = this.isOverallPlaying; // Set based on overall target
+                             if (this.isPlaying[i]) {
+                                 actuallyPlayingCount++;
+                                 console.log(`[RBProc] Setting track ${i} to playing.`);
+                             }
+                         } else {
+                             this.isPlaying[i] = false;
+                         }
+                    }
+                    this.isOverallPlaying = (actuallyPlayingCount > 0); // Final state depends on who could play
+                    console.log(`[RBProc] Playback toggled. Final Overall: ${this.isOverallPlaying}, T0: ${this.isPlaying[0]}, T1: ${this.isPlaying[1]}`);
+                    this.port.postMessage({ type: 'playbackStateChanged', isPlaying: this.isOverallPlaying });
                     break;
+
                 case 'seek':
-                     if (!this.Module || !this.rubberbandState) {
-                         console.warn(`[RBProc-${this.instanceId}] Cannot seek: Module/State not ready.`);
-                         return;
-                     }
                      const seekTime = data.time;
                      const seekSample = Math.max(0, Math.floor(seekTime * this.sampleRate));
-                     console.log(`[RBProc-${this.instanceId}] Seek command processed: ${seekTime.toFixed(3)}s (Sample: ${seekSample})`);
-                     this.sourcePosition = Math.min(seekSample, this.sourceLength);
-                     this.availableFrames = 0;
-                     // It's crucial to reset Rubberband state on seek
-                     this.Module._rubberband_reset(this.rubberbandState);
-                     console.log(`[RBProc-${this.instanceId}] Rubberband state reset after seek.`);
-                    break;
-                case 'setSpeed':
-                     if (!this.Module || !this.rubberbandState) {
-                         console.warn(`[RBProc-${this.instanceId}] Cannot set speed: Module/State not ready.`);
-                         return;
+                     console.log(`[RBProc] Seek command processed for ALL tracks: ${seekTime.toFixed(3)}s (Sample: ${seekSample})`);
+                     for (let i = 0; i < RubberbandProcessor.MAX_TRACKS; i++) {
+                          if (this.isTrackReady[i] && this.rubberbandState[i]) { // Check state pointer exists
+                               this.sourcePosition[i] = Math.min(seekSample, this.sourceLength[i]);
+                               this.availableFrames[i] = 0;
+                               // *** FIX: Use reset instead of recreate ***
+                               console.log(`[RBProc] Resetting state for track ${i} on seek to sample ${this.sourcePosition[i]}.`);
+                               try {
+                                   this.Module._rubberband_reset(this.rubberbandState[i]);
+                               } catch(e) {
+                                   console.error(`[RBProc] Error resetting RB state for track ${i} on seek:`, e);
+                                   // If reset fails, maybe cleanup is needed? For now, just log.
+                                   this._cleanupTrack(i); // Attempt cleanup if reset fails? Risky.
+                                   this.port.postMessage({ type: 'error', message: `RB Reset track ${i} failed: ${e.message}`, trackIndex: i });
+                               }
+                          }
                      }
-                     this.timeRatio = data.speed;
-                     console.log(`[RBProc-${this.instanceId}] Setting time ratio: ${this.timeRatio.toFixed(2)}`);
-                     this.Module._rubberband_set_time_ratio(this.rubberbandState, this.timeRatio);
+                     console.log(`[RBProc] All track states reset after seek.`);
+                     // Ensure processor state reflects pause after seek
+                     this.isOverallPlaying = false; this.isPlaying = [false, false];
+                     this.port.postMessage({ type: 'playbackStateChanged', isPlaying: false });
                     break;
-                case 'setPitch':
-                    if (!this.Module || !this.rubberbandState) {
-                         console.warn(`[RBProc-${this.instanceId}] Cannot set pitch: Module/State not ready.`);
-                         return;
-                    }
-                    this.pitchScale = data.pitch;
-                    console.log(`[RBProc-${this.instanceId}] Setting pitch scale: ${this.pitchScale.toFixed(2)}`);
-                    this.Module._rubberband_set_pitch_scale(this.rubberbandState, this.pitchScale);
-                    break;
-                case 'reset':
-                    console.log(`[RBProc-${this.instanceId}] Reset/Cleanup command processed.`);
-                    this._cleanup();
-                    break;
-                default:
-                    console.warn(`[RBProc-${this.instanceId}] Unknown message type: ${data.type}`);
+
+                // ... (setSpeed, setPitch, setMute, reset, default cases - unchanged) ...
+                case 'setSpeed': this.timeRatio = data.speed; console.log(`[RBProc] Setting time ratio for ALL tracks: ${this.timeRatio.toFixed(2)}`); for (let i = 0; i < RubberbandProcessor.MAX_TRACKS; i++) { if (this.isTrackReady[i] && this.rubberbandState[i]) { try { this.Module._rubberband_set_time_ratio(this.rubberbandState[i], this.timeRatio); } catch(e) {} } } break;
+                case 'setPitch': this.pitchScale = data.pitch; console.log(`[RBProc] Setting pitch scale for ALL tracks: ${this.pitchScale.toFixed(2)}`); for (let i = 0; i < RubberbandProcessor.MAX_TRACKS; i++) { if (this.isTrackReady[i] && this.rubberbandState[i]) { try { this.Module._rubberband_set_pitch_scale(this.rubberbandState[i], this.pitchScale); } catch(e) {} } } break;
+                case 'setMute': if (trackIndex === undefined || trackIndex < 0 || trackIndex >= RubberbandProcessor.MAX_TRACKS) { console.error(`[RBProc] setMute invalid trackIndex: ${trackIndex}`); return; } console.log(`[RBProc] Mute command received for track ${trackIndex}: ${data.muted} (Not implemented in worklet)`); break;
+                case 'reset': console.log(`[RBProc] Reset/Cleanup command processed.`); this._cleanup(); break;
+                default: console.warn(`[RBProc] Unknown message type: ${data.type}`);
+
             }
         } catch (error) {
-             console.error(`[RBProc-${this.instanceId}] Error processing message type ${data.type}:`, error);
+             console.error(`[RBProc] Error processing message type ${data.type}:`, error);
              this.port.postMessage({ type: 'error', message: `Error processing command ${data.type}: ${error.message}` });
-             this.isPlaying = false; // Stop playback on error
+             this.isOverallPlaying = false; this.isPlaying = [false, false];
         }
     }
 
 
-        /**
-     * Main processing function called by the AudioWorklet system.
-     * @param {Array<Array<Float32Array>>} inputs - Input audio data (not used).
-     * @param {Array<Array<Float32Array>>} outputs - Output buffers to fill.
-     * @param {Record<string, Float32Array>} parameters - Audio parameters (not used).
-     * @returns {boolean} Return true to keep processor alive.
-     */
-    process(inputs, outputs, parameters) {
-         // Simplified readiness check
-         if (!this.isReady || !this.Module || !this.rubberbandState || !this.isPlaying || !this.audioDataChannels || this.channelCount === 0) {
-             this._outputSilence(outputs);
-             return true;
-         }
-
-        const outputBuffer = outputs[0];
-        const outputChannelCount = outputBuffer.length;
-        const requestedFrames = outputBuffer[0].length; // Usually 128
-
-        // Safety checks
-        if (outputChannelCount < this.channelCount) {
-             console.error(`[RBProc-${this.instanceId}] Mismatch: Output expects ${outputChannelCount} channels, processor has ${this.channelCount}. Stopping.`);
-             this._outputSilence(outputs);
-             this.isPlaying = false;
-             this.port.postMessage({ type: 'error', message: 'Output channel count mismatch.'});
-             return true;
-        }
-        if (this.wasmInputBuffers.length !== this.channelCount || this.wasmOutputBuffers.length !== this.channelCount || this.wasmInputPtrs.length !== this.channelCount || this.wasmOutputPtrs.length !== this.channelCount) {
-            console.error(`[RBProc-${this.instanceId}] Mismatch: WASM buffers/pointers not allocated correctly for ${this.channelCount} channels. Stopping.`);
-             this._outputSilence(outputs);
-             this.isPlaying = false;
-             this.port.postMessage({ type: 'error', message: 'WASM buffer allocation error.'});
-             return true;
-        }
-
-        let framesWritten = 0;
-        // REMOVED: const processStartTime = performance.now();
-
+    /** Main processing function */
+    process(inputs, outputs, parameters) { /* ... unchanged ... */
+         if (!this.isWasmReady || !this.Module || !this.isOverallPlaying) { this._outputSilence(outputs); return true; }
+        const outputBuffer = outputs[0]; const outputChannelCount = outputBuffer.length; const requestedFrames = outputBuffer[0].length;
+        this._outputSilence(outputBuffer); let anyTrackStillPlaying = false;
         try {
-             while (framesWritten < requestedFrames) {
-                 // --- Log state before checking available frames ---
-                 // console.log(`[RBProc-${this.instanceId}] Loop Start: written=${framesWritten}, req=${requestedFrames}, avail=${this.availableFrames}, srcPos=${this.sourcePosition}`);
-
-                 if (this.availableFrames === 0) {
-                     // console.log(`[RBProc-${this.instanceId}] Checking available...`);
-                     this.availableFrames = this.Module._rubberband_available(this.rubberbandState);
-                     // console.log(`[RBProc-${this.instanceId}] Available = ${this.availableFrames}`);
-                 }
-
-                 if (this.availableFrames > 0) {
-                     // --- Retrieve Frames ---
-                     let framesToRetrieve = Math.min(this.availableFrames, requestedFrames - framesWritten);
-                     if (framesToRetrieve > this.inputBufferSize) {
-                         // console.warn(`[RBProc-${this.instanceId}] Clamping retrieve size ${framesToRetrieve} to buffer size ${this.inputBufferSize}`);
-                         framesToRetrieve = this.inputBufferSize;
-                     }
-                     if (framesToRetrieve <= 0) break; // Should not happen if availableFrames > 0
-
-                     // console.log(`[RBProc-${this.instanceId}] Attempting retrieve: ${framesToRetrieve} frames`);
-                     const outputPtrArray = this.Module.stackAlloc(this.channelCount * 4); // Allocate on stack
-                     for (let i = 0; i < this.channelCount; ++i) { this.Module.setValue(outputPtrArray + i * 4, this.wasmOutputPtrs[i], '*'); }
-
-                     const retrieved = this.Module._rubberband_retrieve(this.rubberbandState, outputPtrArray, framesToRetrieve);
-                     // console.log(`[RBProc-${this.instanceId}] Retrieved: ${retrieved} frames`);
-
-                     if (retrieved > 0) {
-                         for (let i = 0; i < this.channelCount; ++i) {
-                             // Ensure outputBuffer[i] exists before setting
-                             if (outputBuffer[i]) {
-                                  outputBuffer[i].set(this.wasmOutputBuffers[i].subarray(0, retrieved), framesWritten);
-                             }
-                         }
-                         // Fill remaining output channels (if any) with silence
-                         for (let i = this.channelCount; i < outputChannelCount; ++i) {
-                             if (outputBuffer[i]) {
-                                  outputBuffer[i].fill(0, framesWritten, framesWritten + retrieved);
-                             }
-                         }
-                         framesWritten += retrieved;
-                         this.availableFrames -= retrieved;
-                     } else {
-                         // If retrieve returned 0, even if available > 0, reset available and break to potentially process more input
-                         this.availableFrames = 0;
-                         console.warn(`[RBProc-${this.instanceId}] Retrieve returned 0 despite available=${this.availableFrames}. Breaking retrieve loop.`);
-                         break;
-                     }
-                     // Free stack-allocated pointer array immediately? No, stack pointer moves on return.
-
-                 } else { // availableFrames is 0, need to process more input
-                     // --- Check for End of Source ---
-                     if (this.sourcePosition >= this.sourceLength) {
-                         // console.log(`[RBProc-${this.instanceId}] End of source reached (pos=${this.sourcePosition}). Flushing...`);
-                         const inputPtrArray = this.Module.stackAlloc(this.channelCount * 4);
-                         for (let i = 0; i < this.channelCount; ++i) { this.Module.setValue(inputPtrArray + i * 4, this.wasmInputPtrs[i], '*'); }
-                         // Process with 0 frames and final=true to flush internal buffers
-                         this.Module._rubberband_process(this.rubberbandState, inputPtrArray, 0, true);
-                         this.availableFrames = this.Module._rubberband_available(this.rubberbandState);
-                         // console.log(`[RBProc-${this.instanceId}] Available after flush = ${this.availableFrames}`);
-
-                         if (this.availableFrames <= 0) { // Nothing left after flushing
-                              console.log(`[RBProc-${this.instanceId}] End of source & flushed, stopping playback.`);
-                              this.isPlaying = false;
-                              this.port.postMessage({ type: 'playbackEnded' });
-                              this._outputSilence(outputs, framesWritten);
-                              return true; // Keep processor alive but stop processing loop
-                         }
-                         // If frames became available after flush, loop again to retrieve them
-                         continue;
-                     }
-
-                     // --- Process More Input ---
-                     const framesToProcess = Math.min(this.inputBufferSize, this.sourceLength - this.sourcePosition);
-                     if (framesToProcess <= 0) { // Safety check, should be caught above
-                          console.warn(`[RBProc-${this.instanceId}] framesToProcess is ${framesToProcess} despite source not ended. Stopping.`);
-                          this.isPlaying = false;
-                          this.port.postMessage({ type: 'playbackEnded' });
-                          this._outputSilence(outputs, framesWritten);
-                          return true;
-                     }
-
-                     // console.log(`[RBProc-${this.instanceId}] Processing input: ${framesToProcess} frames from pos ${this.sourcePosition}`);
-                     const inputPtrArray = this.Module.stackAlloc(this.channelCount * 4);
-                     for (let i = 0; i < this.channelCount; ++i) {
-                         const channelData = this.audioDataChannels[i];
-                         // Ensure channelData is valid
-                         if (!channelData) {
-                              throw new Error(`Missing audio data for channel ${i}`);
-                         }
-                         const subArray = channelData.subarray(this.sourcePosition, this.sourcePosition + framesToProcess);
-                         this.wasmInputBuffers[i].set(subArray);
-                         // Zero out remaining part of input buffer if needed
-                         if (framesToProcess < this.inputBufferSize) {
-                             this.wasmInputBuffers[i].fill(0, framesToProcess);
-                         }
-                         this.Module.setValue(inputPtrArray + i * 4, this.wasmInputPtrs[i], '*');
-                     }
-
-                     this.Module._rubberband_process(this.rubberbandState, inputPtrArray, framesToProcess, false);
-                     this.sourcePosition += framesToProcess;
-                     // Check available again *after* processing
-                     this.availableFrames = this.Module._rubberband_available(this.rubberbandState);
-                     // console.log(`[RBProc-${this.instanceId}] Available after process = ${this.availableFrames}`);
-
-                     // If processing yielded no output frames, and we haven't written anything this quantum, break the loop
-                     if (this.availableFrames <= 0 && framesWritten === 0) {
-                          // console.log(`[RBProc-${this.instanceId}] Processed input but no frames available yet, breaking loop for this quantum.`);
-                          break;
-                     }
-                 } // End if/else availableFrames > 0
-
-                 // Safety break to prevent potential infinite loops - REMOVED performance.now() dependency
-                 // const loopDuration = performance.now() - processStartTime; // REMOVED
-                 // if (loopDuration > 50) { // REMOVED Timeout check
-                 //      console.warn(`[RBProc-${this.instanceId}] Process loop took >50ms. Breaking to yield thread.`); // REMOVED
-                 //      break; // REMOVED
-                 // }
-
-             } // End while (framesWritten < requestedFrames)
-
-             // Fill remaining buffer with silence if needed
-             if (framesWritten < requestedFrames) {
-                 // console.log(`[RBProc-${this.instanceId}] Outputting silence for remaining ${requestedFrames - framesWritten} frames.`);
-                 this._outputSilence(outputs, framesWritten);
-             }
-
-        } catch(error) {
-             console.error(`[RBProc-${this.instanceId}] Error during process loop:`, error);
-             this.port.postMessage({ type: 'error', message: `Processing error: ${error.message}`});
-             this.isPlaying = false;
-             this._outputSilence(outputs);
-        }
-
-        return true; // Keep processor alive
+            for (let trackIndex = 0; trackIndex < RubberbandProcessor.MAX_TRACKS; trackIndex++) {
+                if (!this.isTrackReady[trackIndex] || !this.isPlaying[trackIndex] || !this.rubberbandState[trackIndex]) continue;
+                anyTrackStillPlaying = true; let framesWrittenThisTrack = 0; const trackChannelCount = this.channelCount[trackIndex]; const trackInputBufferSize = this.inputBufferSize[trackIndex];
+                if (outputChannelCount < trackChannelCount) { console.error(`[RBProc] T${trackIndex}: Output chan mismatch. Stop.`); this.isPlaying[trackIndex] = false; continue; } if (this.wasmInputBuffers[trackIndex]?.length !== trackChannelCount || this.wasmOutputBuffers[trackIndex]?.length !== trackChannelCount) { console.error(`[RBProc] T${trackIndex}: WASM buffer mismatch. Stop.`); this.isPlaying[trackIndex] = false; continue; }
+                while (framesWrittenThisTrack < requestedFrames) {
+                    if (this.availableFrames[trackIndex] === 0) { this.availableFrames[trackIndex] = this.Module._rubberband_available(this.rubberbandState[trackIndex]); }
+                    if (this.availableFrames[trackIndex] > 0) {
+                        let framesToRetrieve = Math.min(this.availableFrames[trackIndex], requestedFrames - framesWrittenThisTrack); if (framesToRetrieve > trackInputBufferSize) framesToRetrieve = trackInputBufferSize; if (framesToRetrieve <= 0) break; const outputPtrArray = this.Module.stackAlloc(trackChannelCount * 4); for (let i = 0; i < trackChannelCount; ++i) { this.Module.setValue(outputPtrArray + i * 4, this.wasmOutputPtrs[trackIndex][i], '*'); } const retrieved = this.Module._rubberband_retrieve(this.rubberbandState[trackIndex], outputPtrArray, framesToRetrieve);
+                        if (retrieved > 0) { for (let i = 0; i < trackChannelCount; ++i) { const trackOutput = this.wasmOutputBuffers[trackIndex][i]; const mainOutput = outputBuffer[i]; if (mainOutput) { for(let j=0; j < retrieved; j++) { mainOutput[framesWrittenThisTrack + j] += trackOutput[j]; } } } framesWrittenThisTrack += retrieved; this.availableFrames[trackIndex] -= retrieved; } else { this.availableFrames[trackIndex] = 0; break; }
+                    } else {
+                        if (this.sourcePosition[trackIndex] >= this.sourceLength[trackIndex]) { const inputPtrArray = this.Module.stackAlloc(trackChannelCount * 4); for (let i = 0; i < trackChannelCount; ++i) { this.Module.setValue(inputPtrArray + i * 4, this.wasmInputPtrs[trackIndex][i], '*'); } this.Module._rubberband_process(this.rubberbandState[trackIndex], inputPtrArray, 0, true); this.availableFrames[trackIndex] = this.Module._rubberband_available(this.rubberbandState[trackIndex]); if (this.availableFrames[trackIndex] <= 0) { /* console.log(`[RBProc] T${trackIndex}: End of source & flushed.`); */ this.isPlaying[trackIndex] = false; break; } continue; }
+                        const framesToProcess = Math.min(trackInputBufferSize, this.sourceLength[trackIndex] - this.sourcePosition[trackIndex]); if (framesToProcess <= 0) { console.warn(`[RBProc] T${trackIndex}: framesToProcess is ${framesToProcess}. Stop.`); this.isPlaying[trackIndex] = false; break; } const inputPtrArray = this.Module.stackAlloc(trackChannelCount * 4); for (let i = 0; i < trackChannelCount; ++i) { const channelData = this.audioDataChannels[trackIndex]?.[i]; if (!channelData) throw new Error(`Missing audio T${trackIndex} Ch${i}`); const subArray = channelData.subarray(this.sourcePosition[trackIndex], this.sourcePosition[trackIndex] + framesToProcess); this.wasmInputBuffers[trackIndex][i].set(subArray); if (framesToProcess < trackInputBufferSize) { this.wasmInputBuffers[trackIndex][i].fill(0, framesToProcess); } this.Module.setValue(inputPtrArray + i * 4, this.wasmInputPtrs[trackIndex][i], '*'); } this.Module._rubberband_process(this.rubberbandState[trackIndex], inputPtrArray, framesToProcess, false); this.sourcePosition[trackIndex] += framesToProcess; this.availableFrames[trackIndex] = this.Module._rubberband_available(this.rubberbandState[trackIndex]); if (this.availableFrames[trackIndex] <= 0 && framesWrittenThisTrack === 0) { break; }
+                    }
+                }
+            }
+            this.isOverallPlaying = this.isPlaying[0] || this.isPlaying[1];
+            if (!this.isOverallPlaying && anyTrackStillPlaying) { console.log(`[RBProc] Both tracks finished playing.`); this.port.postMessage({ type: 'playbackEnded' }); }
+        } catch(error) { console.error(`[RBProc] Error during process loop:`, error); this.port.postMessage({ type: 'error', message: `Processing error: ${error.message}`}); this.isPlaying = [false, false]; this.isOverallPlaying = false; this._outputSilence(outputBuffer); }
+        return true;
     }
 
-    /**
-     * Fills output buffers with silence.
-     * @param {Array<Array<Float32Array>>} outputs - The output array from process().
-     * @param {number} [startIndex=0] - Index from where to start filling silence.
-     * @private
-     */
-    _outputSilence(outputs, startIndex = 0) {
-        if (!outputs || !outputs[0]) return;
-        for (const channel of outputs[0]) {
-             if (channel && startIndex < channel.length) { // Add check for channel existence
-                try { channel.fill(0, startIndex); } catch(e) { console.error(`[RBProc-${this.instanceId}] Error filling silence:`, e); }
-             }
-        }
+    /** Fills output buffers with silence */
+    _outputSilence(outputBuffer, startIndex = 0) { /* ... unchanged ... */
+        const channels = outputBuffer?.[0]; if (!channels) return;
+        for (const channel of channels) { if (channel && startIndex < channel.length) { try { channel.fill(0, startIndex); } catch(e) { if (!this._silenceErrorLogged) { console.error(`[RBProc] Error filling silence:`, e); this._silenceErrorLogged = true; } } } }
     }
 
-    /**
-     * Cleans up WASM memory and other resources.
-     * @private
-     */
-     _cleanup() {
-         console.log(`[RBProc-${this.instanceId}] Cleaning up resources...`);
-         this.isPlaying = false;
-         this.isLoading = false;
-         this.isReady = false;
+          /** Cleans up resources for a specific track, EXCEPT the audio data itself. */
+     _cleanupTrack(trackIndex) {
+         // console.log(`[RBProc] Cleaning up resources for track ${trackIndex}...`); // Less verbose
+         this.isPlaying[trackIndex] = false;
+         this.isTrackReady[trackIndex] = false;
 
-         if (this.Module && this.rubberbandState) {
-             try { this.Module._rubberband_delete(this.rubberbandState); }
-             catch(e) { console.error(`[RBProc-${this.instanceId}] Error deleting Rubberband state:`, e); }
-             this.rubberbandState = 0;
+         // Delete the Rubberband state instance
+         if (this.Module && this.rubberbandState[trackIndex]) {
+             try { this.Module._rubberband_delete(this.rubberbandState[trackIndex]); } catch(e) {}
+             this.rubberbandState[trackIndex] = 0;
          }
-         try { this._freeWasmBuffers(); }
-         catch(e) { console.error(`[RBProc-${this.instanceId}] Error freeing WASM buffers:`, e); }
+         // Free WASM buffers
+         try { this._freeWasmBuffers(trackIndex); } catch(e) {}
 
-         this.Module = null;
-         this.rubberbandLoaderFunc = null;
-         this.audioDataChannels = null;
-         this.sourcePosition = 0;
-         this.sourceLength = 0;
-         console.log(`[RBProc-${this.instanceId}] Cleanup finished.`);
+         // *** DO NOT CLEAR AUDIO DATA HERE ***
+         // this.audioDataChannels[trackIndex] = null; // REMOVED
+
+         // Reset other track-specific state
+         this.sourcePosition[trackIndex] = 0;
+         // Keep sourceLength - it's tied to the audioDataChannels
+         // this.sourceLength[trackIndex] = 0; // Keep
+         // Keep channelCount - it's tied to audioDataChannels
+         // this.channelCount[trackIndex] = 0; // Keep
+         this.availableFrames[trackIndex] = 0;
+         this.inputBufferSize[trackIndex] = 0;
+         // console.log(`[RBProc] Track ${trackIndex} cleanup finished (kept audio data).`); // Less verbose
+     }
+
+    /** Cleans up all resources */
+     _cleanup() { /* ... unchanged ... */
+         console.log(`[RBProc] Cleaning up ALL resources...`); this._cleanupTrack(0); this._cleanupTrack(1); this.isOverallPlaying = false; this.timeRatio = 1.0; this.pitchScale = 1.0; console.log(`[RBProc] Full cleanup finished.`);
      }
 }
 
 // Register the processor
 try {
      registerProcessor('rubberband-processor', RubberbandProcessor);
-} catch (error) {
-    console.error("Failed to register RubberbandProcessor:", error);
-    // Cannot post message here as 'port' is not available statically
-}
+} catch (error) { console.error("Failed to register RubberbandProcessor:", error); }
 // --- /vibe-player/js/player/rubberbandProcessor.js ---
