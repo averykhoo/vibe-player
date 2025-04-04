@@ -25,14 +25,16 @@ AudioApp = (function() {
     let vadResults = [null, null];
     /** @type {Array<File|null>} Currently loaded audio file objects. */
     let files = [null, null];
-    /** @type {Array<boolean>} Flags indicating if the VAD model is ready (shared, but potentially track-specific logic later?). */
-    let vadModelReady = false; // Keep single for now, model is loaded once.
+    /** @type {boolean} Flag indicating if the VAD model is ready (shared). */
+    let vadModelReady = false;
     /** @type {Array<boolean>} Flags indicating if the AudioWorklet processor is ready for playback commands. */
     let workletReadyStates = [false, false];
     /** @type {Array<boolean>} Flags indicating if background VAD is running for a track. */
     let vadProcessingStates = [false, false];
     /** @type {Array<boolean>} Flags indicating if playback for a track has ended. */
     let trackEndedStates = [false, false];
+    /** @type {Array<boolean>} Flags indicating if a track is muted [Track 0, Track 1]. */
+    let trackMutedStates = [false, false];
 
     // --- Shared Playback State ---
     /** @type {number} Number of currently active/loaded tracks (0, 1, or 2). */
@@ -42,6 +44,10 @@ AudioApp = (function() {
     /** @type {boolean} Overall playback state (true if any active track is playing). */ let isActuallyPlaying = false;
     /** @type {number|null} */ let rAFUpdateHandle = null; // requestAnimationFrame handle
     /** @type {number} Playback speed used for main thread time estimation */ let currentSpeedForUpdate = 1.0;
+
+    // --- Loading State ---
+    /** @type {number} Index of the next track slot to load into (0 or 1). */
+    let nextTrackIndexToLoad = 0;
 
     // --- Debounced Function ---
     /** @type {Function|null} Debounced function for engine synchronization after speed change. */
@@ -63,8 +69,8 @@ AudioApp = (function() {
 
         AudioApp.uiManager.init();
         AudioApp.audioEngine.init();
-        AudioApp.waveformVisualizer.init(); // Assuming single instance for now
-        AudioApp.spectrogramVisualizer.init(); // Assuming single instance for now
+        AudioApp.waveformVisualizer.init();
+        AudioApp.spectrogramVisualizer.init();
         setupAppEventListeners();
 
         // Reset state completely on init
@@ -75,6 +81,7 @@ AudioApp = (function() {
 
     /** @private */
     function _resetAppState() {
+        console.log("App: Resetting global state..."); // Added log
         stopUIUpdateLoop();
         audioBuffers = [null, null];
         vadResults = [null, null];
@@ -82,12 +89,26 @@ AudioApp = (function() {
         workletReadyStates = [false, false];
         vadProcessingStates = [false, false];
         trackEndedStates = [false, false];
+        trackMutedStates = [false, false]; // Reset mute state
         activeTracks = 0;
         playbackStartTimeContext = null;
         playbackStartSourceTime = 0.0;
         isActuallyPlaying = false;
         currentSpeedForUpdate = 1.0;
-        // vadModelReady flag persists across loads unless explicitly reset if needed
+        nextTrackIndexToLoad = 0; // Reset loading index
+
+        // Ensure tracks are unmuted in engine on reset, IF engine exists
+        // FIX: Check if audioEngine and setTrackMuted exist before calling
+        if (AudioApp.audioEngine?.setTrackMuted) {
+            try {
+                AudioApp.audioEngine.setTrackMuted(0, false);
+                AudioApp.audioEngine.setTrackMuted(1, false);
+            } catch (e) {
+                 console.warn("App: Error during reset unmute:", e); // Should not happen with check, but safety
+            }
+        } else {
+            console.log("App: Skipping reset unmute as audioEngine is not ready.");
+        }
     }
 
 
@@ -126,42 +147,55 @@ AudioApp = (function() {
     async function handleFileSelected(e) {
         const file = e.detail.file; if (!file) return;
 
-        // --- For this refactor, we always load into Track 0 ---
-        const targetTrackIndex = 0;
+        // --- Use alternating track index ---
+        const targetTrackIndex = nextTrackIndexToLoad;
         console.log(`App: File selected - ${file.name} (loading into track ${targetTrackIndex})`);
 
-        // Reset state for the target track ONLY
+        // Stop existing playback IF IT IS CURRENTLY PLAYING before loading new file
+        if (isActuallyPlaying) {
+            console.log("App: Pausing existing playback before loading new file.");
+            // Important: Don't just toggle, explicitly pause
+            AudioApp.audioEngine.togglePlayPause(); // Ask engine to pause
+            stopUIUpdateLoop();
+            isActuallyPlaying = false; // Assume pause takes effect quickly enough
+            playbackStartTimeContext = null;
+            // Update UI to paused state immediately
+            AudioApp.uiManager.setPlayButtonState(false);
+        }
+
+        // Reset state for the specific target track
         _resetTrackState(targetTrackIndex);
 
-        // Reset shared playback state if needed (e.g., if stopping current playback)
-        if (isActuallyPlaying) {
-             audioEngine.togglePlayPause(); // Ask engine to stop everything
-             stopUIUpdateLoop();
-             isActuallyPlaying = false;
-             playbackStartTimeContext = null;
-        }
-        playbackStartSourceTime = 0.0; // Reset shared start time
-
-        // Update state for the new track
+        // Update overall state
         files[targetTrackIndex] = file;
         activeTracks = files.filter(f => f !== null).length; // Recalculate active tracks
+        playbackStartSourceTime = 0.0; // Reset shared start time on any load
 
-        // Reset UI & Visuals (assuming single-track UI for now)
-        AudioApp.uiManager.resetUI(); // Full reset might be okay for now
+        // Reset UI only if loading into track 0
+        if (targetTrackIndex === 0) {
+            AudioApp.uiManager.resetUI();
+            AudioApp.waveformVisualizer.clearVisuals();
+            AudioApp.spectrogramVisualizer.clearVisuals();
+            AudioApp.spectrogramVisualizer.showSpinner(true);
+        }
+
+        // Update file info to indicate which track is loading
         AudioApp.uiManager.setFileInfo(`Loading Track ${targetTrackIndex}: ${file.name}...`);
-        AudioApp.waveformVisualizer.clearVisuals(); // Clears track 0 visuals
-        AudioApp.spectrogramVisualizer.clearVisuals(); // Clears track 0 visuals
-        AudioApp.spectrogramVisualizer.showSpinner(true); // Show track 0 spinner
 
         try {
-            // Use the new engine method
             await AudioApp.audioEngine.loadAndProcessTrack(file, targetTrackIndex);
+            // Toggle the index for the *next* load
+            nextTrackIndexToLoad = 1 - targetTrackIndex;
+            console.log(`App: Next file will load into track ${nextTrackIndexToLoad}`);
         }
         catch (error) {
             console.error("App: Error initiating file processing -", error);
-            AudioApp.uiManager.setFileInfo(`Error loading: ${error.message}`); AudioApp.uiManager.resetUI();
-            AudioApp.spectrogramVisualizer.showSpinner(false); stopUIUpdateLoop();
-            _clearTrackStateOnError(targetTrackIndex, 'load'); // Clear state for the failed track
+            AudioApp.uiManager.setFileInfo(`Error loading Track ${targetTrackIndex}: ${error.message}`);
+            if (targetTrackIndex === 0) AudioApp.uiManager.resetUI(); // Reset UI only if track 0 failed
+            if (targetTrackIndex === 0) AudioApp.spectrogramVisualizer.showSpinner(false);
+            stopUIUpdateLoop();
+            _clearTrackStateOnError(targetTrackIndex, 'load');
+            // Do not toggle nextTrackIndexToLoad on error, retry same slot next time.
         }
     }
 
@@ -179,28 +213,24 @@ AudioApp = (function() {
 
         // --- Update UI/Visuals only for Track 0 for now ---
         if (trackIndex === 0) {
-            // Update shared UI time/seek state based on track 0
             AudioApp.uiManager.updateTimeDisplay(0, audioBuffer.duration);
             AudioApp.uiManager.updateSeekBar(0);
-            playbackStartSourceTime = 0.0; // Reset shared time base
+            playbackStartSourceTime = 0.0;
 
-            // Draw initial waveform (gray) for track 0
             console.log("App: Drawing initial waveform (Track 0)...");
-            await AudioApp.waveformVisualizer.computeAndDrawWaveform(audioBuffer, []); // Pass empty regions for loading color
+            await AudioApp.waveformVisualizer.computeAndDrawWaveform(audioBuffer, []);
 
-            // Draw spectrogram (shows spinner internally) for track 0
             console.log("App: Starting spectrogram computation/drawing (Track 0)...");
             await AudioApp.spectrogramVisualizer.computeAndDrawSpectrogram(audioBuffer);
 
             console.log("App: Initial visuals initiated (Track 0).");
-            AudioApp.uiManager.setFileInfo(`Processing VAD (Track 0): ${files[trackIndex] ? files[trackIndex].name : 'Unknown File'}`);
+            AudioApp.uiManager.setFileInfo(`Processing VAD (Track 0): ${files[trackIndex]?.name || 'Unknown File'}`);
 
-            // Trigger background VAD processing for track 0
             console.log("App: Starting background VAD processing (Track 0)...");
-            runVadInBackground(audioBuffer, trackIndex); // Pass trackIndex
+            runVadInBackground(audioBuffer, trackIndex);
         } else {
-            // Handle loading of track 1 later (VAD, visuals etc.)
-            console.log(`App: Track ${trackIndex} buffer stored. UI/VAD update deferred.`);
+            console.log(`App: Track ${trackIndex} buffer stored. Triggering VAD processing (no UI update)...`);
+            runVadInBackground(audioBuffer, trackIndex);
         }
     }
 
@@ -216,20 +246,19 @@ AudioApp = (function() {
         console.log(`App: AudioWorklet processor for track ${trackIndex} is ready.`);
         workletReadyStates[trackIndex] = true;
 
-        // Check if all *active* tracks are now ready
-        _checkAndEnablePlaybackControls();
+        _checkAndEnablePlaybackControls(); // Check if ALL active tracks are now ready
 
-        // Update file info if all ready (use file name from track 0 for now)
         const allActiveReady = _areAllActiveTracksReady();
         if(allActiveReady && activeTracks > 0) {
-             AudioApp.uiManager.setFileInfo(`Ready: ${files[0] ? files[0].name : 'Unknown File'}${activeTracks > 1 ? ' (+1 more)' : ''}`);
-             // Hide spinner for track 0 visuals if it was the last one needed
-             if (trackIndex === 0) {
+             const fileNames = files.map(f => f?.name).filter(Boolean).join(' & ');
+             AudioApp.uiManager.setFileInfo(`Ready: ${fileNames}`);
+             if (files[0]) { // If track 0 exists and all are ready, hide spinner
                  AudioApp.spectrogramVisualizer.showSpinner(false);
              }
         } else if (activeTracks > 0) {
             const readyCount = workletReadyStates.filter((ready, i) => files[i] !== null && ready).length;
-             AudioApp.uiManager.setFileInfo(`Loading... (${readyCount}/${activeTracks} tracks ready)`);
+            const fileNames = files.map(f => f?.name).filter(Boolean).join(' & ');
+             AudioApp.uiManager.setFileInfo(`Loading: ${fileNames} (${readyCount}/${activeTracks} tracks ready)`);
         }
     }
 
@@ -257,7 +286,7 @@ AudioApp = (function() {
                 console.log(`App (VAD Task ${trackIndex}): VAD model ready.`);
             }
 
-            // --- Show VAD Progress UI only for Track 0 for now ---
+            // Show VAD Progress UI only for Track 0
             if (trackIndex === 0) {
                 AudioApp.uiManager.showVadProgress(true);
                 AudioApp.uiManager.updateVadProgress(0);
@@ -271,32 +300,35 @@ AudioApp = (function() {
                      AudioApp.uiManager.setSpeechRegionsText("No VAD data (empty audio?)");
                      AudioApp.uiManager.updateVadProgress(100);
                      AudioApp.uiManager.enableVadControls(false);
+                     AudioApp.uiManager.showVadProgress(false); // Hide bar if no data
                  }
                  vadProcessingStates[trackIndex] = false; return;
             }
 
             console.log(`App (VAD Task ${trackIndex}): Starting VAD analysis...`);
             const vadProgressCallback = (progress) => {
-                 if (trackIndex === 0 && AudioApp.uiManager) { // Only update UI for track 0
+                 // Update UI progress only for Track 0
+                 if (trackIndex === 0 && AudioApp.uiManager) {
                      if (progress.totalFrames > 0) { const percentage = (progress.processedFrames / progress.totalFrames) * 100; AudioApp.uiManager.updateVadProgress(percentage); }
                      else { AudioApp.uiManager.updateVadProgress(0); }
                  }
             };
             const analysisOptions = { onProgress: vadProgressCallback };
-            const result = await AudioApp.vadAnalyzer.analyze(pcm16k, analysisOptions); // Use VAD module (manages its own state)
+            const result = await AudioApp.vadAnalyzer.analyze(pcm16k, analysisOptions);
             vadResults[trackIndex] = result; // Store result in the correct slot
 
             console.log(`App (VAD Task ${trackIndex}): VAD analysis complete. Found ${result.regions?.length || 0} regions.`);
             vadSucceeded = true;
 
-            // --- Update UI only for Track 0 ---
+            // Update UI only for Track 0
             if (trackIndex === 0) {
                  const speechRegions = result.regions || [];
                  AudioApp.uiManager.updateVadDisplay(result.initialPositiveThreshold, result.initialNegativeThreshold);
                  AudioApp.uiManager.setSpeechRegionsText(speechRegions);
                  AudioApp.uiManager.enableVadControls(true);
                  AudioApp.waveformVisualizer.redrawWaveformHighlight(audioBuffer, speechRegions);
-                 AudioApp.uiManager.updateVadProgress(100);
+                 AudioApp.uiManager.updateVadProgress(100); // Ensure 100%
+                 setTimeout(() => AudioApp.uiManager.showVadProgress(false), 500); // Hide after short delay
             }
 
         } catch (error) {
@@ -306,6 +338,7 @@ AudioApp = (function() {
                  AudioApp.uiManager.setSpeechRegionsText(`${errorType}: ${error.message}`);
                  AudioApp.uiManager.enableVadControls(false);
                  AudioApp.uiManager.updateVadProgress(0);
+                 AudioApp.uiManager.showVadProgress(false); // Hide on error
             }
             vadResults[trackIndex] = null;
         } finally {
@@ -321,29 +354,30 @@ AudioApp = (function() {
 
         console.error(`App: Audio Error - Type: ${errorType}, Track: ${trackIndex ?? 'N/A'}, Message: ${errorMessage}`, e.detail.error);
 
-        // Attempt to clear state for the specific track if index is known
         if (trackIndex !== undefined) {
             _clearTrackStateOnError(trackIndex, errorType);
+            // If track 0 failed, update UI to reflect its error
+            if (trackIndex === 0) {
+                 AudioApp.uiManager.setFileInfo(`Error (Track 0, ${errorType}): ${errorMessage.substring(0, 100)}`);
+            } else {
+                 // Update file info to show track 1 failed, keeping track 0 info if present
+                 const track0Name = files[0]?.name;
+                 const baseInfo = track0Name ? `Track 0: ${track0Name}` : "Error";
+                 AudioApp.uiManager.setFileInfo(`${baseInfo} | Error (Track 1, ${errorType}): ${errorMessage.substring(0, 60)}`);
+            }
         } else {
-            // If track index unknown (e.g., early load error), reset everything?
             console.warn("App: Audio error with unknown track index, performing full reset.");
             _resetAppState();
             AudioApp.uiManager.resetUI();
             AudioApp.waveformVisualizer?.clearVisuals();
             AudioApp.spectrogramVisualizer?.clearVisuals();
             AudioApp.spectrogramVisualizer?.showSpinner(false);
+            AudioApp.uiManager.setFileInfo(`Error (${errorType}): ${errorMessage.substring(0, 100)}`);
         }
 
-        // Update UI
-        // TODO: Improve UI error feedback beyond just fileInfo
-        AudioApp.uiManager.setFileInfo(`Error (${errorType}): ${errorMessage.substring(0, 100)}`);
-        if (_areAllActiveTracksReady()) { // Check if controls should be re-enabled/disabled
-             _checkAndEnablePlaybackControls();
-        } else {
-             AudioApp.uiManager.enablePlaybackControls(false);
-             AudioApp.uiManager.enableSeekBar(false);
-        }
-        stopUIUpdateLoop(); // Ensure loop is stopped on error
+        // Disable controls if no tracks are ready
+        _checkAndEnablePlaybackControls();
+        stopUIUpdateLoop();
     }
 
     /** Helper to clear state for a specific track on error */
@@ -355,16 +389,17 @@ AudioApp = (function() {
          workletReadyStates[trackIndex] = false;
          vadProcessingStates[trackIndex] = false;
          trackEndedStates[trackIndex] = false;
+         trackMutedStates[trackIndex] = false; // Reset mute state
          activeTracks = files.filter(f => f !== null).length; // Recalculate
 
-         // TODO: Update UI more specifically later (e.g., show error for track 1)
-         // For now, if track 0 fails, clear visuals.
+         // If track 0 fails, clear its visuals and reset main UI elements
          if (trackIndex === 0) {
             AudioApp.waveformVisualizer?.clearVisuals();
             AudioApp.spectrogramVisualizer?.clearVisuals();
             AudioApp.spectrogramVisualizer?.showSpinner(false);
-            AudioApp.uiManager.resetUI(); // May be too aggressive later
+            AudioApp.uiManager.resetUI(); // Reset sliders, time display etc.
          }
+         // If track 1 fails, we don't clear track 0's visuals
     }
 
 
@@ -373,19 +408,17 @@ AudioApp = (function() {
         if (!_areAllActiveTracksReady()) { console.warn("App: Play/Pause ignored - Not all active tracks ready."); return; }
         const audioCtx = AudioApp.audioEngine.getAudioContext(); if (!audioCtx) { console.error("App: Cannot play/pause, AudioContext not available."); return; }
 
-        // If pausing, calculate current *shared* time and seek engine
         if (isActuallyPlaying) {
+            // Store estimated time BEFORE pausing
             const finalEstimatedTime = calculateEstimatedSourceTime();
-            console.log(`App: Pausing requested. Seeking engine to estimated shared time: ${finalEstimatedTime.toFixed(3)} before pausing.`);
-            AudioApp.audioEngine.seek(finalEstimatedTime); // Seek all active tracks
-
-            // Update shared time base immediately
+            console.log(`App: Pausing requested. Storing estimated shared time: ${finalEstimatedTime.toFixed(3)}.`);
+            // We no longer seek on pause, just update the base time
             playbackStartSourceTime = finalEstimatedTime;
             playbackStartTimeContext = null;
             stopUIUpdateLoop();
-            updateUIWithTime(finalEstimatedTime); // Update shared UI immediately
+            updateUIWithTime(finalEstimatedTime);
         }
-        // Tell engine to toggle internal state for all tracks
+        // Always tell engine to toggle internal state
         AudioApp.audioEngine.togglePlayPause();
         // Actual state update and UI loop start happens in handlePlaybackStateChange
     }
@@ -395,20 +428,39 @@ AudioApp = (function() {
         if (!_areAllActiveTracksReady() || activeTracks === 0) return;
         const audioCtx = AudioApp.audioEngine.getAudioContext(); if (!audioCtx) return;
 
-        // Use main thread calculation for current shared time
-        const currentTime = calculateEstimatedSourceTime();
-        // Duration for clamping needs context later (e.g., longest track?) - use track 0 for now
+        // Store whether we were playing before the jump
+        const wasPlaying = isActuallyPlaying;
+        let pausedForSeek = false;
+
+        // **Pause before seeking**
+        if (wasPlaying) {
+            console.log("App: Pausing before jump...");
+            AudioApp.audioEngine.togglePlayPause(); // Send pause command
+            stopUIUpdateLoop();
+            isActuallyPlaying = false; // Assume pause happens quickly
+            playbackStartTimeContext = null;
+            AudioApp.uiManager.setPlayButtonState(false); // Update UI to show paused
+            pausedForSeek = true;
+        }
+
+        // Calculate target time
+        const currentTime = calculateEstimatedSourceTime(); // Get current time *after* potential pause update
         const duration = audioBuffers[0] ? audioBuffers[0].duration : 0;
         if (isNaN(duration) || duration <= 0) return;
+        const targetSharedTime = Math.max(0, Math.min(currentTime + e.detail.seconds, duration));
 
-        const targetSharedTime = Math.max(0, Math.min(currentTime + e.detail.seconds, duration)); // Clamp based on Track 0 for now
-
-        AudioApp.audioEngine.seek(targetSharedTime); // Tell engine to seek all active tracks
+        console.log(`App: Jumping to ${targetSharedTime.toFixed(3)}s`);
+        AudioApp.audioEngine.seek(targetSharedTime); // Engine seeks all active tracks
 
         // Update main thread time tracking immediately
         playbackStartSourceTime = targetSharedTime;
-        if (isActuallyPlaying) { playbackStartTimeContext = audioCtx.currentTime; }
-        else { playbackStartTimeContext = null; updateUIWithTime(targetSharedTime); }
+        updateUIWithTime(targetSharedTime); // Update UI immediately
+
+        // **Do NOT auto-resume playback.** User must press Play again.
+        // if (pausedForSeek) {
+        //     console.log("App: Resuming playback after jump...");
+        //     AudioApp.audioEngine.togglePlayPause(); // Send play command
+        // }
     }
 
     /** @param {CustomEvent<{fraction: number}>} e @private */
@@ -416,56 +468,74 @@ AudioApp = (function() {
         if (!_areAllActiveTracksReady() || activeTracks === 0) return;
         const audioCtx = AudioApp.audioEngine.getAudioContext(); if (!audioCtx) return;
 
-        // Use duration from track 0 for fraction calculation for now
+        const wasPlaying = isActuallyPlaying;
+        let pausedForSeek = false;
+
+        // **Pause before seeking**
+        if (wasPlaying) {
+            console.log("App: Pausing before seek...");
+            AudioApp.audioEngine.togglePlayPause();
+            stopUIUpdateLoop();
+            isActuallyPlaying = false;
+            playbackStartTimeContext = null;
+            AudioApp.uiManager.setPlayButtonState(false);
+            pausedForSeek = true;
+        }
+
+        // Calculate target time
         const duration = audioBuffers[0] ? audioBuffers[0].duration : 0;
         if (isNaN(duration) || duration <= 0) return;
-
         const targetSharedTime = e.detail.fraction * duration;
-        AudioApp.audioEngine.seek(targetSharedTime); // Tell engine to seek all active tracks
+
+        console.log(`App: Seeking to ${targetSharedTime.toFixed(3)}s (fraction: ${e.detail.fraction.toFixed(3)})`);
+        AudioApp.audioEngine.seek(targetSharedTime); // Engine seeks all active tracks
 
         // Update main thread time tracking immediately
         playbackStartSourceTime = targetSharedTime;
-        if (isActuallyPlaying) { playbackStartTimeContext = audioCtx.currentTime; }
-        else { playbackStartTimeContext = null; updateUIWithTime(targetSharedTime); }
+        updateUIWithTime(targetSharedTime); // Update UI immediately
+
+        // **Do NOT auto-resume playback.**
+        // if (pausedForSeek) {
+        //     console.log("App: Resuming playback after seek...");
+        //     AudioApp.audioEngine.togglePlayPause();
+        // }
     }
-    const handleSeekBarInput = handleSeek; // Alias
+    const handleSeekBarInput = handleSeek; // Alias remains the same
 
     /** @param {CustomEvent<{speed: number}>} e @private */
     function handleSpeedChange(e) {
         if (!_areAllActiveTracksReady()) return;
-        AudioApp.audioEngine.setSpeed(e.detail.speed); // Engine applies to all
-        debouncedSyncEngine(); // Sync engine to main thread time estimate after changes stop
+        AudioApp.audioEngine.setSpeed(e.detail.speed);
+        debouncedSyncEngine();
     }
 
     /** @param {CustomEvent<{pitch: number}>} e @private */
-    function handlePitchChange(e) { if (_areAllActiveTracksReady()) AudioApp.audioEngine.setPitch(e.detail.pitch); } // Engine applies to all
+    function handlePitchChange(e) { if (_areAllActiveTracksReady()) AudioApp.audioEngine.setPitch(e.detail.pitch); }
     /** @param {CustomEvent<{gain: number}>} e @private */
-    function handleGainChange(e) { if (_areAllActiveTracksReady()) AudioApp.audioEngine.setGain(e.detail.gain); } // Engine applies to master
+    function handleGainChange(e) { if (_areAllActiveTracksReady()) AudioApp.audioEngine.setGain(e.detail.gain); }
 
     /** @private */
     function syncEngineToEstimatedTime() {
+        // No need to pause here as speed changes don't seem to cause the crash directly
         if (!_areAllActiveTracksReady() || activeTracks === 0) { console.log("App (Debounced Sync): Skipping sync - not ready."); return; }
         const audioCtx = AudioApp.audioEngine.getAudioContext(); if (!audioCtx) return;
 
         const targetSharedTime = calculateEstimatedSourceTime();
         console.log(`App: Debounced sync executing. Seeking engine to estimated shared time: ${targetSharedTime.toFixed(3)}.`);
-        AudioApp.audioEngine.seek(targetSharedTime); // Engine seeks all active tracks
+        AudioApp.audioEngine.seek(targetSharedTime);
 
-        // Update main thread state immediately
         playbackStartSourceTime = targetSharedTime;
         if (isActuallyPlaying) { playbackStartTimeContext = audioCtx.currentTime; }
         else { playbackStartTimeContext = null; updateUIWithTime(targetSharedTime); }
     }
 
-
     /**
-     * Handles the internal speed change potentially reported by the engine (less common now).
+     * Handles the internal speed change potentially reported by the engine.
      * Updates the main thread's time tracking base.
      * @param {CustomEvent<{speed: number, trackIndex: number}>} e @private
      */
     function handleInternalSpeedChange(e) {
         const { speed: newSpeed, trackIndex } = e.detail;
-        // Only react if the speed actually changed and it's from an active track
         if (newSpeed === currentSpeedForUpdate || files[trackIndex] === null) return;
 
         console.log(`App: Internal speed updated by engine (Track ${trackIndex}) to ${newSpeed.toFixed(2)}x. Updating shared speed estimate.`);
@@ -474,10 +544,9 @@ AudioApp = (function() {
         currentSpeedForUpdate = newSpeed; // Update shared speed used for UI calculation
 
         const audioCtx = AudioApp.audioEngine.getAudioContext();
-        // If playing, recalculate base times to prevent jump in UI display
         if (isActuallyPlaying && playbackStartTimeContext !== null && audioCtx) {
             const elapsedContextTime = audioCtx.currentTime - playbackStartTimeContext;
-            const elapsedSourceTime = elapsedContextTime * oldSpeed; // Use OLD speed
+            const elapsedSourceTime = elapsedContextTime * oldSpeed;
             const previousSourceTime = playbackStartSourceTime + elapsedSourceTime;
             playbackStartSourceTime = previousSourceTime;
             playbackStartTimeContext = audioCtx.currentTime;
@@ -492,13 +561,12 @@ AudioApp = (function() {
         if (!vadResults[trackIndex] || vadProcessingStates[trackIndex]) return;
 
         const { type, value } = e.detail;
-        // Assume vadAnalyzer handles its own state based on initial analysis
-        const newRegions = AudioApp.vadAnalyzer.handleThresholdUpdate(type, value); // TODO: Pass trackIndex if vadAnalyzer is adapted later
+        const newRegions = AudioApp.vadAnalyzer.handleThresholdUpdate(type, value);
 
         // Update UI for track 0
-        AudioApp.uiManager.setSpeechRegionsText(newRegions); // Assumes single display
+        AudioApp.uiManager.setSpeechRegionsText(newRegions);
         if(audioBuffers[trackIndex]) {
-             AudioApp.waveformVisualizer.redrawWaveformHighlight(audioBuffers[trackIndex], newRegions); // Assumes single visualizer instance
+             AudioApp.waveformVisualizer.redrawWaveformHighlight(audioBuffers[trackIndex], newRegions);
         }
     }
 
@@ -509,12 +577,11 @@ AudioApp = (function() {
      */
     function handlePlaybackEnded(e) {
         const { trackIndex } = e.detail;
-        if (trackIndex === undefined || trackEndedStates[trackIndex]) return; // Ignore if index invalid or already ended
+        if (trackIndex === undefined || trackEndedStates[trackIndex]) return;
 
         console.log(`App: Playback ended event received for track ${trackIndex}.`);
         trackEndedStates[trackIndex] = true;
 
-        // Check if all *active* tracks have now ended
         let allActiveEnded = true;
         for (let i = 0; i < files.length; i++) {
             if (files[i] !== null && !trackEndedStates[i]) {
@@ -528,14 +595,12 @@ AudioApp = (function() {
              isActuallyPlaying = false;
              stopUIUpdateLoop();
              playbackStartTimeContext = null;
-             // Set UI time to duration of track 0 (or longest track later?)
-             const duration = audioBuffers[0] ? audioBuffers[0].duration : 0;
+             const duration = audioBuffers[0]?.duration || 0; // Use track 0 duration for UI
              playbackStartSourceTime = duration;
              updateUIWithTime(duration);
              AudioApp.uiManager.setPlayButtonState(false);
         } else {
             console.log(`App: Track ${trackIndex} ended, but other active tracks continue.`);
-            // isActuallyPlaying state is managed in handlePlaybackStateChange
         }
     }
 
@@ -548,87 +613,102 @@ AudioApp = (function() {
         const { isPlaying: workletIsPlaying, trackIndex } = e.detail;
         if (trackIndex === undefined) return;
 
-        console.log(`App: Playback state confirmed by worklet (Track ${trackIndex}): ${workletIsPlaying}`);
+        // console.log(`App: Playback state confirmed by worklet (Track ${trackIndex}): ${workletIsPlaying}`); // Keep console cleaner
 
-        // Determine the *new overall* playback state
-        // Play if commanded AND at least one active track is NOT ended AND reporting playing
-        // Note: This assumes a command to play/pause affects all simultaneously.
-        let overallShouldBePlaying = false;
-        if (workletIsPlaying) { // If at least one track reports playing...
-             // Check if *any* active, non-ended track is now playing
-             for(let i=0; i<files.length; i++) {
-                  if (files[i] !== null && !trackEndedStates[i]) {
-                       // We need to know the intended state (was play commanded?)
-                       // For simplicity now, if *any* active track reports playing, assume overall is playing
-                       overallShouldBePlaying = true; // This might need refinement based on exact command timing
-                       break;
-                  }
-             }
-        } else {
-            // If this track stopped, check if *any other* active, non-ended track is still playing
-             // This requires knowing the state of other worklets, which isn't directly available here.
-             // Alternative: rely on the commanded state. If pause was commanded, overallShouldBePlaying = false.
-             // Let's assume for now: if the latest event is 'false', the overall state becomes false.
-             // This relies on receiving events promptly from all worklets after a command.
-             overallShouldBePlaying = false; // Simplification: last event dictates state? Risky.
+        // Determine overall state based on whether *any* active, non-ended track reports playing
+        let shouldBePlayingOverall = false;
+        for(let i=0; i<files.length; i++) {
+            if (files[i] !== null && !trackEndedStates[i]) {
+                 // How to know the state of track 'i'? Assume if the *event source* is playing, we are playing.
+                 // If the event source stopped, only stop overall if no *other* track is assumed playing.
+                 if (i === trackIndex && workletIsPlaying) {
+                      shouldBePlayingOverall = true; break;
+                 }
+                 // If we receive a 'stopped' event from trackIndex, we need to know if *any other* track
+                 // might still be playing. This logic is tricky without storing each track's last known state.
+                 // Let's stick to: if the latest event source is playing, overall is playing.
+                 // If latest event source stopped, check if any *other* non-ended track exists.
+                 if (workletIsPlaying) {
+                     shouldBePlayingOverall = true; break;
+                 } else {
+                     // This track stopped. Check others.
+                     let otherPotentiallyPlaying = false;
+                     for (let j=0; j<files.length; j++) {
+                          if (j !== trackIndex && files[j] !== null && !trackEndedStates[j]) {
+                              otherPotentiallyPlaying = true; break;
+                          }
+                     }
+                     shouldBePlayingOverall = otherPotentiallyPlaying;
+                 }
+            }
         }
 
-         // --- Refined approach: Check intended state ---
-         // Let's track the *intended* state based on the last command
-         let commandedStateIsPlay = false; // Need to track this based on handlePlayPause etc.
-         // For now, use the logic: If ANY active, non-ended track is playing, UI loop runs.
-         let anyActiveTrackPlaying = false;
-          for(let i=0; i<files.length; i++) {
-               // How to know the *current* state of track 'i' if its event hasn't arrived?
-               // Need to store last known state per track? e.g., trackPlayingStates = [false, false]
-               // Let's stick to the simple logic for now: if the event says playing, overall is playing.
-               // If the event says stopping, overall is stopping (assuming pause syncs).
-               if (files[i] !== null && !trackEndedStates[i]) {
-                    if(i === trackIndex && workletIsPlaying) {
-                         anyActiveTrackPlaying = true; break;
-                    }
-                    // If we stored state: if (trackPlayingStates[i]) { anyActiveTrackPlaying = true; break; }
-               }
-          }
-         overallShouldBePlaying = anyActiveTrackPlaying; // Revise based on incoming event
-
-
-        // --- Update state and UI loop ---
-        if (overallShouldBePlaying && !isActuallyPlaying) {
+        // Update state and UI loop based on the determined overall state
+        if (shouldBePlayingOverall && !isActuallyPlaying) {
             // Transitioning to Playing
             isActuallyPlaying = true;
             AudioApp.uiManager.setPlayButtonState(true);
             const audioCtx = AudioApp.audioEngine?.getAudioContext();
             if (audioCtx) {
-                // Reset time base based on *shared* source time
                  playbackStartSourceTime = calculateEstimatedSourceTime(); // Get current estimate before starting
                  playbackStartTimeContext = audioCtx.currentTime; // Mark context time NOW
-                 console.log(`App: Playback confirmed started/resumed. Setting shared time base: src=${playbackStartSourceTime.toFixed(3)}, ctx=${playbackStartTimeContext.toFixed(3)}`);
+                 // console.log(`App: Playback confirmed started/resumed. Setting shared time base: src=${playbackStartSourceTime.toFixed(3)}, ctx=${playbackStartTimeContext.toFixed(3)}`);
                  updateUIWithTime(playbackStartSourceTime); // Ensure UI reflects start
                  startUIUpdateLoop();
             }
-        } else if (!overallShouldBePlaying && isActuallyPlaying) {
+        } else if (!shouldBePlayingOverall && isActuallyPlaying) {
             // Transitioning to Paused/Stopped
             isActuallyPlaying = false;
             AudioApp.uiManager.setPlayButtonState(false);
             stopUIUpdateLoop();
-            playbackStartTimeContext = null; // Clear context time marker
-            // Time already synced in handlePlayPause or handlePlaybackEnded
-            console.log(`App: Playback confirmed stopped/paused. Base source time: ${playbackStartSourceTime.toFixed(3)}`);
+            playbackStartTimeContext = null;
+            // console.log(`App: Playback confirmed stopped/paused. Base source time: ${playbackStartSourceTime.toFixed(3)}`);
+            updateUIWithTime(calculateEstimatedSourceTime()); // Update UI to final estimated time
         }
     }
 
 
     /** @param {CustomEvent<{key: string}>} e @private */
-    function handleKeyPress(e) { if (!_areAllActiveTracksReady()) return; const key = e.detail.key; const jumpTimeValue = AudioApp.uiManager.getJumpTime(); switch (key) { case 'Space': handlePlayPause(); break; case 'ArrowLeft': handleJump({ detail: { seconds: -jumpTimeValue } }); break; case 'ArrowRight': handleJump({ detail: { seconds: jumpTimeValue } }); break; } }
+    function handleKeyPress(e) {
+        // Only allow controls if *all* active tracks are ready
+        if (!_areAllActiveTracksReady()) return;
+
+        const key = e.detail.key;
+        const jumpTimeValue = AudioApp.uiManager.getJumpTime();
+
+        switch (key) {
+            case 'Space':
+                handlePlayPause();
+                break;
+            case 'ArrowLeft':
+                handleJump({ detail: { seconds: -jumpTimeValue } });
+                break;
+            case 'ArrowRight':
+                handleJump({ detail: { seconds: jumpTimeValue } });
+                break;
+            case 'Digit1': // Key '1'
+                console.log("App: Key '1' pressed. Toggling mute for Track 0."); // Log press
+                trackMutedStates[0] = !trackMutedStates[0];
+                AudioApp.audioEngine.setTrackMuted(0, trackMutedStates[0]);
+                break;
+            case 'Digit2': // Key '2'
+                console.log("App: Key '2' pressed. Toggling mute for Track 1."); // Log press
+                trackMutedStates[1] = !trackMutedStates[1];
+                AudioApp.audioEngine.setTrackMuted(1, trackMutedStates[1]);
+                break;
+        }
+    }
 
     /** @private */
     function handleWindowResize() {
         // Resize visuals for track 0 for now
         const trackIndex = 0;
         const regions = vadResults[trackIndex] ? (vadResults[trackIndex].regions || []) : [];
-        AudioApp.waveformVisualizer?.resizeAndRedraw(audioBuffers[trackIndex], regions); // Assumes single instance
-        AudioApp.spectrogramVisualizer?.resizeAndRedraw(audioBuffers[trackIndex]); // Assumes single instance
+        AudioApp.waveformVisualizer?.resizeAndRedraw(audioBuffers[trackIndex], regions);
+        AudioApp.spectrogramVisualizer?.resizeAndRedraw(audioBuffers[trackIndex]);
+
+        // Update progress indicator on resize (app.js is responsible)
+        updateUIWithTime(calculateEstimatedSourceTime());
     }
     /** @private */
     function handleBeforeUnload() { console.log("App: Unloading..."); stopUIUpdateLoop(); AudioApp.audioEngine?.cleanup(); }
@@ -642,13 +722,13 @@ AudioApp = (function() {
 
     /**
      * Calculates the estimated current shared source time based on AudioContext time.
+     * Uses duration of Track 0 for clamping.
      * @private
      * @returns {number} The estimated current time in seconds on the shared timeline.
      */
     function calculateEstimatedSourceTime() {
         const audioCtx = AudioApp.audioEngine?.getAudioContext();
-        // Use duration of track 0 for clamping for now
-        const duration = audioBuffers[0] ? audioBuffers[0].duration : 0;
+        const duration = audioBuffers[0]?.duration || 0;
 
         if (!isActuallyPlaying || playbackStartTimeContext === null || !audioCtx || activeTracks === 0 || duration <= 0) {
             return playbackStartSourceTime;
@@ -659,7 +739,6 @@ AudioApp = (function() {
         const elapsedSourceTime = elapsedContextTime * currentSpeedForUpdate;
         let estimatedCurrentSourceTime = playbackStartSourceTime + elapsedSourceTime;
 
-        // Clamp to valid duration range (using track 0's duration for now)
         estimatedCurrentSourceTime = Math.max(0, Math.min(estimatedCurrentSourceTime, duration));
         return estimatedCurrentSourceTime;
     }
@@ -670,22 +749,21 @@ AudioApp = (function() {
      * @private
      */
     function updateUIWithTime(sharedTime) {
-        // Use duration of track 0 for display/seek bar calculation for now
-        const duration = audioBuffers[0] ? audioBuffers[0].duration : 0;
+        const duration = audioBuffers[0]?.duration || 0;
         if (isNaN(duration)) return;
 
-        const clampedSharedTime = Math.max(0, Math.min(sharedTime, duration)); // Clamp based on track 0
+        const clampedSharedTime = Math.max(0, Math.min(sharedTime, duration));
         const fraction = duration > 0 ? clampedSharedTime / duration : 0;
 
-        // Update shared UI elements
         AudioApp.uiManager.updateTimeDisplay(clampedSharedTime, duration);
         AudioApp.uiManager.updateSeekBar(fraction);
 
-        // Update visuals for track 0
-        // TODO: Update visuals for track 1 using sharedTime + offset later
         if (audioBuffers[0]) {
-            AudioApp.waveformVisualizer?.updateProgressIndicator(clampedSharedTime, duration); // Pass track 0 duration
-            AudioApp.spectrogramVisualizer?.updateProgressIndicator(clampedSharedTime, duration); // Pass track 0 duration
+            AudioApp.waveformVisualizer?.updateProgressIndicator(clampedSharedTime, duration);
+            AudioApp.spectrogramVisualizer?.updateProgressIndicator(clampedSharedTime, duration);
+        } else {
+             AudioApp.waveformVisualizer?.updateProgressIndicator(0, 1);
+             AudioApp.spectrogramVisualizer?.updateProgressIndicator(0, 1);
         }
     }
 
@@ -697,7 +775,7 @@ AudioApp = (function() {
      * @private
      */
     function updateUIBasedOnContextTime(timestamp) {
-        if (!isActuallyPlaying) { rAFUpdateHandle = null; return; } // Stop loop if not playing
+        if (!isActuallyPlaying) { rAFUpdateHandle = null; return; }
 
         const estimatedSharedTime = calculateEstimatedSourceTime();
         updateUIWithTime(estimatedSharedTime);
@@ -714,7 +792,15 @@ AudioApp = (function() {
          workletReadyStates[trackIndex] = false;
          vadProcessingStates[trackIndex] = false;
          trackEndedStates[trackIndex] = false;
-         // Don't decrement activeTracks here, handleFileSelected recalculates it
+         trackMutedStates[trackIndex] = false; // Reset mute state
+         // FIX: Check if engine and function exist before calling
+         if (AudioApp.audioEngine?.setTrackMuted) {
+             try {
+                 AudioApp.audioEngine.setTrackMuted(trackIndex, false);
+             } catch(e) {
+                  console.warn(`App: Error setting unmute on reset for track ${trackIndex}:`, e);
+             }
+         }
     }
 
     /** @private */
@@ -722,25 +808,23 @@ AudioApp = (function() {
         if (activeTracks === 0) return false;
         for (let i = 0; i < workletReadyStates.length; i++) {
             if (files[i] !== null && !workletReadyStates[i]) {
-                 return false; // Found an active track that isn't ready
+                 return false;
             }
         }
-        return true; // All active tracks are ready
+        return true;
     }
 
      /** @private */
      function _checkAndEnablePlaybackControls() {
          const allReady = _areAllActiveTracksReady();
-         console.log(`App: Checking controls. Active tracks: ${activeTracks}, All active ready: ${allReady}`);
+         // console.log(`App: Checking controls. Active tracks: ${activeTracks}, All active ready: ${allReady}`); // Less verbose
          AudioApp.uiManager.enablePlaybackControls(allReady);
          AudioApp.uiManager.enableSeekBar(allReady);
-         // VAD controls enabled separately based on VAD completion for track 0
      }
 
     // --- Public Interface ---
     return {
         init: init
-        // Expose other methods if needed for debugging or direct calls, but keep minimal
     };
 })(); // End of AudioApp IIFE
 // --- /vibe-player/js/app.js ---

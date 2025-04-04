@@ -114,6 +114,7 @@ This document outlines the principles and procedures for collaborating with an L
         4.  **Entire File Replacement (Fallback 3 - More Common):**
             *   **Condition:** Changes affect **more than two distinct logical blocks** within the file (e.g., modifying two functions and the export list, adding a new function and modifying an existing one, etc.); OR changes are widespread across multiple, non-adjacent sections; OR significantly alter the file's overall structure; OR involve numerous scattered edits making section/function replacement impractical; OR are required for initial file creation or a complete rewrite requested by the user.
             *   **Format:** Provide the complete file content, bracketed by File Identification Comments (see P3.4). **Explicitly state why this format is necessary** (e.g., "Generating full file due to changes in functions X and Y, and the module export list."). **Avoid this format for strictly localized changes covered by formats 1 or 2.**
+2. never generate final code with "contents unchanged" placeholders when ouputting a section or file. it must work when copy-pasted.
 
 ### P5: Phased Lifecycle for Significant Changes
 
