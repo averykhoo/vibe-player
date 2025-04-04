@@ -225,29 +225,43 @@ function tostring(a) {
 //
 mixkey(math.random(), pool);
 
+// //
+// // Nodejs and AMD support: export the implementation as a module using
+// // either convention.
+// //
+// if ((typeof module) == 'object' && module.exports) {
+//   module.exports = seedrandom;
+//   // When in node.js, try using crypto package for autoseeding.
+//   try {
+//     nodecrypto = require('crypto');
+//   } catch (ex) {}
+// } else if ((typeof define) == 'function' && define.amd) {
+//   define(function() { return seedrandom; });
+// } else {
+//   // When included as a plain script, set up Math.seedrandom global.
+//   math['seed' + rngname] = seedrandom;
+// }
 //
-// Nodejs and AMD support: export the implementation as a module using
-// either convention.
 //
-if ((typeof module) == 'object' && module.exports) {
-  module.exports = seedrandom;
-  // When in node.js, try using crypto package for autoseeding.
-  try {
-    nodecrypto = require('crypto');
-  } catch (ex) {}
-} else if ((typeof define) == 'function' && define.amd) {
-  define(function() { return seedrandom; });
-} else {
-  // When included as a plain script, set up Math.seedrandom global.
-  math['seed' + rngname] = seedrandom;
-}
+// // End anonymous scope, and pass initial values.
+// })(
+//   // global: `self` in browsers (including strict mode and web workers),
+//   // otherwise `this` in Node and other environments
+//   (typeof self !== 'undefined') ? self : this,
+//   [],     // pool: entropy pool starts empty
+//   Math    // math: package containing random, pow, and seedrandom
+// );
 
+// NEW BLOCK AT THE END:
+  // Attach to Math object for global access within modules
+  math['seed' + rngname] = seedrandom;
 
 // End anonymous scope, and pass initial values.
 })(
-  // global: `self` in browsers (including strict mode and web workers),
-  // otherwise `this` in Node and other environments
-  (typeof self !== 'undefined') ? self : this,
-  [],     // pool: entropy pool starts empty
-  Math    // math: package containing random, pow, and seedrandom
+  (typeof self !== 'undefined') ? self : this, // global
+  [], // pool
+  Math // math
 );
+
+// Add this line at the very end if needed by module system, otherwise maybe omit
+// export {}; // Indicate it's a module, even if it exports nothing explicitly

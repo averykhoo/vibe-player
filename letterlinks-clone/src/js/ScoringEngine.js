@@ -6,8 +6,8 @@
  */
 
 import * as WordValidator from './WordValidator.js';
-import * as Utils from '../../../vibe-player/js/utils.js';
-import { BONUS_TYPES } from '../../../vibe-player/js/constants.js';
+import * as Utils from './Utils.js';
+import { BONUS_TYPES } from './Constants.js';
 
 /** @typedef {import('./WordValidator.js').isValid} isValidWordFn */ // Type hint for validator function
 

@@ -1,43 +1,44 @@
 // File: src/js/Utils.js
 
 /**
- * @fileoverview Provides utility functions used throughout the application,
- * including seeded PRNG, array shuffling, random choices, coordinate helpers,
- * time formatting, and tile list generation.
+ * @fileoverview Provides utility functions used throughout the application...
  */
 
-// --- PRNG Setup (Requires Vendored seedrandom library) ---
+// --- PRNG Setup (Requires Vendored seedrandom library loaded beforehand) ---
 
-// IMPORTANT: Assumes 'seedrandom.js' has been placed in ../lib/
-// AND that it exports a default function or is adapted to do so.
-// If it modifies Math globally, the import line might be removed,
-// and createPRNG would use `new Math.seedrandom(seed)`.
-// Using placeholder import assuming an ESM-compatible version exists/is made.
-import seedrandom from '../lib/seedrandom.js'; // Adjust path/import method as needed!
+// NO IMPORT statement needed if seedrandom modifies Math globally
 
 /**
- * Creates a seeded Pseudo-Random Number Generator instance using seedrandom.
+ * Creates a seeded Pseudo-Random Number Generator instance using Math.seedrandom.
+ * Relies on the 'seedrandom.js' script having been loaded and executed previously.
  * @param {string | number} seed The initial seed.
  * @returns {() => number} A function that returns a seeded random number [0, 1).
- * Returns Math.random if seedrandom library fails to load.
+ * Returns Math.random if Math.seedrandom is not available.
  */
 export function createPRNG(seed) {
-    if (typeof seedrandom !== 'function') {
-        console.error("seedrandom library not loaded or not a function! Falling back to Math.random (non-deterministic).");
+    // Check if seedrandom attached itself to Math
+    if (typeof Math.seedrandom !== 'function') {
+        console.error("Math.seedrandom not found! Was seedrandom.js loaded correctly? Falling back to Math.random (non-deterministic).");
         return Math.random;
     }
     try {
-        const prng = seedrandom(seed);
-        // Test the generator immediately to catch potential issues from library loading
-        prng(); // Discard first result (sometimes recommended)
+        // Call Math.seedrandom to get a seeded RNG instance
+        // Note: Calling Math.seedrandom usually replaces Math.random globally,
+        // but calling it *with* a seed should return a local PRNG instance
+        // without necessarily replacing Math.random globally IF called this way.
+        // Let's test this assumption. If it *does* replace Math.random, we might need a different approach.
+        const prng = new Math.seedrandom(seed); // Pass the seed here
+        prng(); // Discard first result (optional)
         return prng;
     } catch (error) {
-        console.error("Failed to initialize seedrandom:", error, "Falling back to Math.random.");
+        console.error("Failed to initialize Math.seedrandom:", error, "Falling back to Math.random.");
         return Math.random;
     }
 }
 
 // --- Array Utilities ---
+// (randomChoice, shuffleArray, generateTileListFromWords implementations remain the same,
+//  as they just expect a `prng` function as input)
 
 /**
  * Selects a random element from an array using a seeded PRNG.
@@ -50,14 +51,16 @@ export function randomChoice(array, prng) {
     if (!array || array.length === 0) {
         return undefined;
     }
-    const index = Math.floor(prng() * array.length);
+    // Ensure PRNG is callable
+    const randomValue = typeof prng === 'function' ? prng() : Math.random();
+    const index = Math.floor(randomValue * array.length);
     return array[index];
 }
 
 /**
  * Shuffles array in place using the Fisher-Yates algorithm and a PRNG.
  * @template T
- * @param {T[]} array Array to shuffle.
+ * @param {Array<T>} array Array to shuffle.
  * @param {() => number} prng Seeded PRNG function returning [0, 1).
  * @returns {T[]} The mutated (shuffled) array.
  */
@@ -65,8 +68,10 @@ export function shuffleArray(array, prng) {
     if (!array || array.length < 2) {
         return array; // No need to shuffle empty or single-element arrays
     }
+     // Ensure PRNG is callable
+     const randomFunc = typeof prng === 'function' ? prng : Math.random;
     for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(prng() * (i + 1));
+        const j = Math.floor(randomFunc() * (i + 1));
         [array[i], array[j]] = [array[j], array[i]]; // Swap
     }
     return array;
@@ -76,22 +81,27 @@ export function shuffleArray(array, prng) {
 
 /**
  * Generates the specific tile list for a challenge using dictionary words.
- * Ensures exactly two wildcards are present in the final list.
+ * Ensures exactly the specified number of wildcards are present.
  * @param {Set<string>} dictionarySet The dictionary word list (normalized, e.g., uppercase).
  * @param {number} totalTiles Target number of tiles *including* wildcards (e.g., 37).
  * @param {string | number} seed Seed for the PRNG.
+ * @param {number} [wildcardCount=2] Number of wildcards to include.
  * @param {{minLength?: number, maxLength?: number}} [wordFilterOptions={}] Optional filters for source words.
  * @returns {string[]} The generated list of tiles, shuffled. Returns empty array on error.
  */
-export function generateTileListFromWords(dictionarySet, totalTiles, seed, wordFilterOptions = {}) {
-    if (!(dictionarySet instanceof Set) || dictionarySet.size === 0 || totalTiles < 3) {
+ export function generateTileListFromWords(dictionarySet, totalTiles, seed, wildcardCount = 2, wordFilterOptions = {}) {
+    if (!(dictionarySet instanceof Set) || dictionarySet.size === 0 || totalTiles < wildcardCount) {
         console.error("Invalid input for tile list generation.");
         return [];
     }
 
-    const prng = createPRNG(seed);
+    const prng = createPRNG(seed); // Get the seeded generator
+    if (prng === Math.random) { // Check if fallback occurred
+         console.warn("Generating tile list using non-deterministic Math.random due to PRNG failure.");
+    }
+
     const dictionaryArray = Array.from(dictionarySet);
-    const targetLetters = Math.max(0, totalTiles - 2); // Number of non-wildcard tiles needed
+    const targetLetters = Math.max(0, totalTiles - wildcardCount); // Number of non-wildcard tiles needed
     let currentTileList = [];
     const minLen = wordFilterOptions.minLength || 3;
     const maxLen = wordFilterOptions.maxLength || 8;
@@ -109,8 +119,7 @@ export function generateTileListFromWords(dictionarySet, totalTiles, seed, wordF
     while (currentTileList.length < targetLetters && attempts < maxAttempts) {
         const randomWord = randomChoice(usableWords, prng);
         if (randomWord) {
-             // Assuming dictionary is already uppercase
-            currentTileList.push(...randomWord.split(''));
+            currentTileList.push(...randomWord.toUpperCase().split(''));
         }
         attempts++;
     }
@@ -126,8 +135,10 @@ export function generateTileListFromWords(dictionarySet, totalTiles, seed, wordF
          currentTileList = currentTileList.slice(0, targetLetters);
     }
 
-    // Add exactly two wildcards
-    currentTileList.push('*', '*');
+    // Add wildcards
+    for (let i = 0; i < wildcardCount; i++) {
+        currentTileList.push('*');
+    }
 
     // Final shuffle of the complete list
     shuffleArray(currentTileList, prng);
