@@ -5,10 +5,11 @@
  * handling user input events, managing modals, and playing animations.
  */
 
-import { CSS_CLASSES, BONUS_TYPES, ANIMATION_DURATIONS } from './Constants.js';
+import { CSS_CLASSES, BONUS_TYPES, ANIMATION_DURATIONS, ACHIEVEMENT_DETAILS } from './Constants.js';
 import * as Utils from './Utils.js';
 
 // --- DOM Element References ---
+// (These are assigned in the init function)
 
 /** @type {HTMLElement | null} Main application container */
 let appContainer = null;
@@ -28,53 +29,114 @@ let submitButtonElement = null;
 let menuButtonElement = null;
 /** @type {HTMLElement | null} Menu overlay element */
 let menuOverlayElement = null;
-// Add references for modal elements later (backdrop, containers, buttons etc.)
+// Modal Elements
+/** @type {HTMLElement | null} Global modal backdrop */
+let modalBackdrop = null;
+/** @type {HTMLElement | null} Tutorial modal container */
+let tutorialModal = null;
+/** @type {HTMLElement | null} Wildcard modal container */
+let wildcardModal = null;
+/** @type {HTMLElement | null} Wildcard grid element */
+let wildcardGrid = null;
+/** @type {HTMLElement | null} Submit confirmation modal container */
+let confirmModal = null;
+/** @type {HTMLElement | null} Submit confirmation preview board */
+let confirmPreviewBoard = null;
+/** @type {HTMLElement | null} Game Over modal container */
+let gameOverModal = null;
+/** @type {HTMLElement | null} Game Over score display */
+let gameOverScore = null;
+/** @type {HTMLElement | null} Game Over board display */
+let gameOverBoard = null;
+/** @type {HTMLElement | null} Game Over achievement list area */
+let gameOverAchievements = null;
+/** @type {HTMLElement | null} Loading modal/overlay */
+let loadingModal = null;
+/** @type {HTMLElement | null} Loading modal message element */
+let loadingModalMessage = null;
+/** @type {HTMLElement | null} Error message display area */
+let errorDisplay = null;
+/** @type {HTMLElement | null} Achievement unlocked notification area */
+let achievementDisplay = null;
+/** @type {number | null} Timeout ID for achievement display */
+let achievementTimeout = null;
+
+
+// --- Module State ---
 
 /** @type {object} Callbacks provided by GameManager */
 let gameCallbacks = {};
-
 /** @type {object | null} Reference to the currently dragged tile element */
 let draggedTileElement = null;
 /** @type {{x: number, y: number} | null} Original coords of the dragged tile */
 let dragStartCoords = null;
+/** @type {string | null} Holds the letter of the tile selected from the pool */
+let selectedPoolLetter = null;
+/** @type {HTMLElement | null} Holds reference to the selected pool tile element for highlighting */
+let selectedPoolTileElement = null;
+
 
 // --- Initialization ---
 
 /**
  * Initializes the UIController, gets element references, and sets up base event listeners.
  * @param {object} callbacks - Functions provided by GameManager to handle user actions.
- * @param {() => void} callbacks.onSubmitClick - Called when submit button is clicked.
- * @param {(coords: {x: number, y: number}) => void} callbacks.onBoardSquareClick - Called when an empty board square is clicked.
- * @param {(coords: {x: number, y: number}) => void} callbacks.onPlacedTileClick - Called when a tile on the board is clicked.
- * @param {(letter: string, element: HTMLElement) => void} callbacks.onPoolTileClick - Called when a tile in the pool is clicked.
- * @param {() => void} callbacks.onResetClick - Called when 'Reset Board' in menu is clicked.
- * @param {() => void} callbacks.onHowToPlayClick - Called when 'How to Play' in menu is clicked.
- * @param {(coords: {x: number, y: number}) => void} callbacks.onPlacedTileDragStart - Called when dragging a board tile starts.
- * @param {(coords: {x: number, y: number} | null) => void} callbacks.onDragEnd - Called when dragging ends (null if dropped outside board/pool).
+ * @param {() => void} callbacks.onSubmitClick
+ * @param {(coords: {x: number, y: number}) => void} callbacks.onBoardSquareClick
+ * @param {(coords: {x: number, y: number}) => void} callbacks.onPlacedTileClick
+ * @param {(letter: string, element: HTMLElement) => void} callbacks.onPoolTileClick
+ * @param {() => void} callbacks.onResetClick
+ * @param {() => void} callbacks.onHowToPlayClick
+ * @param {(coords: {x: number, y: number}, element: HTMLElement) => void} callbacks.onPlacedTileDragStart
+ * @param {(targetType: 'board' | 'pool' | 'off', coords?: {x: number, y: number}) => void} callbacks.onDrop
+ * @param {(letter: string) => void} callbacks.onWildcardSelect
+ * @param {() => void} callbacks.onWildcardCancel
+ * @param {() => void} callbacks.onSubmitConfirm
+ * @param {() => void} callbacks.onSubmitCancel
+ * @param {() => void} callbacks.onTutorialClose
+ * @param {() => void} callbacks.onGameOverClose
+ * @param {(unlockedIds: string[]) => void} [callbacks.onDisplayedAchievementsCleared] - Optional callback.
  */
 export function init(callbacks) {
     console.log("UIController initializing...");
     gameCallbacks = callbacks;
 
     // Get main element references
-    appContainer = document.getElementById('app'); // Assuming root element has id="app"
-    boardElement = document.getElementById('game-board');
-    tilePoolElement = document.getElementById('tile-pool');
-    actionsElement = document.getElementById('actions-area');
-    scoreDisplayElement = document.getElementById('score-display');
-    countdownDisplayElement = document.getElementById('countdown-display');
-    submitButtonElement = document.getElementById('submit-button');
-    menuButtonElement = document.getElementById('menu-button');
-    menuOverlayElement = document.getElementById('menu-overlay');
-    // Get modal elements later
+    appContainer = document.body; // Use body for modal overlay class
+    boardElement = document.querySelector('#game-board');
+    tilePoolElement = document.querySelector('#tile-pool');
+    actionsElement = document.querySelector('#actions-area');
+    scoreDisplayElement = document.querySelector('#score-display');
+    countdownDisplayElement = document.querySelector('#countdown-display');
+    submitButtonElement = document.querySelector('#submit-button');
+    menuButtonElement = document.querySelector('#menu-button');
+    menuOverlayElement = document.querySelector('#menu-overlay');
+    modalBackdrop = document.querySelector('#modal-backdrop');
+    tutorialModal = document.querySelector('#tutorial-modal');
+    wildcardModal = document.querySelector('#wildcard-modal');
+    wildcardGrid = document.querySelector('#wildcard-grid');
+    confirmModal = document.querySelector('#confirm-modal');
+    confirmPreviewBoard = document.querySelector('#confirm-preview-board');
+    gameOverModal = document.querySelector('#game-over-modal');
+    gameOverScore = document.querySelector('#game-over-score');
+    gameOverBoard = document.querySelector('#game-over-board');
+    gameOverAchievements = document.querySelector('#achievement-display-gameover'); // Get achievement list element
+    loadingModal = document.querySelector('#loading-modal');
+    loadingModalMessage = loadingModal?.querySelector('.message'); // Get message element inside loading modal
+    errorDisplay = document.querySelector('#error-display');
+    achievementDisplay = document.querySelector('#achievement-display');
 
-    if (!appContainer || !boardElement || !tilePoolElement || !actionsElement || !scoreDisplayElement || !submitButtonElement || !menuButtonElement || !menuOverlayElement || !countdownDisplayElement) {
-        console.error("UIController Init Error: Could not find all required DOM elements!");
-        // Perhaps display a critical error message here
-        return;
+
+    // Validate critical elements
+    const criticalElements = { boardElement, tilePoolElement, submitButtonElement, menuButtonElement, modalBackdrop, loadingModal, loadingModalMessage };
+    for (const key in criticalElements) {
+        if (!criticalElements[key]) {
+            console.error(`UIController Init Error: Required element "${key}" not found! Check index.html.`);
+            displayError("Initialization Failed: UI elements missing.");
+            return;
+        }
     }
 
-    // Add base event listeners
     setupEventListeners();
     console.log("UIController initialized.");
 }
@@ -83,125 +145,192 @@ export function init(callbacks) {
  * Sets up global and persistent event listeners.
  */
 function setupEventListeners() {
-    // --- Click Listeners ---
-    if (submitButtonElement) {
-        submitButtonElement.addEventListener('click', handleSubmitClick);
-    }
-    if (menuButtonElement) {
-        menuButtonElement.addEventListener('click', handleMenuToggle);
-    }
-    if (menuOverlayElement) {
-         // Add listeners for menu items if they exist inside the overlay
-         const resetButton = menuOverlayElement.querySelector('#reset-board-button');
-         const howToPlayButton = menuOverlayElement.querySelector('#how-to-play-button');
-         if (resetButton) resetButton.addEventListener('click', handleResetClick);
-         if (howToPlayButton) howToPlayButton.addEventListener('click', handleHowToPlayClick);
-         // Close menu if clicking outside of it (optional)
-         // document.addEventListener('click', handleOutsideMenuClick); // More complex handling needed
-    }
-
-    // Delegated listeners for dynamically created elements (tiles, squares)
-    if (boardElement) {
-        boardElement.addEventListener('click', handleBoardClick);
-        // Drag & Drop listeners for tiles ON the board
-        boardElement.addEventListener('dragstart', handleBoardDragStart);
-        // Need listeners on potential drop targets (pool area, maybe body to detect drop 'off')
-    }
-    if (tilePoolElement) {
-        tilePoolElement.addEventListener('click', handlePoolClick);
-    }
-
-    // --- Drag & Drop Listeners (Global for handling drop anywhere) ---
-    // Prevent default to allow drop
+    submitButtonElement?.addEventListener('click', handleSubmitClick);
+    menuButtonElement?.addEventListener('click', handleMenuToggle);
+    menuOverlayElement?.querySelector('#reset-board-button')?.addEventListener('click', handleResetClick);
+    menuOverlayElement?.querySelector('#how-to-play-button')?.addEventListener('click', handleHowToPlayClick);
+    boardElement?.addEventListener('click', handleBoardClick);
+    tilePoolElement?.addEventListener('click', handlePoolClick);
+    boardElement?.addEventListener('dragstart', handleBoardDragStart);
     document.addEventListener('dragover', handleDragOver);
     document.addEventListener('drop', handleDrop);
-    document.addEventListener('dragend', handleDragEnd); // Cleanup after drag finishes
+    document.addEventListener('dragend', handleDragEnd);
+    modalBackdrop?.addEventListener('click', handleBackdropClick);
+    document.addEventListener('click', handleOutsideMenuClick, true); // Use capture phase
+    setupModalListeners(); // Add listeners for modal buttons
+}
+
+/** Sets up listeners specific to modal buttons. */
+function setupModalListeners() {
+    // Use optional chaining for safety
+    tutorialModal?.querySelector('.close-button')?.addEventListener('click', () => gameCallbacks.onTutorialClose?.());
+    tutorialModal?.querySelector('.skip-button')?.addEventListener('click', () => gameCallbacks.onTutorialClose?.());
+    wildcardModal?.querySelector('.cancel-button')?.addEventListener('click', () => gameCallbacks.onWildcardCancel?.());
+    wildcardGrid?.addEventListener('click', handleWildcardGridClick);
+    confirmModal?.querySelector('.confirm-button')?.addEventListener('click', () => gameCallbacks.onSubmitConfirm?.());
+    confirmModal?.querySelector('.cancel-button')?.addEventListener('click', () => gameCallbacks.onSubmitCancel?.());
+    gameOverModal?.querySelector('.close-button')?.addEventListener('click', () => gameCallbacks.onGameOverClose?.());
 }
 
 // --- Event Handlers ---
 
 /** Handles clicks on the submit button. */
 function handleSubmitClick() {
-    // Check if button is disabled first
-    if (submitButtonElement && !submitButtonElement.classList.contains(CSS_CLASSES.SUBMIT_DISABLED)) {
+    if (submitButtonElement && !submitButtonElement.disabled) {
         gameCallbacks.onSubmitClick?.();
     }
 }
 
 /** Handles clicks on the main menu toggle button. */
 function handleMenuToggle(event) {
-    event.stopPropagation(); // Prevent potential outside click closing immediately
-    menuOverlayElement?.classList.toggle('visible'); // Assuming 'visible' class controls display
+    event.stopPropagation();
+    menuOverlayElement?.classList.toggle('visible');
+}
+
+/** Handles click outside the menu to close it. */
+function handleOutsideMenuClick(event) {
+    if (menuOverlayElement?.classList.contains('visible') &&
+        !menuOverlayElement.contains(/** @type {Node} */ (event.target)) &&
+        !menuButtonElement?.contains(/** @type {Node} */ (event.target))) {
+        menuOverlayElement.classList.remove('visible');
+    }
 }
 
 /** Handles clicks on the Reset Board menu item. */
 function handleResetClick() {
-    menuOverlayElement?.classList.remove('visible'); // Close menu
+    menuOverlayElement?.classList.remove('visible');
     gameCallbacks.onResetClick?.();
 }
 
 /** Handles clicks on the How to Play menu item. */
 function handleHowToPlayClick() {
-    menuOverlayElement?.classList.remove('visible'); // Close menu
+    menuOverlayElement?.classList.remove('visible');
     gameCallbacks.onHowToPlayClick?.();
 }
 
-/**
- * Handles clicks within the board area (delegated).
- * Determines if a square or a placed tile was clicked.
- * @param {MouseEvent} event
- */
+/** Handles clicks within the board area (delegated). */
 function handleBoardClick(event) {
-    const target = event.target;
+    const target = /** @type {HTMLElement} */ (event.target);
     const square = target.closest(`.${CSS_CLASSES.SQUARE}`);
+    const tileOnSquare = target.closest(`.${CSS_CLASSES.TILE_BOARD}`);
 
-    if (!square) return; // Click wasn't inside a square
-
-    const coords = parseCoordsFromElement(square);
-    if (!coords) return;
-
-    const placedTile = square.querySelector(`.${CSS_CLASSES.TILE_BOARD}`);
-
-    if (placedTile) {
-        // Clicked on a placed tile
-        gameCallbacks.onPlacedTileClick?.(coords);
-    } else {
-        // Clicked on an empty square
-        gameCallbacks.onBoardSquareClick?.(coords);
+    if (tileOnSquare && square) {
+        const coords = parseCoordsFromElement(square);
+        if (coords) gameCallbacks.onPlacedTileClick?.(coords);
+    } else if (square) {
+        const coords = parseCoordsFromElement(square);
+        if (coords) gameCallbacks.onBoardSquareClick?.(coords);
     }
 }
 
-/**
- * Handles clicks within the tile pool area (delegated).
- * @param {MouseEvent} event
- */
+/** Handles clicks within the tile pool area (delegated). */
 function handlePoolClick(event) {
-    const targetTile = event.target.closest(`.${CSS_CLASSES.TILE_POOL}`);
+    const targetTile = /** @type {HTMLElement} */ (event.target).closest(`.${CSS_CLASSES.TILE_POOL}`);
     if (targetTile) {
-        const letter = targetTile.dataset.letter; // Assuming letter is stored in data attribute
+        const letter = targetTile.dataset.letter;
         if (letter) {
-            gameCallbacks.onPoolTileClick?.(letter, targetTile);
+            selectPoolTile(letter, targetTile); // Visually select
+            gameCallbacks.onPoolTileClick?.(letter, targetTile); // Notify manager
         }
     }
 }
 
+/** Handles clicking a letter button in the wildcard grid. */
+function handleWildcardGridClick(event) {
+    const button = /** @type {HTMLElement} */ (event.target).closest(`.${CSS_CLASSES.WILDCARD_BUTTON}`);
+    if (button) {
+        const letter = button.dataset.letter;
+        if (letter) gameCallbacks.onWildcardSelect?.(letter);
+    }
+}
 
-// --- Board Rendering ---
+/** Handles clicks on the modal backdrop to close modals (if appropriate). */
+function handleBackdropClick() {
+    if (wildcardModal?.classList.contains('visible')) {
+        gameCallbacks.onWildcardCancel?.();
+    } else if (confirmModal?.classList.contains('visible')) {
+        gameCallbacks.onSubmitCancel?.();
+    } else if (menuOverlayElement?.classList.contains('visible')){
+        menuOverlayElement.classList.remove('visible');
+    }
+    // By default, don't close Tutorial, Game Over, Loading, or Error modals via backdrop
+}
 
-/**
- * Renders the entire game board structure and placed tiles.
- * @param {number} size - Board dimension.
- * @param {object | null} boardLayout - Bonus layout {'x,y': 'DL'|...}.
- * @param {object} boardTiles - Placed tiles {'x,y': { letter, value, ... }}.
- * @param {object} validationStatus - Current validation status for highlighting.
- */
+// --- Drag and Drop Handlers ---
+
+/** Handles starting to drag a tile from the board. */
+function handleBoardDragStart(event) {
+    const target = /** @type {HTMLElement} */ (event.target);
+    const tileElement = target.closest(`.${CSS_CLASSES.TILE_BOARD}`);
+    const squareElement = target.closest(`.${CSS_CLASSES.SQUARE}`);
+
+    if (tileElement && squareElement && event.dataTransfer) {
+        draggedTileElement = tileElement;
+        dragStartCoords = parseCoordsFromElement(squareElement);
+        event.dataTransfer.setData('text/plain', tileElement.dataset.letter || '');
+        event.dataTransfer.effectAllowed = 'move';
+        // Use setTimeout to allow the browser to render the drag image before adding class
+        setTimeout(() => tileElement.classList.add(CSS_CLASSES.TILE_DRAGGING), 0);
+        if (dragStartCoords) gameCallbacks.onPlacedTileDragStart?.(dragStartCoords, tileElement);
+    } else {
+        event.preventDefault();
+    }
+}
+
+/** Handles dragging over a potential drop target. */
+function handleDragOver(event) {
+    event.preventDefault(); // Necessary to allow dropping
+    if (event.dataTransfer) {
+        event.dataTransfer.dropEffect = 'move';
+    }
+}
+
+/** Handles dropping a dragged element. */
+function handleDrop(event) {
+    event.preventDefault();
+    if (!draggedTileElement || !dragStartCoords) return;
+
+    const target = /** @type {HTMLElement} */ (event.target);
+    const targetSquare = target.closest(`.${CSS_CLASSES.SQUARE}`);
+    const targetPool = target.closest(`.${CSS_CLASSES.TILE_POOL_AREA}`);
+    let dropTargetType = 'off';
+    let dropCoords = null;
+
+    if (targetSquare) {
+        dropTargetType = 'board';
+        dropCoords = parseCoordsFromElement(targetSquare);
+        // Per previous decision, dropping on board doesn't move/swap, only remove original
+        console.log("Dropped on board - treating as remove request for original tile.");
+        gameCallbacks.onDrop?.('pool', undefined); // Signal removal by dropping on pool
+    } else if (targetPool) {
+        dropTargetType = 'pool';
+        gameCallbacks.onDrop?.(dropTargetType, undefined); // Signal removal
+    } else {
+        // Dropped somewhere else (off target)
+        dropTargetType = 'off';
+        gameCallbacks.onDrop?.(dropTargetType, undefined); // Signal removal
+    }
+    // Cleanup happens in handleDragEnd regardless of drop target
+}
+
+/** Handles cleanup after any drag operation ends. */
+function handleDragEnd(event) {
+    if (draggedTileElement) {
+        draggedTileElement.classList.remove(CSS_CLASSES.TILE_DRAGGING);
+    }
+    draggedTileElement = null;
+    dragStartCoords = null;
+}
+
+
+// --- Core Rendering Functions ---
+
+/** Renders the entire game board structure and placed tiles. */
 export function renderBoard(size, boardLayout, boardTiles, validationStatus) {
-    if (!boardElement) return;
-
-    // Clear previous content (simple approach)
+    // ... (Implementation as provided before, ensure it uses Utils.coordKey, Utils.getCenterCoords, getBonusClass, createTileElement, parseCoordsFromElement correctly) ...
+     if (!boardElement) return;
     boardElement.innerHTML = '';
-    boardElement.style.setProperty('--board-size', size); // For CSS Grid layout
-
+    boardElement.style.setProperty('--board-size', size);
     const fragment = document.createDocumentFragment();
     const centerCoords = Utils.getCenterCoords(size);
     const centerKey = Utils.coordKey(centerCoords);
@@ -213,56 +342,45 @@ export function renderBoard(size, boardLayout, boardTiles, validationStatus) {
             const key = Utils.coordKey(coords);
             const squareElement = document.createElement('div');
             squareElement.classList.add(CSS_CLASSES.SQUARE);
-            squareElement.dataset.coordX = x; // Store coords for event handling
-            squareElement.dataset.coordY = y;
-            squareElement.dataset.coordKey = key;
+            squareElement.dataset.coordX = String(x); squareElement.dataset.coordY = String(y); squareElement.dataset.coordKey = key;
 
-            // Apply bonus class
             const bonusType = boardLayout ? boardLayout[key] : null;
             if (bonusType) {
                 const bonusClass = getBonusClass(bonusType);
-                if (bonusClass) {
-                    squareElement.classList.add(bonusClass);
-                    // Optionally add text label for bonus squares
-                    // squareElement.textContent = bonusType !== BONUS_TYPES.STAR ? bonusType : '★';
+                if (bonusClass) squareElement.classList.add(bonusClass);
+                if (bonusType === BONUS_TYPES.STAR && !boardTiles[key]) { // Add star symbol if empty
+                    squareElement.innerHTML = '<span class="material-symbols-outlined bonus-star-icon">star</span>'; // Example using icon font
                 }
             }
 
-            // Render placed tile if exists
+
             const tileData = boardTiles[key];
             if (tileData) {
-                const tileElement = createTileElement(tileData, true); // true for board tile
+                const tileElement = createTileElement(tileData, true);
                 squareElement.appendChild(tileElement);
-                 // Apply invalid highlight if needed
-                 if (invalidKeys.has(key)) {
-                     tileElement.classList.add(CSS_CLASSES.INVALID_SUBMIT_TILE);
-                 } else {
-                     tileElement.classList.remove(CSS_CLASSES.INVALID_SUBMIT_TILE);
-                 }
+                if (invalidKeys.has(key)) {
+                    tileElement.classList.add(CSS_CLASSES.INVALID_SUBMIT_TILE);
+                }
+                 // Remove star icon if tile is placed on star square
+                if (key === centerKey) {
+                    const starIcon = squareElement.querySelector('.bonus-star-icon');
+                    if(starIcon) starIcon.remove();
+                }
             }
 
-            // Apply invalid center star highlight specifically
-             if (key === centerKey && validationStatus?.needsCenterStar) {
+            if (key === centerKey && validationStatus?.needsCenterStar) {
                 squareElement.classList.add(CSS_CLASSES.INVALID_SUBMIT_STAR);
             } else {
                  squareElement.classList.remove(CSS_CLASSES.INVALID_SUBMIT_STAR);
             }
-
-
             fragment.appendChild(squareElement);
         }
     }
     boardElement.appendChild(fragment);
-
-    // Apply valid word highlights separately after all tiles are in DOM
-    renderWordHighlights(validationStatus?.validWordMap || {});
+    applyWordHighlights(validationStatus?.validWordMap || {}); // Apply highlights after elements exist
 }
 
-/**
- * Gets the appropriate CSS class for a bonus type.
- * @param {string | null} bonusType - The bonus type string (e.g., 'DL', 'STAR').
- * @returns {string | null} The corresponding CSS class or null.
- */
+/** Gets the appropriate CSS class for a bonus type. */
 function getBonusClass(bonusType) {
     switch (bonusType) {
         case BONUS_TYPES.DL: return CSS_CLASSES.BONUS_DL;
@@ -274,142 +392,105 @@ function getBonusClass(bonusType) {
     }
 }
 
-/**
- * Creates a tile DOM element.
- * @param {object} tileData - Tile data { letter, value, displayLetter, isWildcard }.
- * @param {boolean} isBoardTile - True if the tile is for the board, false for the pool.
- * @returns {HTMLElement} The created tile element.
- */
+/** Creates a tile DOM element. */
 function createTileElement(tileData, isBoardTile) {
     const tileElement = document.createElement('div');
     tileElement.classList.add(CSS_CLASSES.TILE);
     tileElement.classList.add(isBoardTile ? CSS_CLASSES.TILE_BOARD : CSS_CLASSES.TILE_POOL);
-    tileElement.dataset.letter = tileData.letter; // Store actual letter ('*' for wildcard)
-
+    tileElement.dataset.letter = tileData.letter;
     const letterSpan = document.createElement('span');
     letterSpan.classList.add(CSS_CLASSES.TILE_LETTER);
-    letterSpan.textContent = tileData.displayLetter || tileData.letter; // Show chosen letter for wildcard
-
+    letterSpan.textContent = tileData.displayLetter || tileData.letter;
     const valueSpan = document.createElement('span');
     valueSpan.classList.add(CSS_CLASSES.TILE_VALUE);
-    valueSpan.textContent = tileData.value ?? 0;
-
+    valueSpan.textContent = String(tileData.value ?? 0);
     tileElement.appendChild(letterSpan);
     tileElement.appendChild(valueSpan);
-
-    // Make board tiles draggable
-    if (isBoardTile) {
-        tileElement.draggable = true;
-    }
-
+    if (isBoardTile) tileElement.draggable = true;
     return tileElement;
 }
 
-/**
- * Parses coordinates from a DOM element's data attributes.
- * @param {HTMLElement} element - The element (e.g., a square).
- * @returns {{x: number, y: number} | null} Coordinates object or null.
- */
+/** Parses coordinates from a DOM element's data attributes. */
 function parseCoordsFromElement(element) {
     if (!element || !element.dataset) return null;
     const x = parseInt(element.dataset.coordX, 10);
     const y = parseInt(element.dataset.coordY, 10);
-    if (!isNaN(x) && !isNaN(y)) {
-        return { x, y };
-    }
+    if (!isNaN(x) && !isNaN(y)) return { x, y };
     return null;
 }
 
-// --- Tile Pool Rendering ---
-
-/**
- * Renders the tiles available in the pool.
- * @param {object} poolTiles - Counts of available tiles {'A': count, ...}.
- * @param {string | null} selectedTileLetter - The letter of the currently selected pool tile.
- * @param {object} tileSetConfig - Tile set config containing values needed by createTileElement.
- */
-export function renderTilePool(poolTiles, selectedTileLetter, tileSetConfig) {
+/** Renders the tiles available in the pool. */
+export function renderTilePool(poolTiles, currentSelectedPoolLetter, tileSetConfig) {
     if (!tilePoolElement) return;
+    selectedPoolLetter = currentSelectedPoolLetter; // Update internal tracker
 
-    tilePoolElement.innerHTML = ''; // Clear previous pool
+    tilePoolElement.innerHTML = '';
     const fragment = document.createDocumentFragment();
-    const sortedLetters = Object.keys(poolTiles).sort(); // Sort for consistent display
+    // Sort order might be defined by constants or preferred order
+    const sortedLetters = Object.keys(poolTiles).sort((a, b) => a.localeCompare(b)); // Simple alpha sort
+
+    let firstElementOfSelectedType = null; // Track the first element for highlighting
 
     for (const letter of sortedLetters) {
         const count = poolTiles[letter];
         if (count > 0) {
             const value = tileSetConfig?.values?.[letter] ?? 0;
-            // Create one tile element for each available count
             for (let i = 0; i < count; i++) {
-                const tileData = {
-                    letter: letter,
-                    value: value,
-                    displayLetter: letter, // Display actual letter/symbol
-                    isWildcard: letter === '*'
-                };
-                const tileElement = createTileElement(tileData, false); // Pool tile
-
-                // Add selected class if applicable
-                if (letter === selectedTileLetter && i === 0) { // Highlight only one instance if selected
-                    tileElement.classList.add(CSS_CLASSES.TILE_SELECTED_POOL);
-                } else {
-                    tileElement.classList.remove(CSS_CLASSES.TILE_SELECTED_POOL);
-                }
-
+                const tileData = { letter, value, displayLetter: letter, isWildcard: letter === '*' };
+                const tileElement = createTileElement(tileData, false);
                 fragment.appendChild(tileElement);
+                // Track the first instance if it matches the selected letter
+                if (letter === selectedPoolLetter && !firstElementOfSelectedType) {
+                    firstElementOfSelectedType = tileElement;
+                }
             }
         }
     }
     tilePoolElement.appendChild(fragment);
+
+    // Apply selection highlight after all elements are added
+    selectPoolTile(selectedPoolLetter, firstElementOfSelectedType);
 }
 
+/** Visually selects/deselects a pool tile element */
+function selectPoolTile(letter, tileElement) {
+    // Deselect previous
+    if (selectedPoolTileElement) {
+        selectedPoolTileElement.classList.remove(CSS_CLASSES.TILE_SELECTED_POOL);
+        selectedPoolTileElement = null; // Clear reference
+    }
+    // Select new (only if element exists)
+    if (tileElement && letter) {
+        tileElement.classList.add(CSS_CLASSES.TILE_SELECTED_POOL);
+        selectedPoolTileElement = tileElement; // Store reference
+        // selectedPoolLetter is updated in renderTilePool call
+    }
+}
 
-// --- Score & Countdown Rendering ---
-
-/**
- * Updates the score display element.
- * @param {number} score - The score to display.
- */
+/** Updates the score display element. */
 export function renderScore(score) {
-    if (scoreDisplayElement) {
-        scoreDisplayElement.textContent = `Score: ${score}`;
-    }
+    if (scoreDisplayElement) scoreDisplayElement.textContent = `Score: ${score}`;
 }
 
-/**
- * Updates the countdown timer display.
- * @param {string} timeLeftString - Formatted time string (e.g., "HH:MM:SS").
- */
+/** Updates the countdown timer display. */
 export function renderCountdown(timeLeftString) {
-     if (countdownDisplayElement) {
-        countdownDisplayElement.textContent = `Next: ${timeLeftString}`;
-    }
+     if (countdownDisplayElement) countdownDisplayElement.textContent = `Next: ${timeLeftString}`;
 }
 
-// --- Validation & State Rendering ---
-
-/**
- * Updates the enabled/disabled state and visual style of the submit button.
- * @param {boolean} isSubmittable - Whether the game state allows submission.
- */
+/** Updates the enabled/disabled state and visual style of the submit button. */
 export function renderSubmitButton(isSubmittable) {
     if (!submitButtonElement) return;
     if (isSubmittable) {
         submitButtonElement.classList.remove(CSS_CLASSES.SUBMIT_DISABLED);
         submitButtonElement.disabled = false;
-        submitButtonElement.setAttribute('aria-disabled', 'false');
     } else {
         submitButtonElement.classList.add(CSS_CLASSES.SUBMIT_DISABLED);
         submitButtonElement.disabled = true;
-        submitButtonElement.setAttribute('aria-disabled', 'true');
     }
 }
 
-/**
- * Applies/removes green borders to tiles that form potentially valid words.
- * @param {object} validWordMap - Map of word coordinate keys ("x1,y1-xN,yN") to boolean validity.
- */
-export function renderWordHighlights(validWordMap) {
+/** Applies/removes green borders to tiles that form potentially valid words. */
+function applyWordHighlights(validWordMap) {
     if (!boardElement) return;
 
     // Clear previous highlights first
@@ -420,64 +501,237 @@ export function renderWordHighlights(validWordMap) {
     // Apply new highlights
     for (const wordKey in validWordMap) {
         if (validWordMap[wordKey]) { // Only highlight valid words
-            // Parse the coordinate keys from the wordKey (e.g., "2,2-2,4") -> ["2,2", "2,3", "2,4"]
-            // This requires a helper function to parse ranges or store keys directly
-            // Let's assume validWordMap keys are actually arrays of coordKeys for simplicity here.
-            // OR, assume the key maps directly to the tiles involved in that word.
-            // Simpler: Re-query based on segment keys if ScoringEngine provided them.
-            // For now: Assume we need to find the tiles related to the wordKey somehow.
-            // This part needs refinement based on how word segments/keys are stored.
-
-            // Placeholder: If validWordMap provided segment.keys directly:
-            // const tileKeys = validWordMap[wordKey].keys; // Hypothetical
-            // if(tileKeys) {
-            //    tileKeys.forEach(key => {
-            //        const square = boardElement.querySelector(`[data-coord-key="${key}"]`);
-            //        const tile = square?.querySelector(`.${CSS_CLASSES.TILE_BOARD}`);
-            //        tile?.classList.add(CSS_CLASSES.VALID_WORD_TILE);
-            //    });
-            // }
+            // Assumption: wordKey is "x1,y1;x2,y2;..." representing tile coords in the word
+            const coordKeys = wordKey.split(';');
+            coordKeys.forEach(key => {
+                // Find the square, then the tile within it
+                const square = boardElement.querySelector(`.${CSS_CLASSES.SQUARE}[data-coord-key="${key}"]`);
+                const tile = square?.querySelector(`.${CSS_CLASSES.TILE_BOARD}`);
+                if (tile) { // Ensure tile exists before adding class
+                    tile.classList.add(CSS_CLASSES.VALID_WORD_TILE);
+                }
+            });
         }
     }
-    // TODO: Refine how validWordMap relates word validity back to specific tile elements.
-    // Maybe GameManager needs to pass tileKeys -> isValid map instead?
 }
 
 
-// --- Drag and Drop Handling --- (To be added in Part 2)
-/** Handles starting to drag a tile from the board. */
-function handleBoardDragStart(event) {
-    // ... Implementation in Part 2 ...
-}
-/** Handles dragging over a potential drop target. */
-function handleDragOver(event) {
-     // ... Implementation in Part 2 ...
-}
-/** Handles dropping a dragged element. */
-function handleDrop(event) {
-     // ... Implementation in Part 2 ...
-}
-/** Handles cleanup after any drag operation ends. */
-function handleDragEnd(event) {
-    // ... Implementation in Part 2 ...
-}
+// --- Theme Application ---
 
-
-// --- Theme Application --- (To be added in Part 2)
 /**
- * Applies theme styles (e.g., colors) using CSS variables.
- * @param {object} themeData - The theme configuration object.
+ * Applies theme styles using CSS variables.
+ * @param {object} themeData - The theme configuration object (e.g., { primaryColor: '#ff0000', tileBg: '#eee', ... }).
  */
 export function applyTheme(themeData) {
-    // ... Implementation in Part 2 ...
+    const root = document.documentElement;
+    if (!themeData || typeof themeData !== 'object') {
+        console.warn("Applying default theme styles (no theme data provided).");
+        // Potentially clear existing custom properties if needed?
+        return;
+    }
+    for (const key in themeData) {
+        if (themeData.hasOwnProperty(key) && key !== 'id') { // Exclude theme id property
+            const cssVarName = `--${key.replace(/([A-Z])/g, '-$1').toLowerCase()}`;
+            root.style.setProperty(cssVarName, themeData[key]);
+        }
+    }
+     console.log("Theme applied:", themeData.id || 'custom');
 }
 
-// --- Modals --- (To be added in Part 2)
-// showTutorialModal, hideTutorialModal, showWildcardModal, hideWildcardModal,
-// showSubmitConfirmModal, hideSubmitConfirmModal, showGameOverScreen,
-// displayAchievementsUnlocked, showError, showLoading
 
-// --- Animations --- (To be added in Part 2)
-// animateTilePlacement, animateTileRemoval, animateBonusSquareLoad
+// --- Modals ---
+
+/** Helper to show/hide a modal and backdrop */
+function setModalVisibility(modalElement, visible) {
+     if (modalElement && modalBackdrop) {
+        if (visible) {
+            modalBackdrop.classList.add('visible');
+            modalElement.classList.add('visible');
+            appContainer?.classList.add(CSS_CLASSES.MODAL_OPEN);
+        } else {
+            modalElement.classList.remove('visible');
+            const anyVisible = document.querySelector(`.${CSS_CLASSES.MODAL_CONTAINER}.visible`);
+            if (!anyVisible) {
+                 modalBackdrop.classList.remove('visible');
+                 appContainer?.classList.remove(CSS_CLASSES.MODAL_OPEN);
+             }
+        }
+    } else if(visible) {
+         console.error("Attempted to show modal, but modal or backdrop element not found.", modalElement);
+    }
+}
+
+/** Shows the Tutorial Modal */
+export function showTutorialModal() { setModalVisibility(tutorialModal, true); }
+/** Hides the Tutorial Modal */
+export function hideTutorialModal() { setModalVisibility(tutorialModal, false); }
+
+/** Shows the Wildcard Selection Modal */
+export function showWildcardModal() {
+     if (wildcardGrid) {
+        wildcardGrid.innerHTML = '';
+        const fragment = document.createDocumentFragment();
+        for (let i = 65; i <= 90; i++) {
+            const letter = String.fromCharCode(i);
+            const button = document.createElement('button');
+            button.classList.add(CSS_CLASSES.WILDCARD_BUTTON);
+            button.dataset.letter = letter; button.textContent = letter;
+            fragment.appendChild(button);
+        }
+        wildcardGrid.appendChild(fragment);
+    }
+    setModalVisibility(wildcardModal, true);
+}
+/** Hides the Wildcard Selection Modal */
+export function hideWildcardModal() { setModalVisibility(wildcardModal, false); }
+
+/** Shows the Submit Confirmation Modal with a board preview. */
+export function showSubmitConfirmModal(boardTiles, validWordMap, size, boardLayout) {
+    if (confirmPreviewBoard) {
+        confirmPreviewBoard.innerHTML = ''; // Clear previous
+        confirmPreviewBoard.style.setProperty('--board-size', size);
+        const validTileKeys = new Set();
+         for (const wordKey in validWordMap) {
+            if (validWordMap[wordKey]) {
+                 const coordKeys = wordKey.split(';'); // Still assumes this key format
+                 coordKeys.forEach(key => validTileKeys.add(key));
+            }
+        }
+        const previewTiles = {};
+        validTileKeys.forEach(key => {
+            if (boardTiles[key]) previewTiles[key] = boardTiles[key];
+        });
+        const fragment = document.createDocumentFragment();
+        for (let y = 0; y < size; y++) {
+             for (let x = 0; x < size; x++) {
+                const key = Utils.coordKey({ x, y });
+                const square = document.createElement('div');
+                square.classList.add(CSS_CLASSES.SQUARE);
+                const bonus = boardLayout?.[key];
+                if(bonus) square.classList.add(getBonusClass(bonus));
+                 if(bonus === BONUS_TYPES.STAR && !previewTiles[key]) {
+                    square.innerHTML = '<span class="material-symbols-outlined bonus-star-icon">star</span>';
+                 }
+                if (previewTiles[key]) {
+                     square.appendChild(createTileElement(previewTiles[key], true));
+                     // Remove star icon if tile is placed on star square
+                    if (key === Utils.coordKey(Utils.getCenterCoords(size))) {
+                        const starIcon = square.querySelector('.bonus-star-icon');
+                        if(starIcon) starIcon.remove();
+                    }
+                }
+                fragment.appendChild(square);
+             }
+        }
+         confirmPreviewBoard.appendChild(fragment);
+    }
+    setModalVisibility(confirmModal, true);
+}
+/** Hides the Submit Confirmation Modal */
+export function hideSubmitConfirmModal() { setModalVisibility(confirmModal, false); }
+
+/** Shows the Game Over Modal/Screen. */
+export function showGameOverScreen(finalScore, finalBoardTiles, boardLayout, size, newlyUnlockedIds = []) {
+    if (gameOverScore) gameOverScore.textContent = String(finalScore);
+    if (gameOverBoard) {
+         gameOverBoard.innerHTML = '';
+         gameOverBoard.style.setProperty('--board-size', size);
+         const fragment = document.createDocumentFragment();
+         for (let y = 0; y < size; y++) {
+             for (let x = 0; x < size; x++) {
+                const key = Utils.coordKey({ x, y });
+                const square = document.createElement('div');
+                square.classList.add(CSS_CLASSES.SQUARE);
+                 const bonus = boardLayout?.[key];
+                if(bonus) square.classList.add(getBonusClass(bonus));
+                 if(bonus === BONUS_TYPES.STAR && !finalBoardTiles[key]) {
+                    square.innerHTML = '<span class="material-symbols-outlined bonus-star-icon">star</span>';
+                 }
+                if (finalBoardTiles[key]) {
+                    square.appendChild(createTileElement(finalBoardTiles[key], true));
+                     // Remove star icon if tile is placed on star square
+                     if (key === Utils.coordKey(Utils.getCenterCoords(size))) {
+                        const starIcon = square.querySelector('.bonus-star-icon');
+                        if(starIcon) starIcon.remove();
+                    }
+                }
+                fragment.appendChild(square);
+             }
+         }
+         gameOverBoard.appendChild(fragment);
+    }
+    // Display achievements
+    if (gameOverAchievements) {
+        if (newlyUnlockedIds.length > 0) {
+            gameOverAchievements.innerHTML = 'New Achievements: ' + newlyUnlockedIds.map(id => ACHIEVEMENT_DETAILS[id]?.name || id).join(', ');
+        } else {
+            gameOverAchievements.innerHTML = ''; // Clear if none unlocked
+        }
+    }
+    setModalVisibility(gameOverModal, true);
+}
+/** Hides the Game Over Modal */
+export function hideGameOverScreen() { setModalVisibility(gameOverModal, false); }
+
+/** Shows a generic loading overlay */
+export function showLoading(message = "Loading...") {
+    if (loadingModal && loadingModalMessage) {
+        loadingModalMessage.textContent = message;
+        setModalVisibility(loadingModal, true);
+    } else {
+        console.warn("Loading modal or message element not found.");
+    }
+}
+/** Hides the loading overlay */
+export function hideLoading() {
+    setModalVisibility(loadingModal, false);
+}
+
+/** Displays an error message */
+export function displayError(message) {
+     if (errorDisplay) {
+         errorDisplay.textContent = message;
+         errorDisplay.classList.add('visible');
+         setTimeout(() => errorDisplay.classList.remove('visible'), 5000);
+     } else {
+        console.error("Error display element not found. Message:", message);
+        alert(`Error: ${message}`); // Fallback
+     }
+}
+
+/** Briefly displays unlocked achievements notification */
+export function displayAchievementsUnlocked(unlockedIds) {
+    if (!achievementDisplay || unlockedIds.length === 0) return;
+    const details = unlockedIds.map(id => ACHIEVEMENT_DETAILS[id]?.name || id).join(', ');
+    achievementDisplay.textContent = `Unlocked: ${details}!`;
+    achievementDisplay.classList.add('visible');
+    if (achievementTimeout) clearTimeout(achievementTimeout);
+    achievementTimeout = setTimeout(() => {
+        achievementDisplay.classList.remove('visible');
+        achievementTimeout = null;
+        gameCallbacks?.onDisplayedAchievementsCleared?.(unlockedIds);
+    }, ANIMATION_DURATIONS.ACHIEVEMENT_DISPLAY);
+}
+
+
+// --- Animations (Placeholders) ---
+
+/** Placeholder: Animates tile placement */
+export function animateTilePlacement(tileData, startRef, endCoords, onComplete) {
+    console.log("Simulating tile placement animation for:", tileData.letter);
+    if (onComplete) setTimeout(onComplete, 50); // Simulate short delay
+}
+
+/** Placeholder: Animates tile removal */
+export function animateTileRemoval(tileElement, onComplete) {
+    console.log("Simulating tile removal animation for:", tileElement?.dataset?.letter);
+    if (onComplete) setTimeout(onComplete, 50);
+}
+
+/** Placeholder: Animates bonus squares appearing */
+export function animateBonusSquareLoad(boardLayout, size) {
+    console.log("Simulating bonus square load animation...");
+    // In reality, loop through squares, apply animation class with delay
+}
 
 // File: src/js/UIController.js

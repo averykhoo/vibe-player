@@ -40,6 +40,45 @@ export const LS_KEYS = {
     DICTIONARY_CACHE_PREFIX: 'letterlinks_dict_',      // Prefix for caching fetched dictionaries (append dictionaryPath)
 };
 
+// --- Achievement Definitions ---
+// (Moved from AchievementManager for better separation of constants vs logic)
+
+/**
+ * Enum defining unique IDs for each achievement.
+ * @enum {string}
+ */
+export const ACHIEVE_ID = {
+    FIRST_GAME: 'FIRST_GAME',
+    SCORE_BREAKER_200: 'SCORE_BREAKER_200',
+    HIGH_SCORER_500: 'HIGH_SCORER_500',
+    WORD_WHIZ_50: 'WORD_WHIZ_50',
+    LEXICOGRAPHER_100: 'LEXICOGRAPHER_100',
+    BONUS_HUNTER: 'BONUS_HUNTER',
+    WILD_THING: 'WILD_THING',
+    SPEED_THINKER_200_90S: 'SPEED_THINKER_200_90S',
+    LIGHTNING_LINKS_400_180S: 'LIGHTNING_LINKS_400_180S',
+    BLITZ_FINISH_30S: 'BLITZ_FINISH_30S',
+};
+
+/**
+ * Display names and descriptions for achievements.
+ * Used by UIController and potentially AchievementManager for logging.
+ * @type {Record<string, {name: string, description: string}>}
+ */
+export const ACHIEVEMENT_DETAILS = {
+    [ACHIEVE_ID.FIRST_GAME]: { name: "First Game", description: "Complete your first game." },
+    [ACHIEVE_ID.SCORE_BREAKER_200]: { name: "Score Breaker", description: "Score over 200 points in a single game." },
+    [ACHIEVE_ID.HIGH_SCORER_500]: { name: "High Scorer", description: "Score over 500 points in a single game." },
+    [ACHIEVE_ID.WORD_WHIZ_50]: { name: "Word Whiz", description: "Score 50+ points with a single word." },
+    [ACHIEVE_ID.LEXICOGRAPHER_100]: { name: "Lexicographer", description: "Score 100+ points with a single word." },
+    [ACHIEVE_ID.BONUS_HUNTER]: { name: "Bonus Hunter", description: "Use DL, TL, DW, and TW squares in one game." },
+    [ACHIEVE_ID.WILD_THING]: { name: "Wild Thing", description: "Use both wildcard tiles in one game." },
+    [ACHIEVE_ID.SPEED_THINKER_200_90S]: { name: "Quick Thinker", description: "Score 200+ points in under 90 seconds." },
+    [ACHIEVE_ID.LIGHTNING_LINKS_400_180S]: { name: "Lightning Links", description: "Score 400+ points in under 3 minutes." },
+    [ACHIEVE_ID.BLITZ_FINISH_30S]: { name: "Blitz Finish", description: "Complete a game within 30 seconds." },
+};
+
+
 // --- Default Configuration IDs ---
 
 /** Default board size if not specified by challenge. */
@@ -142,6 +181,9 @@ export const CSS_CLASSES = {
     // Menu
     MENU_OVERLAY: 'menu-overlay',
     MENU_ITEM: 'menu-item',
+
+    ACHIEVEMENT_DISPLAY_GAMEOVER: 'achievement-display-gameover', // Added ID from index.html
+
 };
 
 // --- Animation Timings ---
@@ -155,8 +197,8 @@ export const ANIMATION_DURATIONS = {
     BONUS_LOAD_ITEM: 100, // Duration for each bonus marker animation
     BONUS_LOAD_DELAY: 50,  // Delay between each bonus marker animation start
     MODAL_FADE: 200,
-    ACHIEVEMENT_FADE: 500, // Fade in/out for unlocked notification
-    ACHIEVEMENT_DISPLAY: 2500, // How long notification stays visible
+    ACHIEVEMENT_FADE: 300, // Fade in/out for unlocked notification
+    ACHIEVEMENT_DISPLAY: 3000, // How long notification stays visible
 };
 
 // --- Other Constants ---
