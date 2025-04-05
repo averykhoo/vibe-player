@@ -84,8 +84,8 @@ This document outlines the principles and procedures for collaborating with an L
 
 ### P4: Standardized Code Presentation & Granularity
 
-1.  **Use Most Granular Applicable Format**
-    *   **Reason:** Provides a consistent, predictable format for user review and integration. Balances granularity (to **minimize unintended changes** and ease review) with practicality (to avoid excessive back-and-forth for localized multi-line edits). Ensures clarity by separating code from explanation.
+1.  **Use Most Granular Applicable Format & Avoid Placeholders in Full Replacements**
+    *   **Reason:** Provides a consistent, predictable format for user review and integration. Balances granularity (to **minimize unintended changes** and ease review) with practicality (to avoid excessive back-and-forth for localized multi-line edits). Ensures clarity by separating code from explanation. Prevents requiring manual merging by the user for larger code blocks.
     *   **Context:** When delivering any code modification.
     *   **Action:** LLM **must** use the **most granular applicable format** from the hierarchy below, showing *only* the relevant code block. **Code blocks must contain only the code itself (including necessary code comments) and no extra explanatory text or non-code annotations.** Explanations belong *outside* the code block.
         1.  **Single Line Changes (Highest Priority):**
@@ -114,11 +114,12 @@ This document outlines the principles and procedures for collaborating with an L
         4.  **Entire File Replacement (Fallback 3 - More Common):**
             *   **Condition:** Changes affect **more than two distinct logical blocks** within the file (e.g., modifying two functions and the export list, adding a new function and modifying an existing one, etc.); OR changes are widespread across multiple, non-adjacent sections; OR significantly alter the file's overall structure; OR involve numerous scattered edits making section/function replacement impractical; OR are required for initial file creation or a complete rewrite requested by the user.
             *   **Format:** Provide the complete file content, bracketed by File Identification Comments (see P3.4). **Explicitly state why this format is necessary** (e.g., "Generating full file due to changes in functions X and Y, and the module export list."). **Avoid this format for strictly localized changes covered by formats 1 or 2.**
+        *   **Crucially, when using the "Function Replacement", "Section Replacement", or "Entire File Replacement" formats, the generated code block MUST contain the complete, final, and functional code for that scope.** Do NOT use placeholders like `// ... (implementation unchanged) ...` or `/* ... existing logic ... */` within the generated code block itself. If a section of code within the replacement scope is truly unchanged from the *prior confirmed state*, include that unchanged code verbatim in the final block. The goal is to provide a single, self-contained block that the user can directly copy and paste to replace the relevant section in their editor without needing manual merging or diffing against previous versions. Explanations of *what changed* belong *outside* the code block (as per P2.2).
 
 ### P5: Phased Lifecycle for Significant Changes
 
-1.  **Follow Design -> POC/MVP -> Refactor Cycle**
-    *   **Reason:** Manages risk, validates ideas incrementally, balances development speed with code quality and architectural stability, especially when dealing with complex changes or overall codebase health.
+1.  **Follow Design -> POC/MVP -> Refactor Cycle with Integrated Testing**
+    *   **Reason:** Manages risk, validates ideas incrementally, balances development speed with code quality and architectural stability, especially when dealing with complex changes or overall codebase health. Ensures features are tested before moving forward.
     *   **Context:** When implementing new features, making substantial modifications, or undertaking dedicated refactoring efforts to improve overall codebase health. Note that multiple Design -> MVP cycles might occur before a dedicated Refactor phase.
     *   **Action:** LLM proposes and follows this cycle:
         *   **1. Design:**
@@ -129,10 +130,12 @@ This document outlines the principles and procedures for collaborating with an L
             *   This phase is iterative; expect internal cycles of generation, testing, and bug fixing based on user feedback until the core functionality works.
             *   **Add inline code comments explaining immediate, localized implementation choices or reasons for rejecting quick alternatives at that specific point.**
             *   Output: Working rough feature/functionality, updated usage docs (`README.md`), **localized rationale in code comments.** **Targeted code generation.**
+            *   Testing Step (MVP): After the core MVP code generation for a phase is complete, LLM explicitly pauses and prompts the user: *"Phase X MVP implementation complete. Please perform testing. Focus on [Specific areas A, B, C related to the implemented features]. Report any issues before proceeding to the Refactor phase or the next MVP phase."* LLM can suggest specific test cases (e.g., "Try loading file type Y", "Seek while playing at speed Z", "Verify behavior near time X").
         *   **3. Refactor:**
             *   Improve code quality (idiomatic, robust), integrate cleanly, update detailed docs, address technical debt. **This is the phase where the LLM is actively encouraged (per P3.1) to propose and discuss significant improvements, potentially including rewrites of sections or the entire codebase, if beneficial for long-term health.** The goal is not just polishing one feature, but improving the overall quality and maintainability of the affected code, potentially spanning multiple modules or the entire project. Treat "improving codebase health" as a valid goal for this phase.
             *   **Review POC/MVP comments: Migrate significant architectural rationale, major rejected alternatives, or fundamental limitations discovered to `architecture.md`. Remove or refine purely temporary/obsolete comments.**
             *   Output: Improved codebase structure/quality. **Updated `architecture.md` (reflecting final design and migrated rationale).** Cleaned-up code comments. **Refactoring-focused code generation (potentially including full file replacements per P4.1.4).**
+            *   Testing Step (Refactor): After refactoring changes are applied, LLM explicitly pauses and prompts the user: *"Phase X Refactoring complete. Please perform regression testing, focusing on [Areas A, B, C affected by refactor] and general stability. Report any issues."*
 
 ### P6: Dependency Management Clarity
 
