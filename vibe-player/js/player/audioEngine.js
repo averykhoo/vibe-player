@@ -1,688 +1,644 @@
 // --- /vibe-player/js/player/audioEngine.js --- // Updated Path
 // Manages Web Audio API, AudioWorklet loading/communication, decoding, resampling, and playback control.
 // Uses Rubberband WASM via an AudioWorkletProcessor for time-stretching and pitch/formant shifting.
+// ** MODIFIED FOR MULTI-TRACK SUPPORT **
 
 var AudioApp = AudioApp || {}; // Ensure namespace exists
 
 AudioApp.audioEngine = (function() {
     'use strict';
 
-    // --- Web Audio API & Worklet State ---
+    // === Web Audio API State ===
     /** @type {AudioContext|null} */ let audioCtx = null;
-    /** @type {GainNode|null} */ let gainNode = null;
-    /** @type {AudioWorkletNode|null} */ let workletNode = null;
-    /** @type {AudioBuffer|null} */ let currentDecodedBuffer = null;
+    /** @type {GainNode|null} */ let masterGainNode = null; // Renamed from gainNode
 
-    /** @type {boolean} */ let isPlaying = false; // Tracks the *desired* state sent to worklet
-    /** @type {boolean} */ let workletReady = false;
-    /** @type {number} */ let currentWorkletTime = 0.0; // Source time tracked by worklet/seek commands
-    /** @type {number} */ let currentPlaybackSpeed = 1.0;
-    /** @type {number} */ let currentPitchScale = 1.0;
-    /** @type {number} */ let currentFormantScale = 1.0;
+    /**
+     * @typedef {object} TrackNodes
+     * @property {AudioWorkletNode} workletNode
+     * @property {StereoPannerNode} pannerNode
+     * @property {GainNode} volumeGainNode
+     * @property {GainNode} muteGainNode
+     * // Add DelayNode here if it were used:
+     * // @property {DelayNode} delayNode
+     */
+
+    /** @type {Map<string, TrackNodes>} Stores nodes associated with each trackId */
+    let trackNodesMap = new Map();
+
+    // --- Worklet State (Less state needed here now, managed per track or in app.js) ---
+    // let isPlaying = false; // Global play state managed by app.js
+    let workletModuleAdded = false; // Track if addModule has been done
 
     // --- WASM Resources ---
     /** @type {ArrayBuffer|null} */ let wasmBinary = null;
     /** @type {string|null} */ let loaderScriptText = null;
 
-    // --- Constants REMOVED - Now use AudioApp.Constants ---
-    // const PROCESSOR_SCRIPT_URL = 'js/player/rubberbandProcessor.js'; // REMOVED
-    // const PROCESSOR_NAME = 'rubberband-processor'; // REMOVED
-    // const WASM_BINARY_URL = 'lib/rubberband.wasm'; // REMOVED
-    // const LOADER_SCRIPT_URL = 'lib/rubberband-loader.js'; // REMOVED
-
-    // --- Initialization ---
-
+    // === Initialization ===
     /**
      * Initializes the Audio Engine.
      * @public
      */
     async function init() {
         console.log("AudioEngine: Initializing...");
-        setupAudioContext();
-        await preFetchWorkletResources();
+        setupAudioContext(); // Creates context and masterGainNode
+        await preFetchWorkletResources(); // Fetches WASM/Loader
+        if (audioCtx && !workletModuleAdded) {
+             await addWorkletModule(); // Add module once resources are ready
+        }
         console.log("AudioEngine: Initialized.");
     }
 
-    // --- Setup & Resource Fetching ---
+    // === Setup & Resource Fetching ===
 
     /**
-     * Creates/resets the AudioContext and GainNode.
+     * Creates/resets the AudioContext and Master GainNode.
      * @private
      * @returns {boolean} True if context is ready.
      */
     function setupAudioContext() {
-        // Check if context exists and is not closed
         if (audioCtx && audioCtx.state !== 'closed') { return true; }
         try {
-            // Explicitly log if recreating a closed context
             if (audioCtx && audioCtx.state === 'closed') {
                  console.log("AudioEngine: Recreating closed AudioContext.");
+                 cleanupAllTracks(); // Clean up nodes before recreating context
             }
-            // Create new AudioContext and GainNode
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            gainNode = audioCtx.createGain();
-            gainNode.gain.value = 1.0; // Default gain
-            gainNode.connect(audioCtx.destination);
-            workletNode = null; // Reset worklet node reference
-            workletReady = false; // Reset worklet ready state
+            masterGainNode = audioCtx.createGain(); // Create Master Gain
+            masterGainNode.gain.value = 1.0; // Default master gain
+            masterGainNode.connect(audioCtx.destination); // Connect Master Gain to output
+
+            workletModuleAdded = false; // Reset module loaded flag
             console.log(`AudioEngine: AudioContext created/reset (state: ${audioCtx.state}). Sample Rate: ${audioCtx.sampleRate}`);
-            // Warn if context starts suspended (requires user interaction)
             if (audioCtx.state === 'suspended') {
                  console.warn("AudioEngine: AudioContext is suspended. User interaction needed.");
             }
             return true;
         } catch (e) {
-             // Handle context creation errors
              console.error("AudioEngine: Failed to create AudioContext.", e);
-             audioCtx = null; gainNode = null; workletNode = null; workletReady = false;
+             audioCtx = null; masterGainNode = null; workletModuleAdded = false;
              dispatchEngineEvent('audioapp:engineError', { type: 'context', error: new Error("Web Audio API not supported") });
              return false;
         }
     }
 
-    /**
-     * Fetches WASM resources (binary and loader script).
-     * Uses paths from AudioApp.Constants.
-     * @private
-     * @returns {Promise<void>}
-     */
+    /** Fetches WASM resources (binary and loader script). */
     async function preFetchWorkletResources() {
+        // ... (Implementation unchanged from previous version) ...
         console.log("AudioEngine: Pre-fetching WASM resources...");
         try {
-            // Ensure Constants module is loaded
-            if (!AudioApp.Constants) {
-                throw new Error("AudioApp.Constants not found.");
-            }
-
-            // Fetch WASM binary
-            const wasmResponse = await fetch(AudioApp.Constants.WASM_BINARY_URL); // Use Constant
+            if (!AudioApp.Constants) { throw new Error("AudioApp.Constants not found."); }
+            const wasmResponse = await fetch(AudioApp.Constants.WASM_BINARY_URL);
             if (!wasmResponse.ok) throw new Error(`Fetch failed ${wasmResponse.status} for ${AudioApp.Constants.WASM_BINARY_URL}`);
             wasmBinary = await wasmResponse.arrayBuffer();
-            console.log(`AudioEngine: Fetched WASM binary (${wasmBinary.byteLength} bytes).`);
-
-            // Fetch loader script text
-            const loaderResponse = await fetch(AudioApp.Constants.LOADER_SCRIPT_URL); // Use Constant
+            const loaderResponse = await fetch(AudioApp.Constants.LOADER_SCRIPT_URL);
             if (!loaderResponse.ok) throw new Error(`Fetch failed ${loaderResponse.status} for ${AudioApp.Constants.LOADER_SCRIPT_URL}`);
             loaderScriptText = await loaderResponse.text();
-            console.log(`AudioEngine: Fetched Loader Script text (${loaderScriptText.length} chars).`);
+            console.log(`AudioEngine: Fetched WASM binary (${wasmBinary.byteLength} bytes), Loader (${loaderScriptText.length} chars).`);
         } catch (fetchError) {
-            // Handle fetch errors
             console.error("AudioEngine: Failed to fetch WASM/Loader resources:", fetchError);
             wasmBinary = null; loaderScriptText = null;
             dispatchEngineEvent('audioapp:engineError', { type: 'resource', error: fetchError });
         }
     }
 
-    // --- Loading, Decoding, Resampling Pipeline ---
+    /** Adds the AudioWorklet module if not already added */
+    async function addWorkletModule() {
+         if (workletModuleAdded || !audioCtx || audioCtx.state === 'closed' || !wasmBinary || !loaderScriptText) {
+              if (workletModuleAdded) console.log("AudioEngine: Worklet module already added.");
+              else console.warn("AudioEngine: Cannot add worklet module - prerequisites missing.");
+              return false; // Indicate module not added (or already present)
+         }
+         // Don't add if suspended, wait for resume
+         if (audioCtx.state === 'suspended') {
+             console.log("AudioEngine: Deferring addModule until context is resumed.");
+             return false;
+         }
+
+         try {
+             console.log(`[AudioEngine] Adding AudioWorklet module: ${AudioApp.Constants.PROCESSOR_SCRIPT_URL}`);
+             await audioCtx.audioWorklet.addModule(AudioApp.Constants.PROCESSOR_SCRIPT_URL);
+             console.log("[AudioEngine] AudioWorklet module added successfully.");
+             workletModuleAdded = true;
+             return true;
+         } catch (error) {
+             console.error("[AudioEngine] Error adding AudioWorklet module:", error);
+             workletModuleAdded = false;
+             dispatchEngineEvent('audioapp:engineError', { type: 'workletLoad', error: error });
+             return false;
+         }
+    }
+
+    // --- Track Setup, Loading, Decoding ---
 
     /**
-     * Loads the selected audio file, decodes it, and sets up the AudioWorklet.
-     * Resampling for VAD is now handled separately by the caller (app.js).
-     * @param {File} file - The audio file selected by the user.
+     * Creates the audio graph and worklet node for a specific track,
+     * decodes the audio file, and sends data to the worklet.
+     * Replaces parts of the old loadAndProcessFile.
+     * @param {string} trackId - The unique ID for the track (e.g., 'track_left').
+     * @param {File} file - The audio file for this track.
      * @returns {Promise<void>} Resolves when setup is complete or rejects on error.
-     * @throws {Error} If any critical step fails (context creation, decoding, worklet setup).
+     * @throws {Error} If any critical step fails.
      * @public
      */
-     async function loadAndProcessFile(file) {
-        // Ensure AudioContext is ready, attempt resume if suspended
+    async function setupTrack(trackId, file) {
+        console.log(`AudioEngine: Setting up track ${trackId}...`);
+
+        // 1. Ensure Context is Ready and Module Loaded
         if (!audioCtx || audioCtx.state === 'closed') {
-             console.error("AudioEngine: AudioContext not available.");
-             if (!setupAudioContext()) { throw new Error("AudioContext could not be created/reset."); }
+             if (!setupAudioContext()) throw new Error(`AudioContext failed for track ${trackId}`);
         }
         if (audioCtx.state === 'suspended') {
-             console.log("AudioEngine: Attempting to resume suspended AudioContext...");
-             await audioCtx.resume().catch(e => console.warn("AudioEngine: Context resume failed.", e));
-             if (audioCtx.state !== 'running') {
-                 throw new Error(`AudioContext could not be resumed (state: ${audioCtx.state}). User interaction might be required.`);
+             await resumeContextIfNeeded(`Context resume needed for track ${trackId} setup.`);
+        }
+        if (!workletModuleAdded) {
+             if (!(await addWorkletModule())) { // Try adding module now
+                 throw new Error(`Failed to add AudioWorklet module for track ${trackId}`);
              }
         }
+        if (!wasmBinary || !loaderScriptText) {
+            throw new Error(`Cannot setup Worklet for ${trackId}: WASM/Loader resources missing.`);
+        }
 
-        // Clean up previous worklet and reset state for the new file
-        await cleanupCurrentWorklet();
-        currentDecodedBuffer = null;
-        isPlaying = false;
-        currentWorkletTime = 0.0;
-        currentPlaybackSpeed = 1.0; // Reset speed/pitch/formant on new file
-        currentPitchScale = 1.0;
-        currentFormantScale = 1.0;
+        // 2. Cleanup any existing nodes for this trackId first
+        await cleanupTrack(trackId);
 
+        // 3. Decode Audio
+        let decodedBuffer;
         try {
-            // Decode audio data
+            console.log(`AudioEngine: Decoding audio data for ${trackId}...`);
             const arrayBuffer = await file.arrayBuffer();
-            console.log("AudioEngine: Decoding audio data...");
-            currentDecodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-            console.log(`AudioEngine: Decoded ${currentDecodedBuffer.duration.toFixed(2)}s @ ${currentDecodedBuffer.sampleRate}Hz`);
-            // Dispatch event immediately after decoding
-            dispatchEngineEvent('audioapp:audioLoaded', { audioBuffer: currentDecodedBuffer });
+            decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            console.log(`AudioEngine: Decoded ${trackId} (${decodedBuffer.duration.toFixed(2)}s @ ${decodedBuffer.sampleRate}Hz, ${decodedBuffer.numberOfChannels}ch)`);
+            dispatchEngineEvent('audioapp:audioLoaded', { audioBuffer: decodedBuffer, trackId: trackId });
+        } catch (error) {
+            console.error(`AudioEngine: Error decoding audio for ${trackId}:`, error);
+            dispatchEngineEvent('audioapp:decodingError', { error: error, trackId: trackId });
+            throw error; // Re-throw for app.js
+        }
 
-            // --- Resampling REMOVED from this pipeline ---
+        // 4. Create Audio Graph Nodes
+        console.log(`AudioEngine: Creating audio nodes for ${trackId}...`);
+        let nodes = {};
+        try {
+             nodes.pannerNode = audioCtx.createStereoPanner();
+             nodes.volumeGainNode = audioCtx.createGain();
+             nodes.muteGainNode = audioCtx.createGain();
+             // Default settings
+             nodes.pannerNode.pan.value = 0; // Initial center pan
+             nodes.volumeGainNode.gain.value = 1.0; // Initial volume
+             nodes.muteGainNode.gain.value = 1.0; // Initial unmute
 
-            // Setup AudioWorklet
-            if (!wasmBinary || !loaderScriptText) {
-                throw new Error("Cannot setup Worklet: WASM/Loader resources missing.");
-            }
-            await setupAndStartWorklet(currentDecodedBuffer);
+             // Create Worklet Node
+             const processorOpts = {
+                 sampleRate: audioCtx.sampleRate,
+                 numberOfChannels: decodedBuffer.numberOfChannels,
+                 wasmBinary: wasmBinary.slice(0), // Transfer copy
+                 loaderScriptText: loaderScriptText,
+                 trackId: trackId // Pass trackId to processor
+             };
+             nodes.workletNode = new AudioWorkletNode(audioCtx, AudioApp.Constants.PROCESSOR_NAME, {
+                 numberOfInputs: 0,
+                 numberOfOutputs: 1,
+                 outputChannelCount: [decodedBuffer.numberOfChannels],
+                 processorOptions: processorOpts
+             });
+
+             // Connect Graph: Worklet -> Panner -> Volume -> Mute -> MasterGain -> Destination
+             nodes.workletNode.connect(nodes.pannerNode);
+             nodes.pannerNode.connect(nodes.volumeGainNode);
+             nodes.volumeGainNode.connect(nodes.muteGainNode);
+             nodes.muteGainNode.connect(masterGainNode); // Connect to MASTER gain
+
+             console.log(`AudioEngine: Audio graph created and connected for ${trackId}.`);
+
+             // Store nodes
+             trackNodesMap.set(trackId, nodes);
+
+             // Setup message/error handlers for the new worklet node
+             setupWorkletMessageHandler(nodes.workletNode, trackId);
+
+             // 5. Send Audio Data to Worklet
+             const channelData = [];
+             const transferListAudio = [];
+             for (let i = 0; i < decodedBuffer.numberOfChannels; i++) {
+                 const dataArray = decodedBuffer.getChannelData(i);
+                 const bufferCopy = dataArray.buffer.slice(dataArray.byteOffset, dataArray.byteOffset + dataArray.byteLength);
+                 channelData.push(bufferCopy);
+                 transferListAudio.push(bufferCopy);
+             }
+             console.log(`AudioEngine: Sending audio data to worklet ${trackId}...`);
+             postWorkletMessage(nodes.workletNode, { type: 'load-audio', channelData: channelData }, transferListAudio);
+             console.log(`AudioEngine: Setup complete for ${trackId}. Waiting for processor-ready...`);
 
         } catch (error) {
-            // Catch errors during the loading pipeline
-            console.error("AudioEngine: Error during load/decode/worklet setup:", error);
-            currentDecodedBuffer = null; // Clear buffer on error
-            // Determine specific error type for event dispatch
-            const errorType = error.message.includes("decodeAudioData") ? 'decodingError'
-                              : error.message.includes("Worklet") ? 'workletError'
-                              : 'loadError';
-            dispatchEngineEvent(`audioapp:${errorType}`, { error: error });
-            throw error; // Re-throw for app.js to handle UI reset
+            console.error(`AudioEngine: Error creating/connecting nodes for ${trackId}:`, error);
+            // Cleanup nodes created so far for this track if error occurs mid-setup
+            await cleanupTrack(trackId); // This will disconnect/nullify
+            dispatchEngineEvent('audioapp:engineError', { type: 'nodeSetup', error: error, trackId: trackId });
+            throw error; // Re-throw for app.js
         }
     }
 
+    /** Sets up message handling for a specific worklet node */
+    function setupWorkletMessageHandler(workletNode, trackId) {
+         if (!workletNode || !workletNode.port) {
+             console.error(`[AudioEngine] Cannot setup message handler for ${trackId}: Node or port missing.`);
+             return;
+         }
 
-    /**
-     * Resamples an AudioBuffer to 16kHz mono Float32Array using OfflineAudioContext.
-     * Uses VAD_SAMPLE_RATE from AudioApp.Constants.
-     * @param {AudioBuffer} audioBuffer - The original decoded audio buffer.
-     * @returns {Promise<Float32Array>} A promise resolving to the resampled PCM data.
-     * @throws {Error} If resampling fails or OfflineAudioContext cannot be created.
-     * @private
-     */
-    function convertAudioBufferTo16kHzMonoFloat32(audioBuffer) {
-        // Ensure Constants module is loaded
-        if (!AudioApp.Constants) {
-            return Promise.reject(new Error("AudioApp.Constants not found for resampling."));
-        }
-        const targetSampleRate = AudioApp.Constants.VAD_SAMPLE_RATE; // Use Constant
-        const targetLength = Math.ceil(audioBuffer.duration * targetSampleRate);
+         workletNode.port.onmessage = (event) => {
+             const data = event.data;
+             // Ensure message includes trackId (it should, from modified processor)
+             const messageTrackId = data.trackId || trackId; // Fallback to function arg
 
-        // Handle zero-length audio gracefully
-        if (!targetLength || targetLength <= 0) {
-            console.warn("AudioEngine: Zero length calculated for resampling.");
-            return Promise.resolve(new Float32Array(0));
-        }
+             switch(data.type) {
+                 case 'status':
+                     console.log(`[WorkletStatus ${messageTrackId}] ${data.message}`);
+                     if (data.message === 'processor-ready') {
+                         dispatchEngineEvent('audioapp:workletReady', { trackId: messageTrackId });
+                     } else if (data.message === 'Playback ended') {
+                         dispatchEngineEvent('audioapp:playbackEnded', { trackId: messageTrackId });
+                     } // Processor cleaned up status is just logged
+                     break;
+                 case 'error':
+                     console.error(`[WorkletError ${messageTrackId}] ${data.message}`);
+                     dispatchEngineEvent('audioapp:engineError', { type: 'workletRuntime', error: new Error(data.message), trackId: messageTrackId });
+                     // Let app.js handle marking track as not ready
+                     break;
+                 case 'playback-state':
+                     dispatchEngineEvent('audioapp:playbackStateChanged', { isPlaying: data.isPlaying, trackId: messageTrackId });
+                     break;
+                 case 'time-update':
+                     // Dispatch event with trackId so app.js can store time per track if needed later,
+                     // although global time is primary for UI now.
+                     // Maybe not needed if app.js doesn't use it? Keep for potential future use/debug.
+                     // dispatchEngineEvent('audioapp:timeUpdated', { currentTime: data.currentTime, trackId: messageTrackId });
+                     break;
+                 default:
+                     console.warn(`[AudioEngine] Unhandled message from worklet ${messageTrackId}:`, data.type);
+             }
+         };
 
-        try {
-            // Use OfflineAudioContext for high-quality resampling
-            const offlineCtx = new OfflineAudioContext(
-                1, // Mono output
-                targetLength,
-                targetSampleRate
-            );
-            const src = offlineCtx.createBufferSource();
-            src.buffer = audioBuffer;
-            src.connect(offlineCtx.destination);
-            src.start();
-            // Start rendering and return the promise
-            return offlineCtx.startRendering().then(renderedBuffer => {
-                 return renderedBuffer.getChannelData(0); // Get the single channel data
-            }).catch(err => {
-                 console.error("AudioEngine: Resampling rendering error:", err);
-                 throw new Error(`Audio resampling failed: ${err.message}`);
-            });
-        } catch (offlineCtxError) {
-            // Catch potential errors creating the OfflineAudioContext
-            console.error("AudioEngine: OfflineContext creation error:", offlineCtxError);
-            return Promise.reject(new Error(`OfflineContext creation failed: ${offlineCtxError.message}`));
-        }
+         workletNode.onprocessorerror = (event) => {
+             console.error(`[AudioEngine] Critical Processor Error for ${trackId}:`, event);
+             dispatchEngineEvent('audioapp:engineError', { type: 'workletProcessor', error: new Error("Processor crashed"), trackId: trackId });
+             cleanupTrack(trackId); // Attempt cleanup
+         };
+         console.log(`AudioEngine: Message handler set up for ${trackId}.`);
     }
 
-     /**
-     * Public wrapper to resample an AudioBuffer to 16kHz mono Float32Array.
-     * Calls the internal resampling logic.
-     * @param {AudioBuffer} audioBuffer - The original decoded audio buffer.
-     * @returns {Promise<Float32Array>} A promise resolving to the resampled PCM data.
-     * @throws {Error} If resampling fails or OfflineAudioContext cannot be created.
-     * @public
-     */
+
+    /** Safely posts messages to a specific worklet via trackId */
+    function postMessageToTrack(trackId, message, transferList = []) {
+         const nodes = trackNodesMap.get(trackId);
+         if (nodes && nodes.workletNode) {
+             postWorkletMessage(nodes.workletNode, message, transferList);
+         } else {
+             // Don't warn during cleanup or initial load
+              if (message.type !== 'cleanup' && message.type !== 'load-audio') {
+                  console.warn(`[AudioEngine] Cannot post msg (${message.type}) to ${trackId}: Worklet node not found.`);
+              }
+         }
+    }
+
+    /** Helper to post messages safely (implementation unchanged) */
+    function postWorkletMessage(workletNode, message, transferList = []) {
+        if (workletNode && workletNode.port) {
+            try {
+                workletNode.port.postMessage(message, transferList);
+            } catch (error) {
+                console.error(`[AudioEngine] Error posting message type ${message?.type}:`, error);
+                const trackId = message?.trackId || 'unknown'; // Try to get trackId from message
+                dispatchEngineEvent('audioapp:engineError', { type: 'workletComm', error: error, trackId: trackId });
+                // Attempt cleanup? More complex. Let app.js handle track state.
+            }
+        } // else: warning handled in postMessageToTrack
+    }
+
+    /** Public wrapper for resampling (implementation unchanged) */
     async function resampleTo16kMono(audioBuffer) {
+        // ... (Keep implementation from previous version) ...
         console.log("AudioEngine: Resampling audio to 16kHz mono...");
-        // Delegate to the existing private function
         try {
              const pcm16k = await convertAudioBufferTo16kHzMonoFloat32(audioBuffer);
              console.log(`AudioEngine: Resampled to ${pcm16k.length} samples @ 16kHz`);
              return pcm16k;
         } catch(error) {
              console.error("AudioEngine: Error during public resampling call:", error);
-             // Dispatch a specific resampling error event if needed by app.js
-             dispatchEngineEvent('audioapp:resamplingError', { error: error });
-             throw error; // Re-throw for the caller (app.js background task)
+             dispatchEngineEvent('audioapp:resamplingError', { error: error }); // No trackId here?
+             throw error;
         }
     }
-
-    // --- AudioWorklet Setup and Communication ---
-
-    /**
-     * Cleans up the existing AudioWorkletNode by disconnecting and nullifying references.
-     * Sends a 'cleanup' message to the processor.
-     * @private
-     * @returns {Promise<void>} Resolves once cleanup attempt is complete.
-     */
-    async function cleanupCurrentWorklet() {
-        workletReady = false; // Mark as not ready
-        if (workletNode) {
-            console.log("[AudioEngine] Cleaning up previous worklet node...");
-            try {
-                // Ask processor to clean up its internal state
-                postWorkletMessage({ type: 'cleanup' });
-                // Give processor a brief moment to handle message
-                await new Promise(resolve => setTimeout(resolve, 50));
-
-                // Remove listeners and disconnect node
-                if (workletNode && workletNode.port) {
-                    workletNode.port.onmessage = null;
-                    workletNode.onprocessorerror = null;
-                }
-                if (workletNode) {
-                    workletNode.disconnect();
-                }
-                console.log("[AudioEngine] Previous worklet node disconnected.");
-            } catch (e) {
-                console.warn("[AudioEngine] Error during worklet cleanup:", e);
-            } finally {
-                // Ensure node reference is cleared
-                workletNode = null;
-            }
-        }
-    }
-
-    /**
-     * Adds the AudioWorklet module, creates the AudioWorkletNode, connects it,
-     * and sends initial configuration and audio data to the processor.
-     * Uses paths/names from AudioApp.Constants.
-     * @param {AudioBuffer} decodedBuffer - The decoded audio buffer to send to the worklet.
-     * @private
-     * @returns {Promise<void>} Resolves when the worklet node is set up and data sent.
-     * @throws {Error} If prerequisites are missing or worklet setup fails.
-     */
-    async function setupAndStartWorklet(decodedBuffer) {
-        // Verify all necessary components are available
-        if (!audioCtx || !decodedBuffer || !wasmBinary || !loaderScriptText || !gainNode || !AudioApp.Constants) {
-            throw new Error("Cannot setup worklet - prerequisites missing (context, buffer, wasm, gain, constants).");
-        }
-
-        // Ensure any previous worklet is cleaned up first
-        await cleanupCurrentWorklet();
-
-        try {
-            // Add the processor script as a module using path from Constants
-            console.log(`[AudioEngine] Adding AudioWorklet module: ${AudioApp.Constants.PROCESSOR_SCRIPT_URL}`);
-            await audioCtx.audioWorklet.addModule(AudioApp.Constants.PROCESSOR_SCRIPT_URL); // Use Constant
-            console.log("[AudioEngine] AudioWorklet module added.");
-
-            // Prepare WASM data for transfer (create a copy)
-            const wasmBinaryTransfer = wasmBinary.slice(0);
-
-            // Prepare options to pass to the processor constructor
-            // CRITICAL: Pass the actual context sample rate
-            const processorOpts = {
-                sampleRate: audioCtx.sampleRate,
-                numberOfChannels: decodedBuffer.numberOfChannels,
-                wasmBinary: wasmBinaryTransfer,
-                loaderScriptText: loaderScriptText // Pass loader script text
-            };
-            const transferListWasm = [wasmBinaryTransfer]; // Mark binary for transfer
-
-            console.log("[AudioEngine] Creating AudioWorkletNode with options:", processorOpts);
-            // Create the AudioWorkletNode using name from Constants
-            workletNode = new AudioWorkletNode(audioCtx, AudioApp.Constants.PROCESSOR_NAME, { // Use Constant
-                numberOfInputs: 0, // No audio input from other nodes
-                numberOfOutputs: 1, // One audio output
-                outputChannelCount: [decodedBuffer.numberOfChannels], // Match source channel count
-                processorOptions: processorOpts // Pass constructor options
-            });
-
-            // Setup message handler and error handler for the node
-            setupWorkletMessageHandler();
-            workletNode.onprocessorerror = (event) => {
-                console.error(`[AudioEngine] Critical Processor Error:`, event);
-                dispatchEngineEvent('audioapp:engineError', { type: 'workletProcessor', error: new Error("Processor crashed") });
-                cleanupCurrentWorklet(); // Ensure cleanup on crash
-                workletReady = false; // Mark as not ready
-                isPlaying = false; // Reset playback state
-                dispatchEngineEvent('audioapp:playbackStateChanged', { isPlaying: false });
-            };
-
-            // Connect the worklet node to the gain node (which connects to destination)
-            workletNode.connect(gainNode);
-            console.log("[AudioEngine] AudioWorkletNode created and connected.");
-
-            // Prepare audio channel data for transfer
-            const channelData = [];
-            const transferListAudio = [];
-            for (let i = 0; i < decodedBuffer.numberOfChannels; i++) {
-                const dataArray = decodedBuffer.getChannelData(i);
-                // Create a copy of the underlying ArrayBuffer for transfer
-                const bufferCopy = dataArray.buffer.slice(dataArray.byteOffset, dataArray.byteOffset + dataArray.byteLength);
-                channelData.push(bufferCopy);
-                transferListAudio.push(bufferCopy); // Add buffer copy to transfer list
-            }
-
-            // Send the initial audio data to the worklet
-            console.log(`[AudioEngine] Sending audio data (${channelData.length} channels) to worklet...`);
-            postWorkletMessage({ type: 'load-audio', channelData: channelData }, transferListAudio);
-
-        } catch (error) {
-            console.error("[AudioEngine] Error setting up Worklet Node:", error);
-            await cleanupCurrentWorklet(); // Attempt cleanup on error
-            throw error; // Re-throw for app.js
-        }
-    }
-
-    /**
-     * Sets up the onmessage handler for the current workletNode's port
-     * to receive messages from the processor.
-     * @private
-     */
-    function setupWorkletMessageHandler() {
-        if (!workletNode || !workletNode.port) return; // Ensure node and port exist
-
-        workletNode.port.onmessage = (event) => {
-            const data = event.data;
-            switch(data.type) {
-                case 'status':
-                    // Handle status updates from the worklet
-                    console.log(`[WorkletStatus] ${data.message}`);
-                    if (data.message === 'processor-ready') {
-                        workletReady = true;
-                        dispatchEngineEvent('audioapp:workletReady');
-                    } else if (data.message === 'Playback ended') {
-                        // Let app.js handle UI changes based on this event
-                        dispatchEngineEvent('audioapp:playbackEnded');
-                    } else if (data.message === 'Processor cleaned up') {
-                        // Processor confirmed cleanup
-                        workletReady = false;
-                        isPlaying = false; // Ensure state consistency
-                    }
-                    break;
-                case 'error':
-                    // Handle errors reported by the worklet during runtime
-                    console.error(`[WorkletError] ${data.message}`);
-                    dispatchEngineEvent('audioapp:engineError', { type: 'workletRuntime', error: new Error(data.message) });
-                    workletReady = false; // Mark as not ready on error
-                    isPlaying = false; // Reset playback state
-                    dispatchEngineEvent('audioapp:playbackStateChanged', { isPlaying: false });
-                    break;
-                case 'playback-state':
-                    // Worklet confirms its internal playback state
-                    // Dispatch event for app.js to update its `isActuallyPlaying` flag
-                    dispatchEngineEvent('audioapp:playbackStateChanged', { isPlaying: data.isPlaying });
-                    break;
-                case 'time-update':
-                    // Received time update from worklet (based on its internal calculation)
-                    // Update the engine's internal `currentWorkletTime`
-                    // This value is used as the base for seeks and the main thread's time calculation
-                    if (typeof data.currentTime === 'number' && currentDecodedBuffer) {
-                        currentWorkletTime = data.currentTime;
-                        // NOTE: We no longer dispatch 'audioapp:timeUpdated' for UI updates from here.
-                        // app.js uses requestAnimationFrame and AudioContext.currentTime for UI.
-                    }
-                    break;
-                default:
-                    console.warn("[AudioEngine] Unhandled message from worklet:", data.type);
-            }
-        };
-    }
-
-    /**
-     * Helper function to safely post messages to the AudioWorkletProcessor.
-     * Includes error handling for potential detached port issues.
-     * @param {object} message - The message object to send.
-     * @param {Transferable[]} [transferList=[]] - Optional array of transferable objects.
-     * @private
-     */
-    function postWorkletMessage(message, transferList = []) {
-        if (workletNode && workletNode.port) {
-            try {
-                // Attempt to post the message
-                workletNode.port.postMessage(message, transferList);
-            } catch (error) {
-                // Handle errors, often occurs if the port is closed or detached
-                console.error("[AudioEngine] Error posting message:", error, message.type);
-                // Don't dispatch error during cleanup attempts
-                if (message.type !== 'cleanup') {
-                    dispatchEngineEvent('audioapp:engineError', { type: 'workletComm', error: error });
-                }
-                // Attempt cleanup or handle error state more gracefully
-                cleanupCurrentWorklet();
-                workletReady = false;
-                isPlaying = false;
-                dispatchEngineEvent('audioapp:playbackStateChanged', { isPlaying: false });
-            }
-        } else {
-            // Warn if trying to post when node/port isn't ready, unless it's a cleanup message
-            if (workletReady || message.type !== 'cleanup') {
-                console.warn(`[AudioEngine] Cannot post msg (${message.type}): Worklet node/port not ready.`);
-            }
-        }
-    }
-
-    // --- Playback Control Methods (Public) ---
-
-    /**
-     * Toggles the playback state (play/pause).
-     * Resumes the AudioContext if necessary. Sends message to the worklet.
-     * Updates the internal `isPlaying` flag which tracks the *desired* state.
-     * @public
-     */
-    async function togglePlayPause() {
-        // Ensure worklet and context are ready
-        if (!workletReady) { console.warn("AudioEngine: Worklet not ready."); return; }
-        if (!audioCtx) { console.error("AudioEngine: AudioContext missing."); return;}
-
-        // Resume context if suspended
-        if (audioCtx.state === 'suspended') {
-            console.log("[AudioEngine] Resuming AC on user interaction...");
-            try {
-                await audioCtx.resume();
-                console.log("[AudioEngine] AC resumed.");
-            } catch (err) {
-                console.error("[AudioEngine] Failed to resume AC:", err);
-                dispatchEngineEvent('audioapp:engineError', { type: 'contextResume', error: err });
-                return; // Abort if context cannot be resumed
-            }
-        }
-        // Ensure context is running before proceeding
-        if (audioCtx.state !== 'running') {
-            console.error(`AudioEngine: AC not running (state: ${audioCtx.state}). Cannot toggle playback.`);
-            return;
-        }
-
-        // Determine the target state and send message
-        const targetIsPlaying = !isPlaying; // Toggle the desired state
-        postWorkletMessage({ type: targetIsPlaying ? 'play' : 'pause' });
-        isPlaying = targetIsPlaying; // Update internal *desired* state immediately
-        console.log(`[AudioEngine] Sent ${targetIsPlaying ? 'play' : 'pause'} message.`);
-        // Actual confirmation and UI update handled by app.js via 'playbackStateChanged' event
-    }
-
-    /**
-     * Jumps the playback position relative to the current *source* time.
-     * @param {number} seconds - The number of seconds to jump (positive or negative).
-     * @public
-     */
-    function jumpBy(seconds) {
-        if (!workletReady || !currentDecodedBuffer) return;
-        // Seek relative to the internally tracked source time (`currentWorkletTime`)
-        seek(currentWorkletTime + seconds);
-    }
-
-    /**
-     * Seeks the playback position to an absolute *source* time.
-     * Updates the internal source time tracker and sends a 'seek' message to the worklet.
-     * @param {number} time - The target time in seconds within the source audio.
-     * @public
-     */
-    function seek(time) {
-        if (!workletReady || !currentDecodedBuffer || isNaN(currentDecodedBuffer.duration)) return;
-        // Clamp the target time to the valid audio duration
-        const targetTime = Math.max(0, Math.min(time, currentDecodedBuffer.duration));
-        // Send seek command to the worklet processor
-        postWorkletMessage({ type: 'seek', positionSeconds: targetTime });
-        // Update the internal source time immediately
-        // This is crucial for the main thread's time calculation if seek happens while paused
-        currentWorkletTime = targetTime;
-        console.log(`[AudioEngine] Sent seek message: ${targetTime.toFixed(2)}s`);
-        // UI updates based on this seek are handled by app.js
-    }
-
-    /**
-     * Sets the playback speed (rate). Sends message to the worklet.
-     * Dispatches an internal event for app.js to track the speed change.
-     * @param {number} speed - The desired playback speed (e.g., 1.0 is normal).
-     * @public
-     */
-    function setSpeed(speed) {
-         // Clamp speed to a reasonable range
-         const rate = Math.max(0.25, Math.min(parseFloat(speed) || 1.0, 2.0));
-         // Only send message and update state if the speed actually changes
-         if (currentPlaybackSpeed !== rate) {
-             currentPlaybackSpeed = rate;
-             console.log(`[AudioEngine] Speed target set to ${rate.toFixed(2)}x`);
-             if (workletReady) {
-                 postWorkletMessage({ type: 'set-speed', value: rate });
-             }
-             // Notify app.js about the speed change for its time calculation
-             dispatchEngineEvent('audioapp:internalSpeedChanged', { speed: rate });
+    /** Internal resampling function (implementation unchanged) */
+    function convertAudioBufferTo16kHzMonoFloat32(audioBuffer) {
+         // ... (Keep implementation from previous version) ...
+         if (!AudioApp.Constants) { return Promise.reject(new Error("AudioApp.Constants not found for resampling.")); }
+         const targetSampleRate = AudioApp.Constants.VAD_SAMPLE_RATE;
+         const targetLength = Math.ceil(audioBuffer.duration * targetSampleRate);
+         if (!targetLength || targetLength <= 0) { return Promise.resolve(new Float32Array(0)); }
+         try {
+             const offlineCtx = new OfflineAudioContext(1, targetLength, targetSampleRate);
+             const src = offlineCtx.createBufferSource(); src.buffer = audioBuffer;
+             src.connect(offlineCtx.destination); src.start();
+             return offlineCtx.startRendering().then(renderedBuffer => {
+                  return renderedBuffer.getChannelData(0);
+             }).catch(err => { throw new Error(`Audio resampling failed: ${err.message}`); });
+         } catch (offlineCtxError) {
+             return Promise.reject(new Error(`OfflineContext creation failed: ${offlineCtxError.message}`));
          }
     }
 
-    /**
-     * Sets the pitch shift scale. Sends message to the worklet.
-     * @param {number} pitch - The desired pitch scale (e.g., 1.0 is normal, 1.1 is higher).
-     * @public
-     */
-    function setPitch(pitch) {
-        // Clamp pitch scale to a reasonable range
-        const scale = Math.max(0.25, Math.min(parseFloat(pitch) || 1.0, 2.0)); // Adjusted min to 0.25 to match slider
-        // Only send message if the scale changes
-        if (currentPitchScale !== scale) {
-            currentPitchScale = scale;
-            console.log(`[AudioEngine] Pitch target set to ${scale.toFixed(2)}x`);
-            if (workletReady) {
-                postWorkletMessage({ type: 'set-pitch', value: scale });
-            }
-        }
-    }
+
+    // --- Playback Control Methods (Public - Adapted for Multi-Track) ---
 
     /**
-     * Sets the formant shift scale. Sends message to the worklet.
-     * @param {number} formant - The desired formant scale (e.g., 1.0 is normal).
+     * Toggles playback for all currently active/managed tracks.
+     * Assumes app.js handles readiness checks and context resuming.
+     * @param {boolean} play - True to play, false to pause.
      * @public
      */
-    function setFormant(formant) {
-        // Clamp formant scale to a reasonable range
-        const scale = Math.max(0.5, Math.min(parseFloat(formant) || 1.0, 2.0));
-        // Only send message if the scale changes
-        if (currentFormantScale !== scale) {
-            currentFormantScale = scale;
-            console.log(`[AudioEngine] Formant target set to ${scale.toFixed(2)}x`);
-            if (workletReady) {
-                postWorkletMessage({ type: 'set-formant', value: scale });
-            }
-        }
-    }
-
-    /**
-     * Sets the master gain (volume) level smoothly.
-     * @param {number} gain - The desired gain level (e.g., 1.0 is normal, clamped 0.0 to 5.0).
-     * @public
-     */
-    function setGain(gain) {
-        // Ensure gainNode and context are available
-        if (!gainNode || !audioCtx || audioCtx.state === 'closed') {
-            console.warn("AudioEngine: Cannot set gain - GainNode/Context missing.");
-            return;
-        }
-        // Clamp gain value
-        const value = Math.max(0.0, Math.min(parseFloat(gain) || 1.0, 5.0)); // Range 0 to 5
-        // Use setTargetAtTime for a smooth transition (avoids clicks)
-        // The third parameter is the time constant for the exponential change
-        gainNode.gain.setTargetAtTime(value, audioCtx.currentTime, 0.015);
-    }
-
-    /**
-     * Gets the current internally tracked *source* playback time and the total audio duration.
-     * Used as the base time for seeks and the main thread's time calculation.
-     * @returns {{currentTime: number, duration: number}} Object containing currentTime and duration.
-     * @public
-     */
-    function getCurrentTime() {
-        // Returns the internally tracked source time (updated by worklet 'time-update' or seek actions)
-        return {
-            currentTime: currentWorkletTime,
-            duration: currentDecodedBuffer ? currentDecodedBuffer.duration : 0
-        };
-    }
-
-    /**
-     * Provides access to the current AudioContext instance. Used by app.js for accurate timekeeping.
-     * @returns {AudioContext|null} The active AudioContext, or null if none exists.
-     * @public
-     */
-    function getAudioContext() {
-        return audioCtx;
-    }
-
-
-     // --- Cleanup ---
-
-    /**
-     * Cleans up all audio resources, including the AudioContext and worklet.
-     * Should be called when the application is closing or unloading.
-     * @public
-     */
-    function cleanup() {
-        console.log("AudioEngine: Cleaning up resources...");
-        // First, try to clean up the worklet node gracefully
-        cleanupCurrentWorklet().finally(() => {
-            // Then, close the AudioContext if it exists and is not already closed
-            if (audioCtx && audioCtx.state !== 'closed') {
-                audioCtx.close().then(() => console.log("AudioEngine: AudioContext closed."))
-                           .catch(e => console.warn("AudioEngine: Error closing AudioContext:", e));
-            }
-            // Nullify all references to allow garbage collection
-            audioCtx = null;
-            gainNode = null;
-            workletNode = null;
-            currentDecodedBuffer = null;
-            wasmBinary = null;
-            loaderScriptText = null;
-            workletReady = false;
-            isPlaying = false;
-            currentWorkletTime = 0.0;
-            currentPlaybackSpeed = 1.0;
-            currentPitchScale = 1.0;
-            currentFormantScale = 1.0;
+    function togglePlayPause(play) {
+        const messageType = play ? 'play' : 'pause';
+        console.log(`AudioEngine: Sending '${messageType}' to all managed tracks.`);
+        trackNodesMap.forEach((nodes, trackId) => {
+            postMessageToTrack(trackId, { type: messageType });
         });
     }
 
-    // --- Utility & Dispatch Helper ---
+     /**
+      * Seeks all tracks to positions relative to a global target time, respecting offsets.
+      * Called by app.js after calculating the global target time.
+      * @param {Map<string, number>} trackSeekTimes - Map of { trackId: targetSourceTime }
+      * @public
+      */
+     function seekAllTracks(trackSeekTimes) {
+          console.log(`AudioEngine: Seeking multiple tracks...`, trackSeekTimes);
+          trackSeekTimes.forEach((targetSourceTime, trackId) => {
+               seekTrack(trackId, targetSourceTime); // Use individual seek function
+          });
+     }
+
+     // --- NEW Track-Specific Control Methods ---
+
+     /**
+      * Seeks a specific track to a target source time.
+      * @param {string} trackId
+      * @param {number} targetSourceTime
+      * @public
+      */
+     function seekTrack(trackId, targetSourceTime) {
+          const nodes = trackNodesMap.get(trackId);
+          const duration = nodes?.workletNode?.bufferDuration; // Need way to get duration if buffer isn't stored here
+          // We might need to pass duration or get it from app.js? Assume valid time for now.
+          const clampedTime = Math.max(0, targetSourceTime); // Basic clamping
+          console.log(`AudioEngine: Seeking track ${trackId} to ${clampedTime.toFixed(3)}s`);
+          postMessageToTrack(trackId, { type: 'seek', positionSeconds: clampedTime });
+     }
+
+     /**
+      * Plays a specific track (sends 'play' message).
+      * @param {string} trackId
+      * @public
+      */
+     function playTrack(trackId) {
+          console.log(`AudioEngine: Sending 'play' to track ${trackId}`);
+          postMessageToTrack(trackId, { type: 'play' });
+     }
+
+      /**
+      * Pauses a specific track (sends 'pause' message).
+      * @param {string} trackId
+      * @public
+      */
+     function pauseTrack(trackId) {
+          console.log(`AudioEngine: Sending 'pause' to track ${trackId}`);
+          postMessageToTrack(trackId, { type: 'pause' });
+     }
+
+
+     /**
+      * Sets the playback speed for a specific track.
+      * @param {string} trackId
+      * @param {number} speed - The desired playback speed (e.g., 1.0 is normal).
+      * @public
+      */
+     function setTrackSpeed(trackId, speed) {
+          const rate = Math.max(0.25, Math.min(parseFloat(speed) || 1.0, 2.0));
+          console.log(`AudioEngine: Setting speed for track ${trackId} to ${rate.toFixed(2)}x`);
+          postMessageToTrack(trackId, { type: 'set-speed', value: rate });
+     }
+
+     /**
+      * Sets the pitch scale for a specific track.
+      * @param {string} trackId
+      * @param {number} pitch - The desired pitch scale.
+      * @public
+      */
+     function setTrackPitch(trackId, pitch) {
+         const scale = Math.max(0.25, Math.min(parseFloat(pitch) || 1.0, 2.0));
+         console.log(`AudioEngine: Setting pitch for track ${trackId} to ${scale.toFixed(2)}x`);
+         postMessageToTrack(trackId, { type: 'set-pitch', value: scale });
+     }
+
+      /**
+      * Sets the formant scale for a specific track.
+      * @param {string} trackId
+      * @param {number} formant - The desired formant scale.
+      * @public
+      */
+     function setTrackFormant(trackId, formant) {
+         const scale = Math.max(0.5, Math.min(parseFloat(formant) || 1.0, 2.0));
+         console.log(`AudioEngine: Setting formant for track ${trackId} to ${scale.toFixed(2)}x`);
+         postMessageToTrack(trackId, { type: 'set-formant', value: scale });
+     }
+
+     /**
+      * Sets the stereo pan for a specific track.
+      * @param {string} trackId
+      * @param {number} panValue - Pan value (-1 Left, 0 Center, 1 Right).
+      * @public
+      */
+     function setPan(trackId, panValue) {
+         const nodes = trackNodesMap.get(trackId);
+         if (nodes?.pannerNode && audioCtx && audioCtx.state === 'running') {
+              const value = Math.max(-1, Math.min(parseFloat(panValue) || 0, 1));
+              console.log(`AudioEngine: Setting pan for track ${trackId} to ${value.toFixed(2)}`);
+              // Use setTargetAtTime for smooth pan transition if desired, or just set value
+              nodes.pannerNode.pan.setValueAtTime(value, audioCtx.currentTime);
+         } else {
+              console.warn(`AudioEngine: Cannot set pan for ${trackId} - PannerNode/Context not ready.`);
+         }
+     }
+
+      /**
+      * Sets the individual volume for a specific track.
+      * @param {string} trackId
+      * @param {number} volume - Volume level (e.g., 0.0 to 1.5+).
+      * @public
+      */
+     function setVolume(trackId, volume) {
+         const nodes = trackNodesMap.get(trackId);
+         if (nodes?.volumeGainNode && audioCtx && audioCtx.state === 'running') {
+             const value = Math.max(0.0, parseFloat(volume) || 1.0); // Allow gain > 1
+             console.log(`AudioEngine: Setting volume for track ${trackId} to ${value.toFixed(2)}`);
+             nodes.volumeGainNode.gain.setTargetAtTime(value, audioCtx.currentTime, 0.015); // Smooth transition
+         } else {
+              console.warn(`AudioEngine: Cannot set volume for ${trackId} - VolumeGainNode/Context not ready.`);
+         }
+     }
+
+     /**
+      * Sets the mute state for a specific track.
+      * @param {string} trackId
+      * @param {boolean} isMuted - True to mute, false to unmute.
+      * @public
+      */
+     function setMute(trackId, isMuted) {
+         const nodes = trackNodesMap.get(trackId);
+         if (nodes?.muteGainNode && audioCtx && audioCtx.state === 'running') {
+             const targetGain = isMuted ? 0.0 : 1.0;
+             console.log(`AudioEngine: Setting mute for track ${trackId} to ${isMuted} (Gain: ${targetGain})`);
+             // Use setTargetAtTime for smooth mute/unmute to avoid clicks
+             nodes.muteGainNode.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.010);
+         } else {
+              console.warn(`AudioEngine: Cannot set mute for ${trackId} - MuteGainNode/Context not ready.`);
+         }
+     }
 
     /**
-     * Dispatches a custom event on the main document.
-     * @param {string} eventName - The name of the custom event.
-     * @param {object} [detail={}] - Optional data to pass with the event.
-     * @private
+     * Sets the master gain (volume) level smoothly.
+     * @param {number} gain - The desired gain level (e.g., 1.0 is normal, clamped 0.0 to 2.0).
+     * @public
      */
+    function setGain(gain) { // Renamed from setMasterGain for consistency, affects masterGainNode
+        if (!masterGainNode || !audioCtx || audioCtx.state === 'closed') {
+            console.warn("AudioEngine: Cannot set master gain - MasterGainNode/Context missing.");
+            return;
+        }
+        const value = Math.max(0.0, Math.min(parseFloat(gain) || 1.0, 2.0)); // Range 0 to 2 now
+        masterGainNode.gain.setTargetAtTime(value, audioCtx.currentTime, 0.015);
+    }
+
+    /** Provides access to the current AudioContext instance. */
+    function getAudioContext() { return audioCtx; }
+
+    /** Resumes context if suspended */
+    async function resumeContextIfNeeded(reason = "Context resume needed.") {
+         if (audioCtx && audioCtx.state === 'suspended') {
+              console.log(`AudioEngine: ${reason} Attempting resume...`);
+              try {
+                  await audioCtx.resume();
+                  console.log(`AudioEngine: Context resumed (state: ${audioCtx.state})`);
+                   // If module wasn't added before, try now
+                   if (!workletModuleAdded) { await addWorkletModule(); }
+              } catch (err) {
+                  console.error(`AudioEngine: Failed to resume AC: ${err}`);
+                  dispatchEngineEvent('audioapp:engineError', { type: 'contextResume', error: err });
+                  throw err; // Re-throw so caller knows it failed
+              }
+         }
+    }
+
+    // --- Cleanup ---
+
+    /**
+     * Cleans up resources for a specific trackId.
+     * @param {string} trackId
+     * @public
+     */
+    async function cleanupTrack(trackId) {
+         const nodes = trackNodesMap.get(trackId);
+         if (!nodes) return; // No nodes for this ID
+
+         console.log(`AudioEngine: Cleaning up nodes for track ${trackId}...`);
+
+         // 1. Send cleanup message to worklet first
+         if (nodes.workletNode) {
+             postMessageToTrack(trackId, { type: 'cleanup' });
+             // Optional: wait briefly for message processing before disconnecting
+             await new Promise(resolve => setTimeout(resolve, 50));
+         }
+
+         // 2. Disconnect nodes (in reverse order of connection)
+         try {
+             if (nodes.muteGainNode) nodes.muteGainNode.disconnect();
+             if (nodes.volumeGainNode) nodes.volumeGainNode.disconnect();
+             if (nodes.pannerNode) nodes.pannerNode.disconnect();
+             if (nodes.workletNode) {
+                 if (nodes.workletNode.port) nodes.workletNode.port.onmessage = null;
+                 nodes.workletNode.onprocessorerror = null;
+                 nodes.workletNode.disconnect();
+             }
+             console.log(`AudioEngine: Nodes disconnected for ${trackId}.`);
+         } catch(e) {
+              console.warn(`AudioEngine: Error during node disconnection for ${trackId}:`, e);
+         }
+
+         // 3. Remove from map
+         trackNodesMap.delete(trackId);
+         console.log(`AudioEngine: Track ${trackId} removed from map.`);
+    }
+
+    /** Cleans up all tracks and the AudioContext. */
+    async function cleanupAllTracks() {
+         console.log("AudioEngine: Cleaning up all tracks...");
+         const cleanupPromises = [];
+         trackNodesMap.forEach((nodes, trackId) => {
+             cleanupPromises.push(cleanupTrack(trackId));
+         });
+         await Promise.all(cleanupPromises); // Wait for all individual cleanups
+         console.log("AudioEngine: All tracks cleaned up.");
+    }
+
+    /** Global cleanup function for application exit. */
+    async function cleanup() {
+        console.log("AudioEngine: Global cleanup requested...");
+        await cleanupAllTracks(); // Clean tracks first
+        if (audioCtx && audioCtx.state !== 'closed') {
+            try {
+                await audioCtx.close();
+                console.log("AudioEngine: AudioContext closed.");
+            } catch(e) { console.warn("AudioEngine: Error closing AudioContext:", e); }
+        }
+        audioCtx = null;
+        masterGainNode = null;
+        trackNodesMap.clear();
+        wasmBinary = null;
+        loaderScriptText = null;
+        workletModuleAdded = false;
+        console.log("AudioEngine: Global cleanup finished.");
+    }
+
+    // --- Utility & Dispatch Helper ---
     function dispatchEngineEvent(eventName, detail = {}) {
         document.dispatchEvent(new CustomEvent(eventName, { detail: detail }));
     }
 
     // --- Public Interface ---
-    // Expose the methods needed by other modules (primarily app.js)
     return {
         init: init,
-        loadAndProcessFile: loadAndProcessFile,
-        resampleTo16kMono: resampleTo16kMono, // Keep exposed
-        togglePlayPause: togglePlayPause,
-        jumpBy: jumpBy,
-        seek: seek,
-        setSpeed: setSpeed,
-        setPitch: setPitch,
-        setFormant: setFormant,
-        setGain: setGain,
-        getCurrentTime: getCurrentTime, // Provides source time base
-        getAudioContext: getAudioContext, // Provides access to context time
+        setupTrack: setupTrack, // New setup function per track
+        cleanupTrack: cleanupTrack, // Expose single track cleanup
+        // Removed loadAndProcessFile
+        resampleTo16kMono: resampleTo16kMono,
+        // Global Controls (now potentially acting on multiple tracks)
+        togglePlayPause: togglePlayPause, // Sends play/pause to all tracks
+        seekAllTracks: seekAllTracks, // Seeks all tracks respecting offsets
+        setGain: setGain, // Master gain
+        // Track-Specific Controls
+        playTrack: playTrack,
+        pauseTrack: pauseTrack,
+        seekTrack: seekTrack,
+        setTrackSpeed: setTrackSpeed,
+        setTrackPitch: setTrackPitch,
+        setTrackFormant: setTrackFormant,
+        setPan: setPan,
+        setVolume: setVolume,
+        setMute: setMute,
+        // Getters
+        getAudioContext: getAudioContext,
+        // Global Cleanup
         cleanup: cleanup
-        // Internal state like currentPlaybackSpeed is not exposed directly
     };
 })();
 // --- /vibe-player/js/player/audioEngine.js --- // Updated Path
