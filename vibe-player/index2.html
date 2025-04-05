@@ -1,0 +1,63 @@
+<!-- /vibe-player/index2.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibe Player - Multi-Track POC</title>
+    <style>
+        body { font-family: sans-serif; line-height: 1.5; margin: 15px; }
+        section { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+        label { display: block; margin-bottom: 3px; font-weight: bold;}
+        input[type="range"] { width: 300px; }
+        button:disabled { color: #999; }
+        #status { margin-top: 10px; background-color: #eee; padding: 5px; min-height: 40px; white-space: pre-wrap; font-size: 0.9em; } /* Smaller font for status */
+        .track-info { margin-bottom: 5px; }
+        .track-info span { display: inline-block; min-width: 150px; font-style: italic; color: grey; }
+    </style>
+</head>
+<body>
+
+    <h1>Multi-Track Rubberband POC</h1>
+    <p>Test loading two audio files and playing them simultaneously (Left/Right) via independent Rubberband worklets with shared speed control.</p>
+
+    <!-- === File Loading Section === -->
+    <section id="file-loader">
+        <h2>Load Files</h2>
+        <div>
+            <label for="fileInputLeft">Track 1 (Left Channel):</label>
+            <input type="file" id="fileInputLeft" accept="audio/*">
+            <div class="track-info">File: <span id="fileNameLeft">None</span></div>
+        </div>
+        <hr>
+        <div>
+            <label for="fileInputRight">Track 2 (Right Channel):</label>
+            <input type="file" id="fileInputRight" accept="audio/*">
+            <div class="track-info">File: <span id="fileNameRight">None</span></div>
+        </div>
+    </section>
+
+    <!-- === Controls Section === -->
+    <section id="controls">
+        <h2>Controls (Shared)</h2>
+        <button id="playPauseButton" disabled>Load Files First</button>
+        <br><br>
+        <label for="speedSlider">Speed:</label>
+        <input type="range" id="speedSlider" min="0.25" max="2.0" value="1.0" step="0.01" disabled>
+        <span id="speedValue">1.00x</span>
+    </section>
+
+    <!-- === Status Display === -->
+    <section id="status-display">
+         <h2>Status / Logs</h2>
+         <div id="status">Waiting...</div>
+    </section>
+
+    <!-- === SCRIPTS === -->
+    <!-- Removed constants.js script tag -->
+    <!-- New POC script -->
+    <script src="app2.js"></script>
+
+</body>
+</html>
+<!-- /vibe-player/index2.html -->
