@@ -3,7 +3,7 @@
 
 var AudioApp = AudioApp || {}; // Ensure namespace exists
 
-AudioApp.uiManager = (function() {
+AudioApp.uiManager = (function () {
     'use strict';
 
     // === Module Dependencies ===
@@ -191,12 +191,14 @@ AudioApp.uiManager = (function() {
 
         // Check essential elements
         if (!chooseFileButton_left || !playPauseButton || !seekBar || !gainControl) {
-             console.warn("UIManager: Could not find all required baseline UI elements!");
+            console.warn("UIManager: Could not find all required baseline UI elements!");
         }
         if (!trackControlsSection || !chooseFileButton_right || !multiTrackOptionsDiv) {
             console.warn("UIManager: Could not find multi-track container/control elements!");
         }
-         if (!driftValueMsSpan) { console.warn("UIManager: Drift display span not found."); }
+        if (!driftValueMsSpan) {
+            console.warn("UIManager: Drift display span not found.");
+        }
     }
 
     // --- Slider Marker Positioning ---
@@ -204,9 +206,9 @@ AudioApp.uiManager = (function() {
     function initializeSliderMarkers() {
         const markerConfigs = [
             // Use _left suffixes for initial setup
-            { slider: speedSlider_left, markersDiv: speedMarkers_left },
-            { slider: pitchSlider_left, markersDiv: pitchMarkers_left },
-            { slider: gainControl, markersDiv: gainMarkers }, // Master Gain
+            {slider: speedSlider_left, markersDiv: speedMarkers_left},
+            {slider: pitchSlider_left, markersDiv: pitchMarkers_left},
+            {slider: gainControl, markersDiv: gainMarkers}, // Master Gain
             // Right track markers will be initialized when shown, if needed, or rely on CSS
         ];
         markerConfigs.forEach(config => {
@@ -216,32 +218,36 @@ AudioApp.uiManager = (function() {
 
     /** Helper to position markers for a given slider */
     function positionMarkersForSlider(slider, markersDiv) {
-         if (!slider || !markersDiv) return;
-         const min = parseFloat(slider.min);
-         const max = parseFloat(slider.max);
-         const range = max - min;
-         if (range <= 0) return;
-         const markers = markersDiv.querySelectorAll('span[data-value]');
-         markers.forEach(span => {
-             const value = parseFloat(span.dataset.value);
-             if (!isNaN(value)) {
-                 const percent = ((value - min) / range) * 100;
-                 span.style.left = `${percent}%`;
-             }
-         });
+        if (!slider || !markersDiv) return;
+        const min = parseFloat(slider.min);
+        const max = parseFloat(slider.max);
+        const range = max - min;
+        if (range <= 0) return;
+        const markers = markersDiv.querySelectorAll('span[data-value]');
+        markers.forEach(span => {
+            const value = parseFloat(span.dataset.value);
+            if (!isNaN(value)) {
+                const percent = ((value - min) / range) * 100;
+                span.style.left = `${percent}%`;
+            }
+        });
     }
 
     // --- Event Listener Setup ---
     /** @private */
     function setupEventListeners() {
         // File Loading
-        chooseFileButton_left?.addEventListener('click', () => { hiddenAudioFile_left?.click(); });
-        hiddenAudioFile_left?.addEventListener('change', (e) => {
-             handleFileSelectionEvent(e, 'left');
+        chooseFileButton_left?.addEventListener('click', () => {
+            hiddenAudioFile_left?.click();
         });
-        chooseFileButton_right?.addEventListener('click', () => { hiddenAudioFile_right?.click(); });
+        hiddenAudioFile_left?.addEventListener('change', (e) => {
+            handleFileSelectionEvent(e, 'left');
+        });
+        chooseFileButton_right?.addEventListener('click', () => {
+            hiddenAudioFile_right?.click();
+        });
         hiddenAudioFile_right?.addEventListener('change', (e) => {
-             handleFileSelectionEvent(e, 'right');
+            handleFileSelectionEvent(e, 'right');
         });
         swapTracksButton?.addEventListener('click', () => dispatchUIEvent('audioapp:swapTracksClicked'));
         removeTrackButton_right?.addEventListener('click', () => dispatchUIEvent('audioapp:removeTrackClicked'));
@@ -249,8 +255,8 @@ AudioApp.uiManager = (function() {
         // Global Playback
         seekBar?.addEventListener('input', handleSeekBarInput);
         playPauseButton?.addEventListener('click', () => dispatchUIEvent('audioapp:playPauseClicked'));
-        jumpBackButton?.addEventListener('click', () => dispatchUIEvent('audioapp:jumpClicked', { seconds: -getJumpTime() }));
-        jumpForwardButton?.addEventListener('click', () => dispatchUIEvent('audioapp:jumpClicked', { seconds: getJumpTime() }));
+        jumpBackButton?.addEventListener('click', () => dispatchUIEvent('audioapp:jumpClicked', {seconds: -getJumpTime()}));
+        jumpForwardButton?.addEventListener('click', () => dispatchUIEvent('audioapp:jumpClicked', {seconds: getJumpTime()}));
 
         // Global Master Gain
         setupSliderListeners(gainControl, gainValueDisplay, 'audioapp:gainChanged', 'gain', 'x');
@@ -263,11 +269,11 @@ AudioApp.uiManager = (function() {
         // Linking Buttons
         linkSpeedButton?.addEventListener('click', () => {
             const isActive = toggleLinkButton(linkSpeedButton);
-            dispatchUIEvent('audioapp:linkSpeedToggled', { linked: isActive });
+            dispatchUIEvent('audioapp:linkSpeedToggled', {linked: isActive});
         });
         linkPitchButton?.addEventListener('click', () => {
             const isActive = toggleLinkButton(linkPitchButton);
-            dispatchUIEvent('audioapp:linkPitchToggled', { linked: isActive });
+            dispatchUIEvent('audioapp:linkPitchToggled', {linked: isActive});
         });
 
         // VAD Sliders (Apply to Left Track only)
@@ -296,9 +302,9 @@ AudioApp.uiManager = (function() {
         setupSliderListeners(volumeSlider, volumeValue, `audioapp:volumeChanged_${trackSide}`, 'volume', '');
         // Delay (using 'change' or 'blur' might be better than 'input' for text)
         delayInput?.addEventListener('change', (e) => {
-             const value = e.target.value;
-             // Basic validation could happen here, but parsing is done in app.js
-             dispatchUIEvent(`audioapp:delayChanged_${trackSide}`, { value: value });
+            const value = e.target.value;
+            // Basic validation could happen here, but parsing is done in app.js
+            dispatchUIEvent(`audioapp:delayChanged_${trackSide}`, {value: value});
         });
         // Speed
         setupSliderListeners(speedSlider, speedValue, `audioapp:speedChanged_${trackSide}`, 'speed', 'x');
@@ -314,25 +320,27 @@ AudioApp.uiManager = (function() {
 
     /** Generic handler for file input change events */
     function handleFileSelectionEvent(event, trackSide) { // trackSide is 'left' or 'right'
-         const file = event.target.files?.[0];
-         const detail = { file: file, trackId: trackSide }; // Pass track identifier
-         if (file) {
-             // Update filename display immediately
-             updateFileName(trackSide, file.name);
-             dispatchUIEvent('audioapp:fileSelected', detail);
-         } else {
-             updateFileName(trackSide, "");
-             // Optionally dispatch event even if no file selected? Maybe not needed.
-         }
-         // Clear the input value to allow selecting the same file again
-         event.target.value = null;
+        const file = event.target.files?.[0];
+        const detail = {file: file, trackId: trackSide}; // Pass track identifier
+        if (file) {
+            // Update filename display immediately
+            updateFileName(trackSide, file.name);
+            dispatchUIEvent('audioapp:fileSelected', detail);
+        } else {
+            updateFileName(trackSide, "");
+            // Optionally dispatch event even if no file selected? Maybe not needed.
+        }
+        // Clear the input value to allow selecting the same file again
+        event.target.value = null;
     }
 
     /** Generic handler for seek bar input */
     function handleSeekBarInput(e) {
-         const target = /** @type {HTMLInputElement} */ (e.target);
-         const fraction = parseFloat(target.value);
-         if (!isNaN(fraction)) { dispatchUIEvent('audioapp:seekBarInput', { fraction: fraction }); }
+        const target = /** @type {HTMLInputElement} */ (e.target);
+        const fraction = parseFloat(target.value);
+        if (!isNaN(fraction)) {
+            dispatchUIEvent('audioapp:seekBarInput', {fraction: fraction});
+        }
     }
 
     /** Generic slider listener setup */
@@ -345,7 +353,7 @@ AudioApp.uiManager = (function() {
         slider.addEventListener('input', () => {
             const value = parseFloat(slider.value);
             valueDisplay.textContent = value.toFixed(2) + suffix;
-            dispatchUIEvent(eventName, { [detailKey]: value });
+            dispatchUIEvent(eventName, {[detailKey]: value});
         });
         // Ensure markers are positioned if slider exists
         const markersDivId = slider.id.replace(/Slider|Control/i, 'Markers'); // Guess markers div ID
@@ -363,73 +371,91 @@ AudioApp.uiManager = (function() {
             if (!isNaN(value)) {
                 sliderElement.value = String(value);
                 // Crucially, dispatch the 'input' event so listeners (including ours) fire
-                sliderElement.dispatchEvent(new Event('input', { bubbles: true }));
-                 // Also dispatch the specific change event for app.js if needed immediately
-                 const eventName = sliderElement.dataset.eventName; // Need to store event name on slider
-                 const detailKey = sliderElement.dataset.detailKey;
-                 if(eventName && detailKey) {
-                    dispatchUIEvent(eventName, { [detailKey]: value });
-                 }
+                sliderElement.dispatchEvent(new Event('input', {bubbles: true}));
+                // Also dispatch the specific change event for app.js if needed immediately
+                const eventName = sliderElement.dataset.eventName; // Need to store event name on slider
+                const detailKey = sliderElement.dataset.detailKey;
+                if (eventName && detailKey) {
+                    dispatchUIEvent(eventName, {[detailKey]: value});
+                }
             }
         }
     }
 
-     /** Handles VAD slider input */
-     function handleVadSliderInput(e) {
+    /** Handles VAD slider input */
+    function handleVadSliderInput(e) {
         // ... (implementation unchanged, still applies to left) ...
-         const slider = /** @type {HTMLInputElement} */ (e.target);
-         const value = parseFloat(slider.value);
-         let type = null;
-         if (slider === vadThresholdSlider && vadThresholdValueDisplay) {
-             vadThresholdValueDisplay.textContent = value.toFixed(2); type = 'positive';
-         } else if (slider === vadNegativeThresholdSlider && vadNegativeThresholdValueDisplay) {
-             vadNegativeThresholdValueDisplay.textContent = value.toFixed(2); type = 'negative';
-         }
-         if (type) { dispatchUIEvent('audioapp:thresholdChanged', { type: type, value: value }); }
-     }
+        const slider = /** @type {HTMLInputElement} */ (e.target);
+        const value = parseFloat(slider.value);
+        let type = null;
+        if (slider === vadThresholdSlider && vadThresholdValueDisplay) {
+            vadThresholdValueDisplay.textContent = value.toFixed(2);
+            type = 'positive';
+        } else if (slider === vadNegativeThresholdSlider && vadNegativeThresholdValueDisplay) {
+            vadNegativeThresholdValueDisplay.textContent = value.toFixed(2);
+            type = 'negative';
+        }
+        if (type) {
+            dispatchUIEvent('audioapp:thresholdChanged', {type: type, value: value});
+        }
+    }
 
     /** Handles global keydowns */
     function handleKeyDown(e) {
         // ... (implementation unchanged) ...
-         const target = e.target;
-         // Allow keybinds if target is body or button, but not input fields
-         const isBody = target instanceof HTMLBodyElement;
-         const isButton = target instanceof HTMLButtonElement;
-         const isRange = target instanceof HTMLInputElement && target.type === 'range';
+        const target = e.target;
+        // Allow keybinds if target is body or button, but not input fields
+        const isBody = target instanceof HTMLBodyElement;
+        const isButton = target instanceof HTMLButtonElement;
+        const isRange = target instanceof HTMLInputElement && target.type === 'range';
 
-         if (!isBody && !isButton && !isRange) return; // Ignore inputs in text fields etc.
+        if (!isBody && !isButton && !isRange) return; // Ignore inputs in text fields etc.
 
-         let handled = false; let eventKey = null;
-         switch (e.code) {
-             case 'Space': eventKey = 'Space'; handled = true; break;
-             case 'ArrowLeft': eventKey = 'ArrowLeft'; handled = true; break;
-             case 'ArrowRight': eventKey = 'ArrowRight'; handled = true; break;
-         }
-         if (eventKey) { dispatchUIEvent('audioapp:keyPressed', { key: eventKey }); }
-         if (handled) { e.preventDefault(); }
+        let handled = false;
+        let eventKey = null;
+        switch (e.code) {
+            case 'Space':
+                eventKey = 'Space';
+                handled = true;
+                break;
+            case 'ArrowLeft':
+                eventKey = 'ArrowLeft';
+                handled = true;
+                break;
+            case 'ArrowRight':
+                eventKey = 'ArrowRight';
+                handled = true;
+                break;
+        }
+        if (eventKey) {
+            dispatchUIEvent('audioapp:keyPressed', {key: eventKey});
+        }
+        if (handled) {
+            e.preventDefault();
+        }
     }
 
     /** Toggles link button visual state and returns new active state */
     function toggleLinkButton(button) {
-         if (!button) return false;
-         const isActive = !button.classList.contains('active');
-         if (isActive) {
-             button.classList.add('active');
-             button.innerHTML = '🔗'; // Linked icon
-             button.title = button.title.replace('Link', 'Unlink');
-         } else {
-             button.classList.remove('active');
-             button.innerHTML = '🚫'; // Unlinked icon (simple placeholder)
-             button.title = button.title.replace('Unlink', 'Link');
-         }
-         return isActive;
+        if (!button) return false;
+        const isActive = !button.classList.contains('active');
+        if (isActive) {
+            button.classList.add('active');
+            button.innerHTML = '🔗'; // Linked icon
+            button.title = button.title.replace('Link', 'Unlink');
+        } else {
+            button.classList.remove('active');
+            button.innerHTML = '🚫'; // Unlinked icon (simple placeholder)
+            button.title = button.title.replace('Unlink', 'Link');
+        }
+        return isActive;
     }
 
 
     /** Dispatches a custom UI event */
     function dispatchUIEvent(eventName, detail = {}) {
         // console.log("UIManager: Dispatching event", eventName, detail); // Optional debug
-        document.dispatchEvent(new CustomEvent(eventName, { detail: detail }));
+        document.dispatchEvent(new CustomEvent(eventName, {detail: detail}));
     }
 
     // --- Public Methods for Updating UI ---
@@ -505,12 +531,19 @@ AudioApp.uiManager = (function() {
     /** @public @param {'left' | 'right'} trackSide @param {string} text */
     function updateFileName(trackSide, text) {
         const display = trackSide === 'left' ? fileNameDisplay_left : fileNameDisplay_right;
-        if (display) { display.textContent = text; display.title = text; }
+        if (display) {
+            display.textContent = text;
+            display.title = text;
+        }
     }
+
     /** @public @param {'left' | 'right'} trackSide @param {string} text */
     function setFileInfo(trackSide, text) {
         const info = trackSide === 'left' ? fileInfo_left : fileInfo_right;
-        if (info) { info.textContent = text; info.title = text; }
+        if (info) {
+            info.textContent = text;
+            info.title = text;
+        }
     }
 
     /** @public @param {boolean} isPlaying */
@@ -523,7 +556,7 @@ AudioApp.uiManager = (function() {
         if (timeDisplay && Utils) {
             timeDisplay.textContent = `${Utils.formatTime(currentTime)} / ${Utils.formatTime(duration)}`;
         } else if (timeDisplay) {
-             timeDisplay.textContent = `Err / Err`;
+            timeDisplay.textContent = `Err / Err`;
         }
     }
 
@@ -533,28 +566,34 @@ AudioApp.uiManager = (function() {
         if (seekBar) {
             const clampedFraction = Math.max(0, Math.min(1, fraction));
             // Only update if value is significantly different to avoid fighting user input
-            if (Math.abs(parseFloat(seekBar.value) - clampedFraction) > 1e-3 ) { // Tolerance
+            if (Math.abs(parseFloat(seekBar.value) - clampedFraction) > 1e-3) { // Tolerance
                 seekBar.value = String(clampedFraction);
             }
         }
     }
 
-     /** @public @param {number} driftMs */
-     function updateDriftDisplay(driftMs) {
-          if (driftValueMsSpan) {
-              driftValueMsSpan.textContent = driftMs.toFixed(1); // Show one decimal place
-          }
-     }
+    /** @public @param {number} driftMs */
+    function updateDriftDisplay(driftMs) {
+        if (driftValueMsSpan) {
+            driftValueMsSpan.textContent = driftMs.toFixed(1); // Show one decimal place
+        }
+    }
 
     /** @public @param {string | Array<{start: number, end: number}>} regionsOrText */
     function setSpeechRegionsText(regionsOrText) {
         // ... (implementation unchanged - still applies to left VAD) ...
         if (!speechRegionsDisplay) return;
-        if (typeof regionsOrText === 'string') { speechRegionsDisplay.textContent = regionsOrText; }
-        else if (Array.isArray(regionsOrText)) {
-             if (regionsOrText.length > 0) { speechRegionsDisplay.textContent = regionsOrText.map(r => `Start: ${r.start.toFixed(2)}s, End: ${r.end.toFixed(2)}s`).join('\n'); }
-             else { speechRegionsDisplay.textContent = "No speech detected."; }
-        } else { speechRegionsDisplay.textContent = "None"; }
+        if (typeof regionsOrText === 'string') {
+            speechRegionsDisplay.textContent = regionsOrText;
+        } else if (Array.isArray(regionsOrText)) {
+            if (regionsOrText.length > 0) {
+                speechRegionsDisplay.textContent = regionsOrText.map(r => `Start: ${r.start.toFixed(2)}s, End: ${r.end.toFixed(2)}s`).join('\n');
+            } else {
+                speechRegionsDisplay.textContent = "No speech detected.";
+            }
+        } else {
+            speechRegionsDisplay.textContent = "None";
+        }
     }
 
     /** @public @param {number} positive @param {number} negative @param {boolean} [isNA=false] */
@@ -577,6 +616,8 @@ AudioApp.uiManager = (function() {
 
     /** @public @param {boolean} enable - Enables global Play/Pause, Jump controls */
     function enablePlaybackControls(enable) {
+        // *** ADD LOG ***
+        console.log(`UIManager: Setting Playback Controls enabled = ${enable}`);
         if (playPauseButton) playPauseButton.disabled = !enable;
         if (jumpBackButton) jumpBackButton.disabled = !enable;
         if (jumpForwardButton) jumpForwardButton.disabled = !enable;
@@ -584,7 +625,11 @@ AudioApp.uiManager = (function() {
     }
 
     /** @public @param {boolean} enable */
-     function enableSeekBar(enable) { if (seekBar) seekBar.disabled = !enable; }
+    function enableSeekBar(enable) {
+        // *** ADD LOG ***
+        console.log(`UIManager: Setting Seek Bar enabled = ${enable}`);
+        if (seekBar) seekBar.disabled = !enable;
+    }
 
     /** @public @param {'left' | 'right'} trackSide @param {boolean} enable */
     function enableTrackControls(trackSide, enable) {
@@ -596,66 +641,80 @@ AudioApp.uiManager = (function() {
             document.getElementById(`speed_${trackSide}`),
             document.getElementById(`pitch_${trackSide}`),
         ];
-        controls.forEach(el => { if (el) el.disabled = !enable; });
+        controls.forEach(el => {
+            if (el) el.disabled = !enable;
+        });
 
         // Also enable/disable linking buttons if BOTH tracks become enabled/disabled
         // This logic might be better handled in app.js based on overall state
         if (isMultiTrackUIVisible) {
-             const otherSide = trackSide === 'left' ? 'right' : 'left';
-             const otherTrackControlsEnabled = !document.getElementById(`volume_${otherSide}`)?.disabled;
-             const bothEnabled = enable && otherTrackControlsEnabled;
-             if(linkSpeedButton) linkSpeedButton.disabled = !bothEnabled;
-             if(linkPitchButton) linkPitchButton.disabled = !bothEnabled;
+            const otherSide = trackSide === 'left' ? 'right' : 'left';
+            const otherTrackControlsEnabled = !document.getElementById(`volume_${otherSide}`)?.disabled;
+            const bothEnabled = enable && otherTrackControlsEnabled;
+            if (linkSpeedButton) linkSpeedButton.disabled = !bothEnabled;
+            if (linkPitchButton) linkPitchButton.disabled = !bothEnabled;
         } else {
-             if(linkSpeedButton) linkSpeedButton.disabled = true;
-             if(linkPitchButton) linkPitchButton.disabled = true;
+            if (linkSpeedButton) linkSpeedButton.disabled = true;
+            if (linkPitchButton) linkPitchButton.disabled = true;
         }
     }
 
-     /** @public @param {boolean} enable */
-     function enableRightTrackLoadButton(enable) {
-          if(chooseFileButton_right) chooseFileButton_right.disabled = !enable;
-     }
-     /** @public @param {boolean} enable */
-     function enableSwapButton(enable) {
-          if(swapTracksButton) swapTracksButton.disabled = !enable;
-     }
-     /** @public @param {boolean} enable */
-     function enableRemoveButton(enable) {
-          if(removeTrackButton_right) removeTrackButton_right.disabled = !enable;
-     }
+    /** @public @param {boolean} enable */
+    function enableRightTrackLoadButton(enable) {
+        if (chooseFileButton_right) chooseFileButton_right.disabled = !enable;
+    }
+
+    /** @public @param {boolean} enable */
+    function enableSwapButton(enable) {
+        if (swapTracksButton) swapTracksButton.disabled = !enable;
+    }
+
+    /** @public @param {boolean} enable */
+    function enableRemoveButton(enable) {
+        if (removeTrackButton_right) removeTrackButton_right.disabled = !enable;
+    }
 
     /** @public @param {boolean} enable */
     function enableVadControls(enable) {
         // ... (implementation unchanged - still applies to left VAD) ...
         if (vadThresholdSlider) vadThresholdSlider.disabled = !enable;
         if (vadNegativeThresholdSlider) vadNegativeThresholdSlider.disabled = !enable;
-        if (!enable) { updateVadDisplay(0.5, 0.35, true); }
+        if (!enable) {
+            updateVadDisplay(0.5, 0.35, true);
+        }
     }
 
     // --- Visibility Control ---
     /** @public Shows/hides the UI elements specific to multi-track mode */
     function showMultiTrackUI(show) {
         console.log(`UIManager: Setting multi-track UI visibility to ${show}`);
-        const displayStyle = show ? '' : 'none'; // Use default display (block, flex, etc.) or none
+        const displayStyle = show ? '' : 'none';
 
-        // Show/hide sections
         if (trackControlsSection) trackControlsSection.style.display = displayStyle;
         if (visualizationRightSection) visualizationRightSection.style.display = displayStyle;
         if (visualizationRightSpecSection) visualizationRightSpecSection.style.display = displayStyle;
-
-        // Show/hide buttons in the file loader area
         if (swapTracksButton) swapTracksButton.style.display = show ? '' : 'none';
         if (removeTrackButton_right) removeTrackButton_right.style.display = show ? '' : 'none';
 
+        // *** FIX MARKER POSITIONING ***
+        // If showing the UI, ensure markers for the Right track are positioned correctly now that elements are visible.
+        if (show) {
+            // Delay slightly maybe? Or just try immediately.
+            // Use setTimeout to ensure elements are truly visible in the DOM render tree
+            setTimeout(() => {
+                console.log("UIManager: Positioning markers for right track sliders.");
+                positionMarkersForSlider(speedSlider_right, speedMarkers_right);
+                positionMarkersForSlider(pitchSlider_right, pitchMarkers_right);
+                // Position volume markers if they exist
+                // positionMarkersForSlider(volumeSlider_right, volumeMarkers_right);
+            }, 0); // Yield to allow rendering first
+        }
+
         // Also handle enabling/disabling relevant controls
-         enableSwapButton(show); // Enable swap/remove only when shown and both tracks loaded (app.js logic)
-         enableRemoveButton(show);
-        // Enable/disable track controls based on the 'show' state? Or based on track readiness? Let app.js control enable state.
-        // If hiding, disable track 2 controls explicitly?
+        enableSwapButton(show); // Enable swap/remove only when shown (actual logic in app.js based on readiness)
+        enableRemoveButton(show);
         if (!show) {
             enableTrackControls('right', false);
-            // Reset right track file display
             updateFileName('right', 'None');
             setFileInfo('right', '');
         }
@@ -666,7 +725,9 @@ AudioApp.uiManager = (function() {
     // --- Getters / Parsers ---
 
     /** @public @returns {number} */
-    function getJumpTime() { return parseFloat(jumpTimeInput?.value) || 5; }
+    function getJumpTime() {
+        return parseFloat(jumpTimeInput?.value) || 5;
+    }
 
     /**
      * @public
@@ -684,11 +745,11 @@ AudioApp.uiManager = (function() {
      * @param {'left' | 'right'} trackSide
      * @param {number} seconds - Delay in seconds.
      */
-     function setDelayValue(trackSide, seconds) {
-         const input = trackSide === 'left' ? delayInput_left : delayInput_right;
-         if (!input) return;
-         input.value = formatDelaySeconds(seconds);
-     }
+    function setDelayValue(trackSide, seconds) {
+        const input = trackSide === 'left' ? delayInput_left : delayInput_right;
+        if (!input) return;
+        input.value = formatDelaySeconds(seconds);
+    }
 
     /** Parses ss.ms or mm:ss.ms input into seconds */
     function parseDelayInput(valueStr) {
@@ -705,7 +766,7 @@ AudioApp.uiManager = (function() {
                     totalSeconds = (minutes * 60) + secondsMs;
                 }
             }
-             // Add hh:mm:ss.ms later if needed
+            // Add hh:mm:ss.ms later if needed
         } else {
             // Handle ss.ms
             totalSeconds = parseFloat(valueStr);
@@ -715,9 +776,9 @@ AudioApp.uiManager = (function() {
 
     /** Formats seconds into ss.ms string */
     function formatDelaySeconds(seconds) {
-         if (isNaN(seconds) || seconds < 0) seconds = 0;
-         // Show 3 decimal places for milliseconds
-         return seconds.toFixed(3);
+        if (isNaN(seconds) || seconds < 0) seconds = 0;
+        // Show 3 decimal places for milliseconds
+        return seconds.toFixed(3);
     }
 
 
@@ -729,6 +790,7 @@ AudioApp.uiManager = (function() {
         const clampedPercentage = Math.max(0, Math.min(100, percentage));
         vadProgressBar.style.width = `${clampedPercentage}%`;
     }
+
     /** @public @param {boolean} show */
     function showVadProgress(show) {
         // ... (implementation unchanged) ...
