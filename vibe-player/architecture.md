@@ -1,5 +1,5 @@
 <!-- /vibe-player/architecture.md -->
-# Vibe Player Architecture (Multi-Track Update)
+# Vibe Player Architecture
 
 ## 1. Overview
 
@@ -27,10 +27,10 @@
 *   **`js/player/`:**
     *   **`audioEngine.js` (Audio Backend):** Manages Web Audio API context, **master gain**. Creates/manages audio graph nodes **per track** (`Worklet -> Panner -> VolumeGain -> MuteGain -> MasterGain`) using an internal Map keyed by `trackId`. Handles `AudioWorkletNode` lifecycle/communication per track. Provides track-specific control methods (`setVolume`, `setPan`, `setTrackSpeed`, `playTrack`, `seekTrack`, etc.) and adapted global methods (`togglePlayPause`, `seekAllTracks`).
     *   **`rubberbandProcessor.js` (AudioWorklet):** Runs in worklet thread. Interfaces with Rubberband WASM. Accepts `trackId` for logging/messaging. **One instance runs per loaded audio track.**
-*   **`js/vad/`:** (Modules unchanged, but only used by `app.js` for Left track)
-    *   **`sileroWrapper.js`**
-    *   **`sileroProcessor.js`**
-    *   **`vadAnalyzer.js`**
+*   **`js/vad/`:**
+    *   **`sileroWrapper.js` (VAD ONNX Interface):** Wraps ONNX Runtime session for the Silero VAD model. Handles inference calls and state tensors.
+    *   **`sileroProcessor.js` (VAD Frame Logic):** Iterates audio frames, calls `sileroWrapper`, calculates regions based on probabilities/thresholds, yields to main thread, reports progress.
+    *   **`vadAnalyzer.js` (VAD State Manager):** Bridges `app.js` and VAD processing. Holds VAD results/thresholds. Initiates analysis and recalculation.
 *   **`js/visualizers/`:**
     *   **`waveformVisualizer.js`:** **Refactored** to export a `createInstance` factory. Each instance manages its own canvas/indicator elements (passed during creation) and state. Draws waveform, handles highlighting (Left only), resizing. `updateProgressIndicator` now handles offset logic for pre-roll/active/post-roll states.
     *   **`spectrogramVisualizer.js`:** **Refactored** to export a `createInstance` factory. Each instance manages its own elements, state, and offscreen cache. Computes/draws spectrogram. `updateProgressIndicator` handles offset logic.
@@ -64,16 +64,29 @@
 *   **Offset Handling via Seek:** Using `app.js` logic and `seek` commands to manage track start offsets instead of `DelayNode`. More flexible, less memory intensive, better control. (New Design)
 *   **Linked Speed (Default):** Speed/Pitch controls default to linked for simpler synchronization logic and UI. Independent control deferred. (New Design Choice)
 *   **Main-Thread Time Sync:** Still relies on `AudioContext.currentTime` and `requestAnimationFrame` in `app.js` for UI updates and the primary time reference. Periodic seeks (on Play/Seek) correct worklet timing drift relative to this reference. (Constraint/Design Adaptation)
-*   **VAD on Left Only:** VAD processing and UI elements currently only apply to the Left track to limit scope. (MVP Limitation)
 *   **Visualizer Offset Display:** Uses progress indicator styling (inactive/active states) and positioning (start/middle/end) to show offset/duration relationship, avoids complex graphical waveform shifting for now. (New Design)
-*   **Master Gain 0x Workaround:** Targeting a near-zero value (`1e-7`) in `audioEngine.setGain` instead of `0.0` to avoid browser quirks. (Implementation Detail)
+
+(old decisions, retained by human)
+
+*   **AudioWorklet for Rubberband:** Essential for performing complex audio processing (time-stretching) off the main thread without blocking UI or audio playback. Adds architectural complexity for message passing and state synchronization between main thread (`audioEngine`) and worklet thread (`rubberbandProcessor`). Required a **customized WASM loader** (`lib/rubberband-loader.js`).
+    *   **Alternative Considered (SoundTouchJS):** SoundTouchJS was evaluated, but the audio quality, especially at slower speeds, was significantly worse than Rubberband. Rubberband's computational cost was deemed acceptable for the quality improvement. Native Web Audio playback rate changes were also too choppy at low speeds.
+    *   **Rubberband Flags:** The primary goal for flag tuning was improving voice quality. The current flag set (`ProcessRealTime`, `PitchHighQuality`, `PhaseIndependent`, `TransientsCrisp`) represents a balance. `EngineFiner` was tested but resulted in stuttering playback, likely due to exceeding CPU limits on the test machine; the default (faster) engine is currently used.
+    *   **Rubberband Temporal Inaccuracy:** ***(RESTORED)*** Rubberband prioritizes audio quality, leading to potential drift in its output duration and time reporting relative to Web Audio clock. This necessitates **main-thread time calculation** for the UI indicator and periodic seek-based synchronization. Analogy: Cannot use a rubber band as a precise ruler.
+*   **ONNX Runtime Web for VAD:** Enables use of standard ML models (like Silero VAD) directly in the browser via WASM. Avoids needing a dedicated VAD implementation.
+*   **Visualizer Computation:** Waveform data calculated per-pixel. Spectrogram data computed entirely upfront (using **modified `lib/fft.js`**) before being drawn asynchronously chunk-by-chunk.
+    *   **Tradeoff:** Faster waveform display. Spectrogram has an initial computation delay before drawing starts, but avoids the complexity of streaming FFT computation. Async drawing prevents blocking during render.
 
 ## 6. Known Issues & Development Log
 
-*   **Formant Shifting (Non-Functional):** No change.
+*   **Formant Shifting (Non-Functional):** Currently disabled/commented out.
+    *   **Details:** Attempts were made to enable formant scaling using `_rubberband_set_formant_scale`. Rubberband flags tested included permutations of `EngineFiner`, `PhaseIndependent`, `FormantPreserved`, and the current default flag set. Formant scaling was tested alone and in combination with phase/speed shifting (0.25x to 2.0x). Debugging confirmed the target scale value was successfully passed to the WASM function via the correct API call.
+    *   **Result:** No errors were thrown, but **no audible effect** from formant shifting was ever observed. The feature was abandoned as non-functional in the current Rubberband WASM build/configuration. It's uncertain if the issue is in the WASM compilation, the underlying library's formant preservation interaction with other flags, or a misunderstanding of the scale parameter (though multiplier is standard).
+*   **VAD Performance & Backgrounding:** Runs on main thread; may cause minor UI jank and pauses when tab unfocused.
 *   **VAD:** Only works for Left track. Backgrounding tab may pause processing.
-*   **Spectrogram Latency:** Initial computation delay still exists per track.
+*   **Spectrogram Latency:** Initial computation delay before drawing begins.
+*   **Rubberband Engine Choice:** `EngineFiner` caused stuttering; using default (faster) engine.
 *   **Rubberband Drift:** Potential for minor drift between tracks over long durations, currently only corrected by user Play/Seek actions. Active correction deferred.
+*   **Playback Indicator Drift (Mitigated):** Reliance on main-thread calculation and sync-on-pause/speed-change significantly reduces drift compared to trusting worklet time reports, but minor visual discrepancies *during* rapid parameter changes might still occur due to inherent system latencies.
 *   **Unimplemented Controls:** Mute, Solo, Volume, Delay, Pitch, Swap, Linking logic handlers in `app.js` are placeholders.
 
 <!-- /vibe-player/architecture.md -->
