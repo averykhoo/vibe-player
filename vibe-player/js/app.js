@@ -2,52 +2,82 @@
 // Creates the global namespace and orchestrates the application flow.
 // MUST be loaded FIRST after libraries.
 
-var AudioApp = AudioApp || {};
+/**
+ * @namespace AudioApp
+ * @description Main application namespace for Vibe Player.
+ */
+var AudioApp = AudioApp || {}; // Create the main application namespace
 
+// Design Decision: Use an IIFE to encapsulate the main application logic
+// and expose only the `init` function via the AudioApp namespace.
 AudioApp = (function() {
     'use strict';
-    // ... (State variables, createInitialTrackState - unchanged) ...
-    function createInitialTrackState(side) { return { id: `track_${side}`, side: side, file: null, audioBuffer: null, isLoading: false, isReady: false, hasEnded: false, parameters: { offsetSeconds: 0.0, volume: 1.0, speed: 1.0, pitch: 1.0, pan: (side === 'left' ? -1 : 1), isMuted: false, isSoloed: false, }, vad: { results: null, isProcessing: false, }, }; }
-    let tracks = [ createInitialTrackState('left'), createInitialTrackState('right') ];
-    let multiTrackModeActive = false; let speedLinked = true; let pitchLinked = true; let globalPlaybackState = 'stopped';
-    let playbackStartTimeContext = null; let playbackStartSourceTime = 0.0; let rAFUpdateHandle = null; let currentGlobalSpeed = 1.0;
-    let vadModelReady = false; let debouncedSyncEngine = null; const SYNC_DEBOUNCE_WAIT_MS = 300;
+
+    // === Module Dependencies ===
+    // Access modules via AudioApp.* where needed, after init check.
+
+    // --- Application State ---
+    /**
+     * @typedef {object} TrackState
+     * @property {'track_left' | 'track_right'} id - Unique track identifier.
+     * @property {'left' | 'right'} side - UI side identifier.
+     * @property {File|null} file - The original audio file object.
+     * @property {AudioBuffer|null} audioBuffer - The decoded audio buffer.
+     * @property {boolean} isLoading - Is the track currently loading/decoding?
+     * @property {boolean} isReady - Is the track's worklet ready for playback commands?
+     * @property {boolean} hasEnded - Has the worklet reported the end of this track's playback?
+     * @property {object} parameters - Playback parameters for this track.
+     * @property {number} parameters.offsetSeconds - Playback start offset in seconds.
+     * @property {number} parameters.volume - Individual track volume (0.0 to 1.5+).
+     * @property {number} parameters.speed - Individual track target speed (used if unlinked).
+     * @property {number} parameters.pitch - Individual track target pitch (used if unlinked).
+     * @property {number} parameters.pan - Stereo pan (-1 Left, 0 Center, 1 Right).
+     * @property {boolean} parameters.isMuted - User-requested mute state.
+     * @property {boolean} parameters.isSoloed - User-requested solo state.
+     * @property {object} vad - VAD related state (currently only for left track).
+     * @property {VadResult|null} vad.results - Results from VAD analysis.
+     * @property {boolean} vad.isProcessing - Is VAD currently running for this track?
+     */
+     function createInitialTrackState(side) { return { id: `track_${side}`, side: side, file: null, audioBuffer: null, isLoading: false, isReady: false, hasEnded: false, parameters: { offsetSeconds: 0.0, volume: 1.0, speed: 1.0, pitch: 1.0, pan: (side === 'left' ? -1 : 1), isMuted: false, isSoloed: false, }, vad: { results: null, isProcessing: false, }, }; }
+     let tracks = [ createInitialTrackState('left'), createInitialTrackState('right') ];
+     let multiTrackModeActive = false;
+     let speedLinked = true;
+     let pitchLinked = true;
+     let globalPlaybackState = 'stopped';
+     let playbackStartTimeContext = null;
+     let playbackStartSourceTime = 0.0;
+     let rAFUpdateHandle = null;
+     let currentGlobalSpeed = 1.0;
+     let vadModelReady = false;
+     let debouncedSyncEngine = null;
+     const SYNC_DEBOUNCE_WAIT_MS = 300;
 
     // --- Visualizer Instance References ---
     let waveformVizLeft = null; let specVizLeft = null; let waveformVizRight = null; let specVizRight = null;
 
+    // --- Initialization ---
     /** @public */
     function init() {
         console.log("AudioApp: Initializing...");
-        if (!AudioApp.uiManager || !AudioApp.audioEngine || !AudioApp.waveformVisualizer?.createInstance || // Check for factory
-            !AudioApp.spectrogramVisualizer?.createInstance || !AudioApp.vadAnalyzer || !AudioApp.sileroWrapper ||
-            !AudioApp.Constants || !AudioApp.Utils)
-        { /* ... error logging ... */ let missing = []; /*...*/ console.error(`AudioApp: CRITICAL - Required modules/factories missing: [${missing.join(', ')}].`); AudioApp.uiManager?.setFileInfo('left', "Initialization Error: Missing modules."); return; }
+        if (!AudioApp.uiManager || !AudioApp.audioEngine || !AudioApp.waveformVisualizer?.createInstance || !AudioApp.spectrogramVisualizer?.createInstance || !AudioApp.vadAnalyzer || !AudioApp.sileroWrapper || !AudioApp.Constants || !AudioApp.Utils)
+        { let missing = []; if (!AudioApp.uiManager) missing.push("uiManager"); /* ... other checks ... */ console.error(`AudioApp: CRITICAL - Required modules/factories missing: [${missing.join(', ')}].`); AudioApp.uiManager?.setFileInfo('left', "Initialization Error: Missing modules."); return; }
 
         debouncedSyncEngine = AudioApp.Utils.debounce(syncEngineToEstimatedTime, SYNC_DEBOUNCE_WAIT_MS);
-        AudioApp.uiManager.init();
-        AudioApp.audioEngine.init();
+        AudioApp.uiManager.init(); AudioApp.audioEngine.init();
 
-        try { // --- Initialize Left Visualizer Instances using Factory ---
-            waveformVizLeft = AudioApp.waveformVisualizer.createInstance({ // Call factory
-                canvasId: 'waveformCanvas_left',
-                indicatorId: 'waveformProgressIndicator_left'
-            });
-            specVizLeft = AudioApp.spectrogramVisualizer.createInstance({ // Call factory
-                canvasId: 'spectrogramCanvas_left',
-                spinnerId: 'spectrogramSpinner_left',
-                indicatorId: 'spectrogramProgressIndicator_left'
-            });
+        try { // Init Left Viz
+            waveformVizLeft = AudioApp.waveformVisualizer.createInstance({ canvasId: 'waveformCanvas_left', indicatorId: 'waveformProgressIndicator_left' });
+            specVizLeft = AudioApp.spectrogramVisualizer.createInstance({ canvasId: 'spectrogramCanvas_left', spinnerId: 'spectrogramSpinner_left', indicatorId: 'spectrogramProgressIndicator_left' });
             console.log("AudioApp: Left visualizer instances created.");
         } catch (vizError) { console.error("AudioApp: CRITICAL - Failed to create visualizer instances:", vizError); AudioApp.uiManager?.setFileInfo('left', "Error: Visualizers failed to create."); }
 
-        setupAppEventListeners();
-        AudioApp.uiManager.resetUI();
+        setupAppEventListeners(); AudioApp.uiManager.resetUI();
         console.log("AudioApp: Initialized. Waiting for file...");
     }
 
+    // --- Event Listener Setup ---
     /** @private */
-    function setupAppEventListeners() { /* ... Listener setup unchanged ... */
+    function setupAppEventListeners() {
         document.addEventListener('audioapp:fileSelected', handleFileSelected); document.addEventListener('audioapp:removeTrackClicked', handleRemoveTrack); document.addEventListener('audioapp:swapTracksClicked', handleSwapTracks); document.addEventListener('audioapp:linkSpeedToggled', handleLinkSpeedToggle); document.addEventListener('audioapp:linkPitchToggled', handleLinkPitchToggle); document.addEventListener('audioapp:volumeChanged_left', (e) => handleVolumeChange('left', e.detail.volume)); document.addEventListener('audioapp:volumeChanged_right', (e) => handleVolumeChange('right', e.detail.volume)); document.addEventListener('audioapp:delayChanged_left', (e) => handleDelayChange('left', e.detail.value)); document.addEventListener('audioapp:delayChanged_right', (e) => handleDelayChange('right', e.detail.value)); document.addEventListener('audioapp:speedChanged_left', (e) => handleSpeedChange('left', e.detail.speed)); document.addEventListener('audioapp:speedChanged_right', (e) => handleSpeedChange('right', e.detail.speed)); document.addEventListener('audioapp:pitchChanged_left', (e) => handlePitchChange('left', e.detail.pitch)); document.addEventListener('audioapp:pitchChanged_right', (e) => handlePitchChange('right', e.detail.pitch)); document.addEventListener('audioapp:muteToggled_left', () => handleMuteToggle('left')); document.addEventListener('audioapp:muteToggled_right', () => handleMuteToggle('right')); document.addEventListener('audioapp:soloToggled_left', () => handleSoloToggle('left')); document.addEventListener('audioapp:soloToggled_right', () => handleSoloToggle('right')); document.addEventListener('audioapp:playPauseClicked', handlePlayPause); document.addEventListener('audioapp:jumpClicked', handleJump); document.addEventListener('audioapp:seekRequested', handleSeek); document.addEventListener('audioapp:seekBarInput', handleSeek); document.addEventListener('audioapp:gainChanged', handleMasterGainChange); document.addEventListener('audioapp:thresholdChanged', handleThresholdChange); document.addEventListener('audioapp:keyPressed', handleKeyPress); document.addEventListener('audioapp:audioLoaded', handleAudioLoaded); document.addEventListener('audioapp:workletReady', handleWorkletReady); document.addEventListener('audioapp:decodingError', handleAudioError); document.addEventListener('audioapp:resamplingError', handleAudioError); document.addEventListener('audioapp:playbackError', handleAudioError); document.addEventListener('audioapp:engineError', handleAudioError); document.addEventListener('audioapp:playbackEnded', handlePlaybackEnded); document.addEventListener('audioapp:playbackStateChanged', handlePlaybackStateChange); window.addEventListener('resize', handleWindowResize); window.addEventListener('beforeunload', handleBeforeUnload);
     }
 
@@ -57,24 +87,19 @@ AudioApp = (function() {
     function areAllActiveTracksReady() { if (!tracks[0]?.isReady) return false; if (multiTrackModeActive && !tracks[1]?.isReady) return false; return true; }
     function getReadyTrackCount() { return tracks.filter(t => t?.isReady).length; }
 
-     /** Draws visuals for a specific track using its assigned visualizer instance */
+     /** Draws visuals for a specific track */
      async function drawTrackVisuals(track) {
-         if (!track?.audioBuffer) { console.warn(`App: Cannot draw visuals for ${track?.side}, no audio buffer.`); return; }
-         console.log(`App: Drawing/Redrawing visuals for track ${track.side}...`);
+         if (!track?.audioBuffer) { console.warn(`App: Cannot draw visuals for ${track?.side}, no buffer.`); return; }
+         console.log(`App: Drawing/Redrawing visuals for ${track.side}...`);
          try {
              const waveformViz = (track.side === 'left') ? waveformVizLeft : waveformVizRight;
              const specViz = (track.side === 'left') ? specVizLeft : specVizRight;
              const initialRegions = (track.side === 'left') ? (track.vad.results?.regions || []) : null;
-
-             // Check if instance exists before calling methods
-             if (waveformViz?.computeAndDrawWaveform) {
-                 await waveformViz.computeAndDrawWaveform(track.audioBuffer, initialRegions);
-             } else { console.warn(`App: Waveform visualizer instance for ${track.side} not available for drawing.`); }
-
-             if (specViz?.computeAndDrawSpectrogram) {
-                 await specViz.computeAndDrawSpectrogram(track.audioBuffer);
-             } else { console.warn(`App: Spectrogram visualizer instance for ${track.side} not available for drawing.`); }
-         } catch (visError) { console.error(`App: Error drawing visuals for track ${track.side}:`, visError); }
+             if (waveformViz?.computeAndDrawWaveform) { await waveformViz.computeAndDrawWaveform(track.audioBuffer, initialRegions); }
+             else { console.warn(`App: WF Viz for ${track.side} not available.`); }
+             if (specViz?.computeAndDrawSpectrogram) { await specViz.computeAndDrawSpectrogram(track.audioBuffer); }
+             else { console.warn(`App: Spec Viz for ${track.side} not available.`); }
+         } catch (visError) { console.error(`App: Error drawing visuals for ${track.side}:`, visError); }
      }
 
 
@@ -82,7 +107,7 @@ AudioApp = (function() {
 
     /** @param {CustomEvent<{file: File, trackId: 'left' | 'right'}>} e */
     async function handleFileSelected(e) {
-        const { file, trackId: trackSide } = e.detail; const track = findTrackBySide(trackSide); if (!track || !file) return; if (track.side === 'right' && !tracks[0]?.isReady) { console.warn(`App: Cannot load Right track until Left track is ready.`); AudioApp.uiManager.updateFileName('right', 'Load Left First!'); return; }
+        const { file, trackId: trackSide } = e.detail; const track = findTrackBySide(trackSide); if (!track || !file) return; if (track.side === 'right' && !tracks[0]?.isReady) { console.warn(`App: Load Left first.`); AudioApp.uiManager.updateFileName('right', 'Load Left First!'); return; }
         console.log(`App: File selected for track ${track.side} -`, file.name);
         Object.assign(track, createInitialTrackState(track.side), { file: file, isLoading: true });
         if (track.side === 'left') {
@@ -107,18 +132,12 @@ AudioApp = (function() {
              const duration = audioBuffer.duration; AudioApp.uiManager.updateTimeDisplay(0, duration); AudioApp.uiManager.updateSeekBar(0); playbackStartSourceTime = 0.0;
              runVadInBackground(track);
              await drawTrackVisuals(track); // Draw left visuals now
-         } else {
-             // Right track visuals are drawn after worklet ready + viz init
-             if (waveformVizRight && specVizRight) { // Draw only if instances exist
-                 await drawTrackVisuals(track);
-             }
-         }
+         } else { if (waveformVizRight && specVizRight) { await drawTrackVisuals(track); } } // Draw right only if viz exists
     }
 
     /** @param {CustomEvent<{trackId: string}>} e */
-    async function handleWorkletReady(e) { // Make async for draw call
-        const trackId = e.detail.trackId; const track = findTrackById(trackId);
-        if (!track || !track.audioBuffer) { console.warn(`App: Worklet ready for ${trackId}, but track/buffer missing.`); return; }
+    async function handleWorkletReady(e) {
+        const trackId = e.detail.trackId; const track = findTrackById(trackId); if (!track || !track.audioBuffer) { console.warn(`App: Worklet ready for ${trackId}, but track/buffer missing.`); return; }
         console.log(`App: Worklet ready for ${track.side}.`); track.isReady = true; track.isLoading = false; track.hasEnded = false;
         AudioApp.uiManager.enableTrackControls(track.side, true);
         AudioApp.audioEngine.setVolume(track.id, track.parameters.volume); AudioApp.audioEngine.setPan(track.id, track.parameters.pan); AudioApp.audioEngine.setTrackSpeed(track.id, track.parameters.speed); AudioApp.audioEngine.setTrackPitch(track.id, track.parameters.pitch);
@@ -128,19 +147,10 @@ AudioApp = (function() {
         }
         if (track.side === 'right') {
              multiTrackModeActive = true;
-             // Create Right Visualizer Instances if they don't exist
-             if (!waveformVizRight) {
-                  try { waveformVizRight = AudioApp.waveformVisualizer.createInstance({ canvasId: 'waveformCanvas_right', indicatorId: 'waveformProgressIndicator_right' }); }
-                  catch(err) { console.error("Failed creating waveformVizRight", err); }
-             }
-             if (!specVizRight) {
-                  try { specVizRight = AudioApp.spectrogramVisualizer.createInstance({ canvasId: 'spectrogramCanvas_right', spinnerId: 'spectrogramSpinner_right', indicatorId: 'spectrogramProgressIndicator_right' }); }
-                  catch(err) { console.error("Failed creating specVizRight", err); }
-             }
-             // Show UI & Draw visuals now that instances are guaranteed
-             AudioApp.uiManager.showMultiTrackUI(true);
-             AudioApp.uiManager.enableSwapButton(true); AudioApp.uiManager.enableRemoveButton(true);
-             await drawTrackVisuals(track); // Draw Right visuals
+             if (!waveformVizRight) { try { waveformVizRight = AudioApp.waveformVisualizer.createInstance({ canvasId: 'waveformCanvas_right', indicatorId: 'waveformProgressIndicator_right' }); } catch(err) { console.error("Failed creating waveformVizRight", err); } }
+             if (!specVizRight) { try { specVizRight = AudioApp.spectrogramVisualizer.createInstance({ canvasId: 'spectrogramCanvas_right', spinnerId: 'spectrogramSpinner_right', indicatorId: 'spectrogramProgressIndicator_right' }); } catch(err) { console.error("Failed creating specVizRight", err); } }
+             AudioApp.uiManager.showMultiTrackUI(true); AudioApp.uiManager.enableSwapButton(true); AudioApp.uiManager.enableRemoveButton(true);
+             await drawTrackVisuals(track); // Draw Right visuals now
         }
 
         if (areAllActiveTracksReady()) { console.log("App: All active tracks ready."); AudioApp.uiManager.enablePlaybackControls(true); AudioApp.uiManager.enableSeekBar(true); }
@@ -152,24 +162,55 @@ AudioApp = (function() {
     async function handleRemoveTrackInternal() {
         if (!tracks[1]) return; const trackId = tracks[1].id;
         await AudioApp.audioEngine.cleanupTrack(trackId); tracks[1] = createInitialTrackState('right'); multiTrackModeActive = false;
-        waveformVizRight = null; specVizRight = null; // Clear instance refs
-        AudioApp.uiManager.showMultiTrackUI(false); AudioApp.uiManager.enableRightTrackLoadButton(true); AudioApp.uiManager.enableSwapButton(false); AudioApp.uiManager.enableRemoveButton(false);
+        waveformVizRight = null; specVizRight = null; AudioApp.uiManager.showMultiTrackUI(false);
+        AudioApp.uiManager.enableRightTrackLoadButton(true); AudioApp.uiManager.enableSwapButton(false); AudioApp.uiManager.enableRemoveButton(false);
         if (tracks[0]?.isReady) { AudioApp.uiManager.enablePlaybackControls(true); AudioApp.uiManager.enableSeekBar(true); }
         else { AudioApp.uiManager.enablePlaybackControls(false); AudioApp.uiManager.enableSeekBar(false); }
         console.log("App: Right track removed.");
     }
-    function handleSwapTracks() { console.warn("Swap tracks not implemented."); }
-    function handleLinkSpeedToggle(e) { speedLinked = e.detail.linked; console.log("App: SpeedLink set to", speedLinked); }
-    function handleLinkPitchToggle(e) { pitchLinked = e.detail.linked; console.log("App: PitchLink set to", pitchLinked); }
-    function handleVolumeChange(trackSide, volume) { console.warn("Volume change not implemented."); }
-    function handleDelayChange(trackSide, valueStr) { console.warn("Delay change not implemented."); }
-    function handleMuteToggle(trackSide) { console.warn("Mute toggle not implemented."); }
-    function handleSoloToggle(trackSide) { console.warn("Solo toggle not implemented."); }
+    function handleSwapTracks() { console.warn("Swap tracks not implemented yet."); }
+    function handleLinkSpeedToggle(e) { speedLinked = e.detail.linked; console.log("App: SpeedLink set to", speedLinked); AudioApp.uiManager.setLinkButtonState(AudioApp.linkSpeedButton, speedLinked); } // Update UI button state
+    function handleLinkPitchToggle(e) { pitchLinked = e.detail.linked; console.log("App: PitchLink set to", pitchLinked); AudioApp.uiManager.setLinkButtonState(AudioApp.linkPitchButton, pitchLinked); } // Update UI button state
+
+    /** Handler for individual track volume changes */
+    function handleVolumeChange(trackSide, volume) {
+         const track = findTrackBySide(trackSide);
+         if (!track || !track.isReady) return; // Ignore if track not ready
+         const newVolume = Math.max(0, Math.min(parseFloat(volume) || 1.0, 1.5)); // Clamp 0-1.5
+         console.log(`App: Volume change for ${trackSide} to ${newVolume.toFixed(2)}`);
+         track.parameters.volume = newVolume;
+         AudioApp.audioEngine.setVolume(track.id, newVolume);
+         // TODO: Add Mute/Solo interaction logic here later
+         // E.g., if volume > 0, ensure mute button is not disabled?
+    }
+
+     /** Handler for individual track delay input changes */
+     function handleDelayChange(trackSide, valueStr) {
+         const track = findTrackBySide(trackSide);
+         if (!track) return;
+         const newOffsetSeconds = AudioApp.uiManager.parseDelayInput(valueStr); // Use parser
+         if (isNaN(newOffsetSeconds)) {
+              console.warn(`App: Invalid delay input for ${trackSide}: "${valueStr}"`);
+              // Optionally reset UI input to previous valid value
+              AudioApp.uiManager.setDelayValue(trackSide, track.parameters.offsetSeconds);
+              return;
+         }
+         if (track.parameters.offsetSeconds !== newOffsetSeconds) {
+              console.log(`App: Delay change for ${trackSide} to ${newOffsetSeconds.toFixed(3)}s`);
+              track.parameters.offsetSeconds = newOffsetSeconds;
+              // Update UI to show potentially formatted value
+              AudioApp.uiManager.setDelayValue(trackSide, newOffsetSeconds);
+              // No automatic seek on delay change for now. Seek/Play will use new offset.
+         }
+     }
+
+    function handleMuteToggle(trackSide) { console.warn("Mute toggle not implemented yet."); }
+    function handleSoloToggle(trackSide) { console.warn("Solo toggle not implemented yet."); }
 
     // --- VAD Processing ---
     /** @param {TrackState} track */
     async function runVadInBackground(track) {
-        if (track.side !== 'left' || !track.audioBuffer || !waveformVizLeft) return; // Need viz instance now
+        if (track.side !== 'left' || !track.audioBuffer || !waveformVizLeft) return;
         if (!AudioApp.vadAnalyzer || !AudioApp.sileroWrapper || !AudioApp.audioEngine || !AudioApp.uiManager) { console.error("App (VAD Task): Missing dependencies."); track.vad.isProcessing = false; return; }
         if (track.vad.isProcessing) { console.warn("App: VAD already running for Left track."); return; }
         track.vad.isProcessing = true; track.vad.results = null; let pcm16k = null; let vadSucceeded = false;
@@ -189,8 +230,8 @@ AudioApp = (function() {
     }
 
      /** @param {CustomEvent<{type?: string, error: Error, trackId?: string}>} e */
-    function handleAudioError(e) { /* ... Unchanged - handles track state/UI based on trackId ... */
-        const errorType = e.detail.type || 'Unknown'; const errorMessage = e.detail.error ? e.detail.error.message : 'An unknown error occurred'; const trackId = e.detail.trackId; const track = findTrackById(trackId); const trackSide = track ? track.side : 'global'; console.error(`App: Audio Error - Track: ${trackSide}, Type: ${errorType}, Msg: ${errorMessage}`, e.detail.error); if (track) { track.isLoading = false; track.isReady = false; AudioApp.uiManager.setFileInfo(track.side, `Error (${errorType})`); AudioApp.uiManager.enableTrackControls(track.side, false); if (track.side === 'right') { AudioApp.uiManager.enableSwapButton(false); AudioApp.uiManager.enableRemoveButton(false); } } else { stopUIUpdateLoop(); AudioApp.uiManager.resetUI(); tracks.forEach(t => { Object.assign(t, createInitialTrackState(t.side)); }); multiTrackModeActive = false; globalPlaybackState = 'stopped'; } if (!areAllActiveTracksReady()) { AudioApp.uiManager.enablePlaybackControls(false); AudioApp.uiManager.enableSeekBar(false); }
+    function handleAudioError(e) {
+        const errorType = e.detail.type || 'Unknown'; const errorMessage = e.detail.error ? e.detail.error.message : 'An unknown error occurred'; const trackId = e.detail.trackId; const track = findTrackById(trackId); const trackSide = track ? track.side : 'global'; console.error(`App: Audio Error - Track: ${trackSide}, Type: ${errorType}, Msg: ${errorMessage}`, e.detail.error); if (track) { track.isLoading = false; track.isReady = false; AudioApp.uiManager.setFileInfo(track.side, `Error (${errorType})`); AudioApp.uiManager.enableTrackControls(track.side, false); if (track.side === 'right') { AudioApp.uiManager.enableSwapButton(false); AudioApp.uiManager.enableRemoveButton(false); } } else { stopUIUpdateLoop(); AudioApp.uiManager.resetUI(); tracks.forEach(t => { Object.assign(t, createInitialTrackState(t.side)); }); multiTrackModeActive = false; globalPlaybackState = 'stopped'; waveformVizLeft?.clearVisuals(); specVizLeft?.clearVisuals(); waveformVizRight = null; specVizRight = null; } if (!areAllActiveTracksReady()) { AudioApp.uiManager.enablePlaybackControls(false); AudioApp.uiManager.enableSeekBar(false); }
     }
 
 
@@ -215,18 +256,48 @@ AudioApp = (function() {
     // --- Parameter Change Handlers ---
     /** @param {'left' | 'right'} trackSide @param {number} speed */
     function handleSpeedChange(trackSide, speed) {
-        if (!speedLinked) { console.warn("App: Unlinked speed change not implemented yet."); return; }
-        const newSpeed = Math.max(0.25, Math.min(parseFloat(speed) || 1.0, 2.0)); if (Math.abs(currentGlobalSpeed - newSpeed) < 1e-6) return;
-        console.log(`App: Linked speed changed to ${newSpeed.toFixed(2)}x`); const oldGlobalSpeed = currentGlobalSpeed; currentGlobalSpeed = newSpeed;
-        tracks.forEach(track => {
-            if (track?.isReady) { track.parameters.speed = newSpeed; AudioApp.audioEngine.setTrackSpeed(track.id, newSpeed); const slider = document.getElementById(`speed_${track.side}`); if (slider) slider.value = String(newSpeed); }
-        });
-        const audioCtx = AudioApp.audioEngine.getAudioContext(); if (globalPlaybackState === 'playing' && playbackStartTimeContext !== null && audioCtx) { const elapsedContextTime = audioCtx.currentTime - playbackStartTimeContext; const elapsedSourceTime = elapsedContextTime * oldGlobalSpeed; const previousSourceTime = playbackStartSourceTime + elapsedSourceTime; playbackStartSourceTime = previousSourceTime; playbackStartTimeContext = audioCtx.currentTime; }
-        debouncedSyncEngine();
+        if (speedLinked) {
+            const newSpeed = Math.max(0.25, Math.min(parseFloat(speed) || 1.0, 2.0)); if (Math.abs(currentGlobalSpeed - newSpeed) < 1e-6) return;
+            console.log(`App: Linked speed changed to ${newSpeed.toFixed(2)}x`); const oldGlobalSpeed = currentGlobalSpeed; currentGlobalSpeed = newSpeed;
+            tracks.forEach(track => {
+                if (track?.isReady) { track.parameters.speed = newSpeed; AudioApp.audioEngine.setTrackSpeed(track.id, newSpeed); const slider = document.getElementById(`speed_${track.side}`); if (slider) slider.value = String(newSpeed); }
+            });
+            const audioCtx = AudioApp.audioEngine.getAudioContext(); if (globalPlaybackState === 'playing' && playbackStartTimeContext !== null && audioCtx) { const elapsedContextTime = audioCtx.currentTime - playbackStartTimeContext; const elapsedSourceTime = elapsedContextTime * oldGlobalSpeed; const previousSourceTime = playbackStartSourceTime + elapsedSourceTime; playbackStartSourceTime = previousSourceTime; playbackStartTimeContext = audioCtx.currentTime; }
+            debouncedSyncEngine();
+        } else {
+             // --- IMPLEMENT UNLINKED SPEED (Individual track update) ---
+             const track = findTrackBySide(trackSide); if (!track || !track.isReady) return;
+             const newSpeed = Math.max(0.25, Math.min(parseFloat(speed) || 1.0, 2.0));
+             if (Math.abs(track.parameters.speed - newSpeed) < 1e-6) return; // No change for this track
+             console.log(`App: Unlinked speed for track ${track.side} changed to ${newSpeed.toFixed(2)}x`);
+             track.parameters.speed = newSpeed;
+             AudioApp.audioEngine.setTrackSpeed(track.id, newSpeed);
+             // Note: No time base adjustment or debounced sync needed for unlinked changes? Or maybe sync only the affected track? Defer complexity.
+             // We also need to decide how global time estimation works with unlinked speeds - using currentGlobalSpeed (1.0?) might be wrong.
+             console.warn("App: Unlinked speed change applied, but global time estimation might be inaccurate.");
+        }
     }
 
     /** @param {'left' | 'right'} trackSide @param {number} pitch */
-    function handlePitchChange(trackSide, pitch) { console.warn("Pitch change not implemented yet."); }
+    function handlePitchChange(trackSide, pitch) {
+         const newPitch = Math.max(0.25, Math.min(parseFloat(pitch) || 1.0, 2.0));
+         if (pitchLinked) {
+              console.log(`App: Linked pitch changed to ${newPitch.toFixed(2)}x`);
+              tracks.forEach(track => {
+                  if (track?.isReady) {
+                       track.parameters.pitch = newPitch; AudioApp.audioEngine.setTrackPitch(track.id, newPitch);
+                       const slider = document.getElementById(`pitch_${track.side}`); if (slider) slider.value = String(newPitch);
+                  }
+              });
+         } else {
+              const track = findTrackBySide(trackSide); if (!track || !track.isReady) return;
+              if (Math.abs(track.parameters.pitch - newPitch) < 1e-6) return;
+              console.log(`App: Unlinked pitch for track ${track.side} changed to ${newPitch.toFixed(2)}x`);
+              track.parameters.pitch = newPitch; AudioApp.audioEngine.setTrackPitch(track.id, newPitch);
+         }
+         // No debounced sync typically needed for pitch
+    }
+
     /** @param {CustomEvent<{gain: number}>} e */
     function handleMasterGainChange(e) { AudioApp.audioEngine?.setGain(e.detail.gain); }
 
@@ -258,17 +329,10 @@ AudioApp = (function() {
 
      /** Updates the time display, seek bar, drift, and visualization progress indicators. */
      function updateUIWithTime(globalTime) {
-          let maxEffectiveDuration = 0; tracks.forEach(track => { if (track?.audioBuffer) { maxEffectiveDuration = Math.max(maxEffectiveDuration, track.parameters.offsetSeconds + track.audioBuffer.duration); } }); if (isNaN(maxEffectiveDuration)) maxEffectiveDuration = 0;
-          const clampedGlobalTime = Math.max(0, Math.min(globalTime, maxEffectiveDuration)); const fraction = maxEffectiveDuration > 0 ? clampedGlobalTime / maxEffectiveDuration : 0;
-          AudioApp.uiManager.updateTimeDisplay(clampedGlobalTime, maxEffectiveDuration); AudioApp.uiManager.updateSeekBar(fraction); AudioApp.uiManager.updateDriftDisplay(0);
-
-          // --- Update Visualizer Progress Indicators ---
-          const leftTrack = tracks[0];
-          if (leftTrack?.audioBuffer && waveformVizLeft?.updateProgressIndicator) { waveformVizLeft.updateProgressIndicator(clampedGlobalTime, leftTrack.parameters.offsetSeconds, leftTrack.audioBuffer.duration); }
-          if (leftTrack?.audioBuffer && specVizLeft?.updateProgressIndicator) { specVizLeft.updateProgressIndicator(clampedGlobalTime, leftTrack.parameters.offsetSeconds, leftTrack.audioBuffer.duration); }
-          const rightTrack = tracks[1];
-          if (multiTrackModeActive && rightTrack?.audioBuffer && waveformVizRight?.updateProgressIndicator) { waveformVizRight.updateProgressIndicator(clampedGlobalTime, rightTrack.parameters.offsetSeconds, rightTrack.audioBuffer.duration); }
-          if (multiTrackModeActive && rightTrack?.audioBuffer && specVizRight?.updateProgressIndicator) { specVizRight.updateProgressIndicator(clampedGlobalTime, rightTrack.parameters.offsetSeconds, rightTrack.audioBuffer.duration); }
+          let maxEffectiveDuration = 0; tracks.forEach(track => { if (track?.audioBuffer) { maxEffectiveDuration = Math.max(maxEffectiveDuration, track.parameters.offsetSeconds + track.audioBuffer.duration); } }); if (isNaN(maxEffectiveDuration)) maxEffectiveDuration = 0; const clampedGlobalTime = Math.max(0, Math.min(globalTime, maxEffectiveDuration)); const fraction = maxEffectiveDuration > 0 ? clampedGlobalTime / maxEffectiveDuration : 0;
+          AudioApp.uiManager.updateTimeDisplay(clampedGlobalTime, maxEffectiveDuration); AudioApp.uiManager.updateSeekBar(fraction); AudioApp.uiManager.updateDriftDisplay(0); // Placeholder
+          // Update Visualizer Progress Indicators
+          const leftTrack = tracks[0]; if (leftTrack?.audioBuffer && waveformVizLeft?.updateProgressIndicator) { waveformVizLeft.updateProgressIndicator(clampedGlobalTime, leftTrack.parameters.offsetSeconds, leftTrack.audioBuffer.duration); } if (leftTrack?.audioBuffer && specVizLeft?.updateProgressIndicator) { specVizLeft.updateProgressIndicator(clampedGlobalTime, leftTrack.parameters.offsetSeconds, leftTrack.audioBuffer.duration); } const rightTrack = tracks[1]; if (multiTrackModeActive && rightTrack?.audioBuffer && waveformVizRight?.updateProgressIndicator) { waveformVizRight.updateProgressIndicator(clampedGlobalTime, rightTrack.parameters.offsetSeconds, rightTrack.audioBuffer.duration); } if (multiTrackModeActive && rightTrack?.audioBuffer && specVizRight?.updateProgressIndicator) { specVizRight.updateProgressIndicator(clampedGlobalTime, rightTrack.parameters.offsetSeconds, rightTrack.audioBuffer.duration); }
      }
     /** rAF loop function */
     function updateUIBasedOnContextTime(timestamp) { if (globalPlaybackState !== 'playing') { rAFUpdateHandle = null; return; } const estimatedGlobalTime = calculateEstimatedSourceTime(); updateUIWithTime(estimatedGlobalTime); rAFUpdateHandle = requestAnimationFrame(updateUIBasedOnContextTime); }
