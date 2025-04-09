@@ -128,17 +128,49 @@ AudioApp.waveformVisualizer = (function() {
              drawWaveformInternal();
         }
 
-        function updateProgressIndicator(globalCurrentTime, trackOffsetSeconds, trackDurationSeconds) {
-             // Logging removed for brevity, add back if needed
-             if (!waveformCanvas || !waveformProgressIndicator) { return; }
-             const canvasWidth = waveformCanvas.clientWidth;
-             if (isNaN(trackDurationSeconds) || trackDurationSeconds <= 0 || canvasWidth <= 0) { waveformProgressIndicator.style.left = "0px"; waveformProgressIndicator.className = 'playback-position-indicator inactive'; return; }
-             const trackEffectiveTime = globalCurrentTime - trackOffsetSeconds; let indicatorLeft = "0px"; let indicatorClass = 'playback-position-indicator';
-             if (trackEffectiveTime < 0) { indicatorLeft = "0px"; indicatorClass += ' inactive'; }
-             else if (trackEffectiveTime > trackDurationSeconds) { indicatorLeft = canvasWidth + "px"; indicatorClass += ' inactive'; }
-             else { const fraction = trackEffectiveTime / trackDurationSeconds; indicatorLeft = (fraction * canvasWidth) + "px"; }
-             waveformProgressIndicator.style.left = indicatorLeft; waveformProgressIndicator.className = indicatorClass;
+            /**
+     * Updates the position and style of the progress indicator overlay.
+     * @param {number} globalCurrentTime - The current global timeline time in seconds.
+     * @param {number} trackOffsetSeconds - The offset of this track in seconds.
+     * @param {number} trackDurationSeconds - The total duration of this track's audio in seconds.
+     * @public
+     */
+    function updateProgressIndicator(globalCurrentTime, trackOffsetSeconds, trackDurationSeconds) {
+        // *** ADD LOGGING (Ensure it's present) ***
+        console.log(`WaveformViz (${elementSuffix}): updateProgressIndicator - globalT=${globalCurrentTime?.toFixed(3)}, offset=${trackOffsetSeconds?.toFixed(3)}, duration=${trackDurationSeconds?.toFixed(3)}`);
+
+        if (!waveformCanvas || !waveformProgressIndicator) {
+             console.log(`WaveformViz (${elementSuffix}): Indicator update skipped - elements missing.`);
+             return;
         }
+        const canvasWidth = waveformCanvas.clientWidth;
+        if (isNaN(trackDurationSeconds) || trackDurationSeconds <= 0 || canvasWidth <= 0) {
+            console.log(`WaveformViz (${elementSuffix}): Indicator update skipped - invalid state (Dur:${trackDurationSeconds}, Width:${canvasWidth}). Resetting position.`);
+            waveformProgressIndicator.style.left = "0px";
+            waveformProgressIndicator.className = 'playback-position-indicator inactive';
+            return;
+        }
+
+        const trackEffectiveTime = globalCurrentTime - trackOffsetSeconds;
+        let indicatorLeft = "0px";
+        let indicatorClass = 'playback-position-indicator';
+        let state = "pre";
+
+        if (trackEffectiveTime < 0) {
+            indicatorLeft = "0px"; indicatorClass += ' inactive'; state = "pre";
+        } else if (trackEffectiveTime > trackDurationSeconds) {
+            indicatorLeft = canvasWidth + "px"; indicatorClass += ' inactive'; state = "post";
+        } else {
+            const fraction = trackEffectiveTime / trackDurationSeconds;
+            indicatorLeft = (fraction * canvasWidth) + "px"; state = "active";
+        }
+
+        // *** ADD LOGGING (Ensure it's present) ***
+        console.log(`WaveformViz (${elementSuffix}): effectiveT=${trackEffectiveTime.toFixed(3)}, state=${state}, left=${indicatorLeft}, class=${indicatorClass}`);
+
+        waveformProgressIndicator.style.left = indicatorLeft;
+        waveformProgressIndicator.className = indicatorClass;
+    }
 
         function clearVisuals() {
             console.log(`WaveformVisualizer (${elementSuffix}): Clearing visuals and cache.`);

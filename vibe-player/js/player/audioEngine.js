@@ -395,35 +395,42 @@ AudioApp.audioEngine = (function () {
         });
     }
 
-    /**
-     * Seeks all tracks to positions relative to a global target time, respecting offsets.
-     * Called by app.js after calculating the global target time.
-     * @param {Map<string, number>} trackSeekTimes - Map of { trackId: targetSourceTime }
-     * @public
-     */
-    function seekAllTracks(trackSeekTimes) {
-        console.log(`AudioEngine: Seeking multiple tracks...`, trackSeekTimes);
-        trackSeekTimes.forEach((targetSourceTime, trackId) => {
-            seekTrack(trackId, targetSourceTime); // Use individual seek function
-        });
-    }
+         /**
+      * Seeks all tracks to positions relative to a global target time, respecting offsets.
+      * Called by app.js after calculating the global target time.
+      * @param {Map<string, number>} trackSeekTimes - Map of { trackId: targetSourceTime }
+      * @public
+      */
+     function seekAllTracks(trackSeekTimes) {
+          // *** ADD LOGGING ***
+          console.log(`AudioEngine: seekAllTracks received Map:`);
+          trackSeekTimes.forEach((time, id) => {
+               console.log(`  - ${id}: ${time.toFixed(3)}s`);
+          });
+          // *** END LOGGING ***
 
-    // --- NEW Track-Specific Control Methods ---
+          trackSeekTimes.forEach((targetSourceTime, trackId) => {
+               seekTrack(trackId, targetSourceTime); // Use individual seek function
+          });
+     }
 
-    /**
-     * Seeks a specific track to a target source time.
-     * @param {string} trackId
-     * @param {number} targetSourceTime
-     * @public
-     */
-    function seekTrack(trackId, targetSourceTime) {
-        const nodes = trackNodesMap.get(trackId);
-        const duration = nodes?.workletNode?.bufferDuration; // Need way to get duration if buffer isn't stored here
-        // We might need to pass duration or get it from app.js? Assume valid time for now.
-        const clampedTime = Math.max(0, targetSourceTime); // Basic clamping
-        console.log(`AudioEngine: Seeking track ${trackId} to ${clampedTime.toFixed(3)}s`);
-        postMessageToTrack(trackId, {type: 'seek', positionSeconds: clampedTime});
-    }
+     /**
+      * Seeks a specific track to a target source time.
+      * @param {string} trackId
+      * @param {number} targetSourceTime
+      * @public
+      */
+     function seekTrack(trackId, targetSourceTime) {
+          const nodes = trackNodesMap.get(trackId);
+          // Duration check is difficult here, rely on app.js clamping if needed
+          const clampedTime = Math.max(0, targetSourceTime);
+
+          // *** ADD LOGGING ***
+          console.log(`AudioEngine: Seeking track ${trackId} WORKLET to ${clampedTime.toFixed(3)}s`);
+          // *** END LOGGING ***
+
+          postMessageToTrack(trackId, { type: 'seek', positionSeconds: clampedTime });
+     }
 
     /**
      * Plays a specific track (sends 'play' message).

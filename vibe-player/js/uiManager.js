@@ -814,22 +814,24 @@ AudioApp.uiManager = (function () {
         setPlayButtonState: setPlayButtonState,
         updateTimeDisplay: updateTimeDisplay,
         updateSeekBar: updateSeekBar,
-        updateDriftDisplay: updateDriftDisplay, // New
+        updateDriftDisplay: updateDriftDisplay,
         enablePlaybackControls: enablePlaybackControls,
         enableSeekBar: enableSeekBar,
         getJumpTime: getJumpTime,
-        // Track Controls (Getters/Setters maybe added later if needed by app.js)
-        // setSliderValue: setSliderValue, // Expose if needed externally? Probably not.
-        setDelayValue: setDelayValue, // Needed to update display after parsing
-        getDelaySeconds: getDelaySeconds, // Needed by app.js
+        // Track Controls
         setLinkButtonState: setLinkButtonState, // Needed by app.js to set initial state
         enableTrackControls: enableTrackControls, // Needed by app.js
+        // *** ADD THESE FOR DELAY HANDLING ***
+        parseDelayInput: parseDelayInput, // Expose parser
+        formatDelaySeconds: formatDelaySeconds, // Expose formatter
+        setDelayValue: setDelayValue, // Expose setter for UI update
         // VAD Controls/Display (Left Track Only)
         setSpeechRegionsText: setSpeechRegionsText,
         updateVadDisplay: updateVadDisplay,
         enableVadControls: enableVadControls,
         updateVadProgress: updateVadProgress,
         showVadProgress: showVadProgress
+        // Removed internal helper setSliderValue from public interface
     };
-})();
+})(); // End of AudioApp.uiManager IIFE
 // --- /vibe-player/js/uiManager.js ---
