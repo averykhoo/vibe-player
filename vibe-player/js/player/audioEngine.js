@@ -258,8 +258,7 @@ AudioApp.audioEngine = (function () {
 
         workletNode.port.onmessage = (event) => {
             const data = event.data;
-            // Ensure message includes trackId (it should, from modified processor)
-            const messageTrackId = data.trackId || trackId; // Fallback to function arg
+            const messageTrackId = data.trackId || trackId;
 
             switch (data.type) {
                 case 'status':
@@ -268,7 +267,7 @@ AudioApp.audioEngine = (function () {
                         dispatchEngineEvent('audioapp:workletReady', {trackId: messageTrackId});
                     } else if (data.message === 'Playback ended') {
                         dispatchEngineEvent('audioapp:playbackEnded', {trackId: messageTrackId});
-                    } // Processor cleaned up status is just logged
+                    }
                     break;
                 case 'error':
                     console.error(`[WorkletError ${messageTrackId}] ${data.message}`);
@@ -286,10 +285,13 @@ AudioApp.audioEngine = (function () {
                     });
                     break;
                 case 'time-update':
-                    // Dispatch event with trackId so app.js can store time per track if needed later,
-                    // although global time is primary for UI now.
-                    // Maybe not needed if app.js doesn't use it? Keep for potential future use/debug.
-                    // dispatchEngineEvent('audioapp:timeUpdated', { currentTime: data.currentTime, trackId: messageTrackId });
+                    // *** MODIFICATION START: Dispatch time update event ***
+                    if (typeof data.currentTime === 'number') {
+                         dispatchEngineEvent('audioapp:timeUpdated', { currentTime: data.currentTime, trackId: messageTrackId });
+                    } else {
+                         console.warn(`[AudioEngine] Received malformed time-update from ${messageTrackId}:`, data);
+                    }
+                    // *** MODIFICATION END ***
                     break;
                 default:
                     console.warn(`[AudioEngine] Unhandled message from worklet ${messageTrackId}:`, data.type);
@@ -303,7 +305,7 @@ AudioApp.audioEngine = (function () {
                 error: new Error("Processor crashed"),
                 trackId: trackId
             });
-            cleanupTrack(trackId); // Attempt cleanup
+            cleanupTrack(trackId);
         };
         console.log(`AudioEngine: Message handler set up for ${trackId}.`);
     }
@@ -382,20 +384,27 @@ AudioApp.audioEngine = (function () {
     // --- Playback Control Methods (Public - Adapted for Multi-Track) ---
 
     /**
-     * Toggles playback for all currently active/managed tracks.
-     * Assumes app.js handles readiness checks and context resuming.
-     * @param {boolean} play - True to play, false to pause.
+     * Sends pause command to all tracks, OR used to be play (now deprecated for play).
+     * app.js now uses playTrack() for starting playback individually.
+     * @param {boolean} play - If false, sends 'pause'. If true, does nothing (legacy).
      * @public
      */
     function togglePlayPause(play) {
-        const messageType = play ? 'play' : 'pause';
-        console.log(`AudioEngine: Sending '${messageType}' to all managed tracks.`);
-        trackNodesMap.forEach((nodes, trackId) => {
-            postMessageToTrack(trackId, {type: messageType});
-        });
+        if (play) {
+            // *** MODIFICATION START: Deprecate play=true case ***
+            console.warn("AudioEngine: togglePlayPause(true) called, but app.js should use playTrack() for starting playback.");
+            // Do nothing, app.js handles starting via playTrack()
+            // *** MODIFICATION END ***
+        } else {
+            // Send pause to all tracks
+            const messageType = 'pause';
+            console.log(`AudioEngine: Sending '${messageType}' to all managed tracks.`);
+            trackNodesMap.forEach((nodes, trackId) => {
+                postMessageToTrack(trackId, {type: messageType});
+            });
+        }
     }
-
-         /**
+    /**
       * Seeks all tracks to positions relative to a global target time, respecting offsets.
       * Called by app.js after calculating the global target time.
       * @param {Map<string, number>} trackSeekTimes - Map of { trackId: targetSourceTime }
@@ -692,14 +701,13 @@ AudioApp.audioEngine = (function () {
     // --- Public Interface ---
     return {
         init: init,
-        setupTrack: setupTrack, // New setup function per track
-        cleanupTrack: cleanupTrack, // Expose single track cleanup
-        // Removed loadAndProcessFile
+        setupTrack: setupTrack,
+        cleanupTrack: cleanupTrack,
         resampleTo16kMono: resampleTo16kMono,
-        // Global Controls (now potentially acting on multiple tracks)
-        togglePlayPause: togglePlayPause, // Sends play/pause to all tracks
-        seekAllTracks: seekAllTracks, // Seeks all tracks respecting offsets
-        setGain: setGain, // Master gain
+        // Global Controls
+        togglePlayPause: togglePlayPause, // Play=true case is now deprecated here
+        seekAllTracks: seekAllTracks,
+        setGain: setGain,
         // Track-Specific Controls
         playTrack: playTrack,
         pauseTrack: pauseTrack,
