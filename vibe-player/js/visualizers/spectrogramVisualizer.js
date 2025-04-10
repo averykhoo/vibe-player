@@ -136,8 +136,8 @@ AudioApp.spectrogramVisualizer = (function(globalFFT) {
      * @public
      */
     function updateProgressIndicator(globalCurrentTime, trackOffsetSeconds, trackDurationSeconds) {
-        // *** ADD LOGGING (Ensure it's present) ***
-        console.log(`SpectroViz (${elementSuffix}): updateProgressIndicator - globalT=${globalCurrentTime?.toFixed(3)}, offset=${trackOffsetSeconds?.toFixed(3)}, duration=${trackDurationSeconds?.toFixed(3)}`);
+        // // *** ADD LOGGING (Ensure it's present) ***
+        // console.log(`SpectroViz (${elementSuffix}): updateProgressIndicator - globalT=${globalCurrentTime?.toFixed(3)}, offset=${trackOffsetSeconds?.toFixed(3)}, duration=${trackDurationSeconds?.toFixed(3)}`);
 
         if (!spectrogramCanvas || !spectrogramProgressIndicator) {
              console.log(`SpectroViz (${elementSuffix}): Indicator update skipped - elements missing.`);
@@ -165,8 +165,8 @@ AudioApp.spectrogramVisualizer = (function(globalFFT) {
             indicatorLeft = (fraction * canvasWidth) + "px"; state = "active";
         }
 
-        // *** ADD LOGGING (Ensure it's present) ***
-        console.log(`SpectroViz (${elementSuffix}): effectiveT=${trackEffectiveTime.toFixed(3)}, state=${state}, left=${indicatorLeft}, class=${indicatorClass}`);
+        // // *** ADD LOGGING (Ensure it's present) ***
+        // console.log(`SpectroViz (${elementSuffix}): effectiveT=${trackEffectiveTime.toFixed(3)}, state=${state}, left=${indicatorLeft}, class=${indicatorClass}`);
 
         spectrogramProgressIndicator.style.left = indicatorLeft;
         spectrogramProgressIndicator.className = indicatorClass;

@@ -136,8 +136,8 @@ AudioApp.waveformVisualizer = (function() {
      * @public
      */
     function updateProgressIndicator(globalCurrentTime, trackOffsetSeconds, trackDurationSeconds) {
-        // *** ADD LOGGING (Ensure it's present) ***
-        console.log(`WaveformViz (${elementSuffix}): updateProgressIndicator - globalT=${globalCurrentTime?.toFixed(3)}, offset=${trackOffsetSeconds?.toFixed(3)}, duration=${trackDurationSeconds?.toFixed(3)}`);
+        // // *** ADD LOGGING (Ensure it's present) ***
+        // console.log(`WaveformViz (${elementSuffix}): updateProgressIndicator - globalT=${globalCurrentTime?.toFixed(3)}, offset=${trackOffsetSeconds?.toFixed(3)}, duration=${trackDurationSeconds?.toFixed(3)}`);
 
         if (!waveformCanvas || !waveformProgressIndicator) {
              console.log(`WaveformViz (${elementSuffix}): Indicator update skipped - elements missing.`);
@@ -165,8 +165,8 @@ AudioApp.waveformVisualizer = (function() {
             indicatorLeft = (fraction * canvasWidth) + "px"; state = "active";
         }
 
-        // *** ADD LOGGING (Ensure it's present) ***
-        console.log(`WaveformViz (${elementSuffix}): effectiveT=${trackEffectiveTime.toFixed(3)}, state=${state}, left=${indicatorLeft}, class=${indicatorClass}`);
+        // // *** ADD LOGGING (Ensure it's present) ***
+        // console.log(`WaveformViz (${elementSuffix}): effectiveT=${trackEffectiveTime.toFixed(3)}, state=${state}, left=${indicatorLeft}, class=${indicatorClass}`);
 
         waveformProgressIndicator.style.left = indicatorLeft;
         waveformProgressIndicator.className = indicatorClass;
