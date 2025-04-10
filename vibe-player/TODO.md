@@ -5,87 +5,66 @@ This file tracks potential improvements, features, and known issues requiring fu
 
 ## Bugs / Issues
 
-*   **[INVESTIGATE] Formant Shift:** The formant shift feature provided by Rubberband WASM is currently non-functional (no audible effect despite parameter being set). Requires deeper investigation. *(Deferred)*
+*   **[INVESTIGATE] Formant Shift:** The formant shift feature provided by Rubberband WASM is currently non-functional (no audible effect). Requires deeper investigation. *(Deferred)*
+*   **[RESOLVED - Post-MVP Fix] Pause Position Bug:** Play position jumped back on pause. Fixed by correcting the order of operations in `app.js::handlePlayPause`.
+*   **[RESOLVED - Post-MVP Fix] Delay Change Bug:** Changing delay offset while playing didn't affect audio. Fixed by triggering a seek in `app.js::handleDelayChange`.
 
-## Current Implementation Plan (Multi-Track MVP)
+## Immediate Implementation (Multi-Track Feature Set & Refactor)
 
-*   **Phase 1 & 1.5: UI Structure & Left Track Baseline + Fixes (Completed)**
-    *   Refactored state (`app.js`) and audioOkay, let's update `TODO.md` to reflect the completion of Phase 1.5 fixes and outline the remaining tasks for Phases 2 and 3 of the multi-track MVP, along with longer-term goals.
+**Goal:** Implement core multi-track features (Volume, Mute, Solo, Swap, Multi-VAD) on a refactored architecture using track data indirection for robustness and extensibility.
 
-*(Guideline P4.1.4: Full File format)*
-*(Guideline P3.4: File Identification Comments)*
+**Order of Operations:**
 
-```markdown
-<!-- /vibe-player/TODO.md -->
-# Vibe Player - TODO & Future Ideas
-
-This file tracks potential improvements, features, and known issues requiring further investigation for the Vibe Player project.
-
-## Bugs / Issues
-
-*   **[INVESTIGATE] Formant Shift:** The formant shift feature provided by Rubberband WASM is currently non-functional (no audible effect despite parameter being set). Requires deeper investigation into Rubberband flags, potential WAS engine (`audioEngine.js`) for multi-track support.
-    *   Implemented progressive UI (`index.html`, `uiManager.js`, `styles.css`) showing Left track first.
-    *   Implemented visualizer factory pattern and instantiation (`visualizers/*.js`, `app.js`).
-    *   Fixed visualizer initialization, updates, gain bug, pan timing.
-    *   Left track loads, plays, seeks correctly with visuals and VAD.
-    *   "Load Right Track" button enabled.
-
-*   **Phase 2: Adding Right Track & Basic Multi-Track UI (Next)**
-    *   Implement Right track loading (`app.js`, `uiManager.js`).
-    *   Instantiate Right visualizers upon Right track ready (`app.js`).
-    *   Activate multi-track UI display (`uiManager.js`, `app.js`).
-    *   Implement "Remove Right Track" functionality (`app.js`, `uiManager.js`, `audioEngine.js`).
-    *   Adapt global Play/Pause/Seek readiness checks for multi-track mode (`app.js`).
-    *   **(Testing Step)**
-
-*   **Phase 3: Essential Multi-Track Controls & Interaction (Following Phase 2)**
-    *   Implement **Individual Volume** controls (UI, `app.js`, `audioEngine.js`).
-    *   ImplementM build issues, or alternative approaches if the library feature is fundamentally broken in this context.
-*   **[RESOLVED - Phase 1.5] Master Gain Display/Behavior Bug:** Setting Master Gain to 0x caused volume jump. Fixed by targeting near-zero value in `audioEngine.setGain`.
-*   **[RESOLVED - Phase 1.5] Initial Pan Error:** Harmless console warning "Cannot set pan - PannerNode/Context not ready". Fixed by moving initial `setPan` call to `handleWorkletReady`.
-*   **[RESOLVED - Phase 1.5] Right Track Visuals:** Did not appear initially. Fixed viz instantiation timing and drawing calls in `app.js`.
-*   **[RESOLVED - Phase 1.5] Left Progress Indicator:** Was not moving. Fixed by refactoring visualizers to use factory pattern for independent instances.
-*   **[RESOLVED - Phase 1.5] Right Track Markers:** Rendered incorrectly. Fixed by positioning markers after UI section becomes visible in `uiManager.js`.
-*   **[RESOLVED - Phase 1.5] Speed Control UI Update:** Slider UI didn't update correctly when linked. Fixed by removing incorrect `setSliderValue` call in `app.js`.
-
-## Immediate Implementation (Multi-Track MVP)
-
-*   **Phase 1 & 1.5: UI Structure & Left Track Baseline & Fixes (COMPLETE)**
-    *   Backend state/engine refactored for multi-track.
-    *   Progressive UI structure added (hidden elements for Track Right).
-    *   Left track loads, plays, displays visuals correctly.
-    *   "Load Right Track" button enabled.
-    *   Initial bugs (Gain, Pan, Viz init/update, Markers) fixed.
-
-*   **Phase 2: Adding Right Track & Basic Multi-Track UI (NEXT)**
-    *   **Goal:** User can enable multi-track mode, load the Right track, see its controls/visuals appear, have global controls affect both tracks, and remove the Right track to revert to single-track mode.
+1.  **Phase R1: Architectural Refactor - Track Indirection (NEXT)**
+    *   **Goal:** Modify the core application structure to manage track data independently from UI channel assignment (Left/Right).
     *   **Tasks:**
-        *   [ ] **`app.js`:** Implement Right track loading (`handleFileSelect` logic for 'right').
-        *   [ ] **`app.js`:** Update `handleWorkletReady` for Right track to correctly trigger UI visibility and control enabling.
-        *   [ ] **`uiManager.js`:** Ensure **Shared Speed** control logic fully (UI already present, logic in `app.js`).
-    *   Implement **Delay Input** (UI, `uiManager.js` parser, `app.js` state).
-    *   Implement **Offset Logic** in global Play/Pause/Seek handlers (`app.js`).
-    *   Implement offset-aware **Dual Visualization Updates** (`app.js` calls to visualizer `updateProgressIndicator`).
-    *   Implement **Track Ending** detection logic (`app.js`).
+        *   [ ] **`app.js`:** Refactor state to use `tracksData` array and `left/rightChannelTrackIndex` pointers. Adapt helper functions.
+        *   [ ] **`audioEngine.js`:** Modify to accept numeric `trackId`s (0, 1, ...) instead of string IDs (`'track_left'`). Update internal map, worklet communication, and public methods accordingly.
+        *   [ ] **`app.js`:** Update event handlers and logic to map UI sides ('left'/'right') to track indices when accessing `tracksData` or calling `audioEngine`.
+        *   [ ] **`uiManager.js`:** Adapt UI update functions as needed. Implement necessary logic for refreshing UI elements based on current L/R track index assignments (e.g., `refreshTrackUI(trackSide, trackIndex)` helper).
+        *   [ ] **`app.js`:** Implement the simplified `handleSwapTracks` using index pointer swapping and UI refresh.
+    *   **(Testing Step)** Verify loading, basic playback, seeking, linked speed/pitch, and swap work correctly after refactor.
+
+2.  **Phase M1: Mute & Solo Implementation (After Refactor)**
+    *   **Goal:** Implement working Mute and Solo buttons for individual tracks.
+    *   **Tasks:**
+        *   [ ] **`app.js`:** Implement `handleMuteToggle`, `handleSoloToggle` to update `isMuted`/`isSoloed` flags in `tracksData`.
+        *   [ ] **`app.js`:** Implement `applyMuteSoloState` helper function to calculate effective mute state based on all track flags and call `audioEngine.setMute`.
+        *   [ ] **`uiManager.js`:** Implement `setMuteButtonState`/`setSoloButtonState` for visual feedback. Ensure listeners call `app.js` handlers.
     *   **(Testing Step)**
+
+3.  **Phase M2: Right Track VAD (After Mute/Solo)**
+    *   **Goal:** Enable VAD processing and waveform highlighting for the Right track.
+    *   **Tasks:**
+        *   [ ] **`app.js`:** Modify `runVadInBackground` to be track-agnostic (accept `trackIndex`). Call it for the right track index upon its `audioLoaded`.
+        *   [ ] **`app.js`:** Ensure VAD results are stored in the correct `tracksData[index].vad`. Update the correct visualizer (`vizRefs.waveform`).
+        *   [ ] **`uiManager.js`:** Update VAD Tuning section title to clarify sliders only affect Left Track VAD recalculation (Decision: Option A - Simpler). Ensure VAD progress/status text indicates the correct track ('Left' or 'Right').
+    *   **(Testing Step)**
+
+4.  **Phase M3: Individual Volume & Unlinked Pitch (Final MVP Features)**
+    *   **Goal:** Ensure individual track volume sliders work correctly and verify unlinked pitch.
+    *   **Tasks:**
+        *   [ ] **`app.js`:** Ensure `handleVolumeChange` correctly maps the UI side (`_left`/`_right`) to the appropriate `trackIndex` and updates `tracksData[trackIndex].parameters.volume`. Ensure it calls `audioEngine.setVolume(trackIndex, newVolume)`.
+        *   [ ] **Testing:** Thoroughly test unlinked pitch mode toggle and control.
+        *   [ ] **Testing:** Thoroughly test individual volume sliders.
+    *   **(Testing Step - Final MVP Features)**
 
 ## Deferred Features / Enhancements (Post-MVP)
 
 *   **UI / UX:**
-    *   **Multi-Track Controls:** Implement Mute/Solo buttons & logic. Implement Swap L/R button & logic. Implement Link/Unlink buttons & logic (Pitch, potentially Volume).
-    *   **Individual Speed/Pitch:** Add UI and logic for unlinked Speed/Pitch controls (requires significant timing logic changes).
+    *   **Individual Speed:** Add UI and logic for unlinked Speed controls (requires significant timing logic changes).
     *   **XP.css Theme:** Upgrade styling from 98.css to XP.css (or similar).
-    *   **Parameter Smoothing:** Investigate smoother transitions for Speed/Pitch changes if possible.
+    *   **Windows 98 Sounds:** Add nostalgic UI sound effects on interactions.
+    *   **Parameter Smoothing:** Investigate smoother transitions for Speed/Pitch changes.
     *   **Error Handling UI:** Display user-friendly error messages in the UI overlay/section.
     *   **Preset Management:** Allow saving/loading sets of Speed/Pitch/Gain/Volume/Offset/VAD settings.
-    *   **Windows 98 Sounds:** Add nostalgic UI sound effects on interactions.
     *   **Keyboard Bindings:** Make keybinds configurable (UI + LocalStorage). Add Reset button. Add more bindings (e.g., speed up/down, reset controls, Mute/Solo L/R). Add 'Back to Start' button.
-    *   **Drift Display:** Implement actual calculation and display of ms drift between tracks (requires reliable timing reports or analysis).
+    *   **Drift Display:** Implement actual calculation and display of ms drift between tracks (reliant on worklet time reports). *(Partially done, needs verification)*
 *   **Visualizations:**
-    *   **VAD for Right Track:** Implement VAD analysis and display/highlighting.
     *   **Graphical Offset:** Implement shifting/scaling of waveform/spectrogram content based on offset.
     *   **Toggle Viz Type:** Allow toggling track display between Waveform and Spectrogram.
     *   **VAD Probability Graph:** Add graph showing VAD probabilities and thresholds (likely Left only initially).
+    *   **VAD Threshold Controls for Right Track:** Add separate UI controls if desired (Option B).
 *   **Audio / Sync:**
     *   **Active Drift Correction:** Implement periodic re-syncing via seek *if testing shows significant drift*. Add manual "Resync" button first.
 *   **Architecture / Code Health:**
@@ -95,5 +74,6 @@ This file tracks potential improvements, features, and known issues requiring fu
     *   **Review `app.js` / `audioEngine.js` Complexity:** Monitor and refactor as features grow.
     *   **Automated Testing:** Introduce unit/integration tests.
     *   **Spectrogram Cache:** Verify robustness with multiple instances.
+    *   **Track Deletion/Reordering:** Consider support beyond just L/R swap.
 
 <!-- /vibe-player/TODO.md -->
