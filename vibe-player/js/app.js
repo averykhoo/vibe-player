@@ -1,26 +1,24 @@
 // --- /vibe-player/js/app.js ---
 // Creates the global namespace and orchestrates the application flow.
-// MUST be loaded FIRST after libraries.
+// REFACTORED to use track data indirection (tracksData array, left/right indices)
+// for managing multiple tracks robustly.
 
 /**
  * @namespace AudioApp
  * @description Main application namespace for Vibe Player.
  */
-var AudioApp = AudioApp || {}; // Create the main application namespace
+var AudioApp = AudioApp || {};
 
-// Design Decision: Use an IIFE to encapsulate the main application logic
-// and expose only the `init` function via the AudioApp namespace.
 AudioApp = (function () {
     'use strict';
 
     // === Module Dependencies ===
-    // Access modules via AudioApp.* where needed, after init check.
+    // Access modules via AudioApp.* after init check.
 
-    // --- Application State ---
+    // --- Application State (Refactored) ---
     /**
-     * @typedef {object} TrackState
-     * @property {'track_left' | 'track_right'} id - Unique track identifier.
-     * @property {'left' | 'right'} side - UI side identifier.
+     * @typedef {object} TrackState Represents the state of a single audio track.
+     * @property {number} id - The numeric index of this track in the tracksData array.
      * @property {File|null} file - The original audio file object.
      * @property {AudioBuffer|null} audioBuffer - The decoded audio buffer.
      * @property {boolean} isLoading - Is the track currently loading/decoding?
@@ -31,71 +29,77 @@ AudioApp = (function () {
      * @property {number} parameters.volume - Individual track volume (0.0 to 1.5+).
      * @property {number} parameters.speed - Individual track target speed (used if unlinked).
      * @property {number} parameters.pitch - Individual track target pitch (used if unlinked).
-     * @property {number} parameters.pan - Stereo pan (-1 Left, 0 Center, 1 Right).
-     * @property {boolean} parameters.isMuted - User-requested mute state.
-     * @property {boolean} parameters.isSoloed - User-requested solo state.
-     * @property {object} vad - VAD related state (currently only for left track).
+     * @property {number} parameters.pan - Stereo pan (-1 Left, 0 Center, 1 Right). (Set by app.js based on multi-channel mode)
+     * @property {boolean} parameters.isMuted - User-requested mute state. (Mute/Solo logic TBD)
+     * @property {boolean} parameters.isSoloed - User-requested solo state. (Mute/Solo logic TBD)
+     * @property {object} vad - VAD related state (Can now apply to any track, UI TBD).
      * @property {VadResult|null} vad.results - Results from VAD analysis.
      * @property {boolean} vad.isProcessing - Is VAD currently running for this track?
-     * @property {number|null} playTimeoutId - ID of the scheduled 'play' command timeout. **NEW**
-     * @property {number} lastReportedTime - Last source time reported by this track's worklet. **NEW**
+     * @property {number|null} playTimeoutId - ID of the scheduled 'play' command timeout.
+     * @property {number} lastReportedTime - Last source time reported by this track's worklet.
      */
-    function createInitialTrackState(side) {
+    /**
+     * Creates an initial state object for a track at a given index.
+     * @param {number} trackIndex - The numeric index/ID for the track.
+     * @returns {TrackState}
+     */
+    function createInitialTrackState(trackIndex) {
         return {
-            id: `track_${side}`,
-            side: side,
-            file: null,
-            audioBuffer: null,
-            isLoading: false,
-            isReady: false,
-            hasEnded: false,
+            id: trackIndex, // Use index as ID
+            file: null, audioBuffer: null, isLoading: false, isReady: false, hasEnded: false,
             parameters: {
                 offsetSeconds: 0.0,
                 volume: 1.0,
                 speed: 1.0,
                 pitch: 1.0,
-                pan: (side === 'left' ? -1 : 1),
+                pan: 0.0,
                 isMuted: false,
                 isSoloed: false,
-            },
+            }, // Default pan = 0
             vad: {results: null, isProcessing: false,},
-            playTimeoutId: null, // ** NEW **
-            lastReportedTime: 0.0, // ** NEW ** Initialize reported time
+            playTimeoutId: null, lastReportedTime: 0.0,
         };
     }
 
-    let tracks = [createInitialTrackState('left'), createInitialTrackState('right')];
-    let multiTrackModeActive = false;
+    /** @type {Array<TrackState | null>} Array holding track data, null indicates empty slot. */
+    let tracksData = [];
+    /** @type {number} Index in tracksData assigned to the Left UI channel, or -1 if none. */
+    let leftChannelTrackIndex = -1;
+    /** @type {number} Index in tracksData assigned to the Right UI channel, or -1 if none. */
+    let rightChannelTrackIndex = -1;
+    /** @type {boolean} True if both Left and Right channels have valid tracks assigned, enabling L/R panning. */
+    let isMultiChannelModeActive = false;
+
+    // Global Playback State
     let speedLinked = true;
     let pitchLinked = true;
     let globalPlaybackState = 'stopped'; // 'stopped', 'playing', 'paused'
-    let playbackStartTimeContext = null; // AudioContext time when playback last started/resumed
-    let playbackStartSourceTime = 0.0; // Global source time when playback last started/resumed/paused/seeked
-    let rAFUpdateHandle = null; // Handle for requestAnimationFrame loop
-    let currentGlobalSpeed = 1.0; // Current effective speed for global time calculation
-    let vadModelReady = false;
-    let debouncedSyncEngine = null; // Debounced function for seeking engine after rapid changes
+    let playbackStartTimeContext = null;
+    let playbackStartSourceTime = 0.0;
+    let rAFUpdateHandle = null;
+    let currentGlobalSpeed = 1.0;
+    let vadModelReady = false; // VAD model readiness (shared)
+    let debouncedSyncEngine = null;
     const SYNC_DEBOUNCE_WAIT_MS = 300;
 
     // --- Visualizer Instance References ---
-    let waveformVizLeft = null;
-    let specVizLeft = null;
-    let waveformVizRight = null;
-    let specVizRight = null;
+    // These are still tied to the UI *side* ('left'/'right')
+    /** @type {object | null} Holds references to visualizer instances, keyed by UI side. */
+    let vizRefs = {
+        left: {waveform: null, spec: null},
+        right: {waveform: null, spec: null}
+    };
 
     // --- Initialization ---
     /**
-     * Initializes the application: checks dependencies, creates visualizers,
-     * sets up event listeners, and resets the UI.
+     * Initializes the application.
      * @public
      */
     function init() {
         console.log("AudioApp: Initializing...");
         // Dependency Check
         if (!AudioApp.uiManager || !AudioApp.audioEngine || !AudioApp.waveformVisualizer?.createInstance || !AudioApp.spectrogramVisualizer?.createInstance || !AudioApp.vadAnalyzer || !AudioApp.sileroWrapper || !AudioApp.Constants || !AudioApp.Utils) {
-            let missing = []; /* ... add specific checks ... */
-            console.error(`AudioApp: CRITICAL - Required modules/factories missing. Check script load order.`);
-            AudioApp.uiManager?.setFileInfo('left', "Initialization Error: Missing modules.");
+            console.error(`AudioApp: CRITICAL - Required modules missing.`); /* Error msg */
             return;
         }
 
@@ -103,44 +107,80 @@ AudioApp = (function () {
         AudioApp.uiManager.init();
         AudioApp.audioEngine.init();
 
-        // Create Left Visualizer Instances
+        // Create Left Visualizer Instances (Always tied to the 'left' UI side initially)
         try {
-            waveformVizLeft = AudioApp.waveformVisualizer.createInstance({
+            vizRefs.left.waveform = AudioApp.waveformVisualizer.createInstance({
                 canvasId: 'waveformCanvas_left',
                 indicatorId: 'waveformProgressIndicator_left'
             });
-            specVizLeft = AudioApp.spectrogramVisualizer.createInstance({
+            vizRefs.left.spec = AudioApp.spectrogramVisualizer.createInstance({
                 canvasId: 'spectrogramCanvas_left',
                 spinnerId: 'spectrogramSpinner_left',
                 indicatorId: 'spectrogramProgressIndicator_left'
             });
             console.log("AudioApp: Left visualizer instances created.");
         } catch (vizError) {
-            console.error("AudioApp: CRITICAL - Failed to create visualizer instances:", vizError);
-            AudioApp.uiManager?.setFileInfo('left', "Error: Visualizers failed to create.");
+            console.error("AudioApp: CRITICAL - Failed to create visualizer instances:", vizError); /* Error msg */
         }
 
-        setupAppEventListeners(); // Setup main event listeners
-        AudioApp.uiManager.resetUI(); // Reset UI to initial state
+        setupAppEventListeners();
+        resetAppStateAndUI(); // Use a combined reset function
         console.log("AudioApp: Initialized. Waiting for file...");
     }
 
+    // --- State Reset ---
+    /**
+     * Resets the application state (tracks, playback, etc.) and triggers a full UI reset.
+     * @private
+     */
+    function resetAppStateAndUI() {
+        console.log("AudioApp: Resetting application state and UI.");
+        // Cancel pending timeouts
+        tracksData.forEach(track => {
+            if (track?.playTimeoutId) clearTimeout(track.playTimeoutId);
+        });
+        stopUIUpdateLoop();
+
+        // Reset state variables
+        tracksData = []; // Clear track data
+        leftChannelTrackIndex = -1;
+        rightChannelTrackIndex = -1;
+        isMultiChannelModeActive = false;
+        speedLinked = true;
+        pitchLinked = true;
+        globalPlaybackState = 'stopped';
+        playbackStartTimeContext = null;
+        playbackStartSourceTime = 0.0;
+        currentGlobalSpeed = 1.0;
+        // vadModelReady remains true if already loaded
+
+        // Clear visualizer instances (Right side needs explicit clearing)
+        vizRefs.left.waveform?.clearVisuals();
+        vizRefs.left.spec?.clearVisuals();
+        vizRefs.right.waveform?.clearVisuals();
+        vizRefs.right.spec?.clearVisuals();
+        vizRefs.right.waveform = null;
+        vizRefs.right.spec = null; // Allow GC
+
+        // Reset UI to its initial single-track state
+        AudioApp.uiManager.resetUI();
+    }
+
+
     // --- Event Listener Setup ---
     /**
-     * Sets up listeners for UI events and audio engine events.
+     * Sets up listeners for UI events and audio engine events. (Listener setup itself unchanged)
      * @private
      */
     function setupAppEventListeners() {
         // File/Track Management
         document.addEventListener('audioapp:fileSelected', handleFileSelected);
         document.addEventListener('audioapp:removeTrackClicked', handleRemoveTrack);
-        document.addEventListener('audioapp:swapTracksClicked', handleSwapTracks);
-
+        document.addEventListener('audioapp:swapTracksClicked', handleSwapTracks); // Listener for swap
         // Linking
         document.addEventListener('audioapp:linkSpeedToggled', handleLinkSpeedToggle);
         document.addEventListener('audioapp:linkPitchToggled', handleLinkPitchToggle);
-
-        // Track Parameters
+        // Track Parameters (Events include '_left' or '_right' suffix)
         document.addEventListener('audioapp:volumeChanged_left', (e) => handleVolumeChange('left', e.detail.volume));
         document.addEventListener('audioapp:volumeChanged_right', (e) => handleVolumeChange('right', e.detail.volume));
         document.addEventListener('audioapp:delayChanged_left', (e) => handleDelayChange('left', e.detail.value));
@@ -149,199 +189,209 @@ AudioApp = (function () {
         document.addEventListener('audioapp:speedChanged_right', (e) => handleSpeedChange('right', e.detail.speed));
         document.addEventListener('audioapp:pitchChanged_left', (e) => handlePitchChange('left', e.detail.pitch));
         document.addEventListener('audioapp:pitchChanged_right', (e) => handlePitchChange('right', e.detail.pitch));
-        document.addEventListener('audioapp:muteToggled_left', () => handleMuteToggle('left'));
-        document.addEventListener('audioapp:muteToggled_right', () => handleMuteToggle('right'));
-        document.addEventListener('audioapp:soloToggled_left', () => handleSoloToggle('left'));
-        document.addEventListener('audioapp:soloToggled_right', () => handleSoloToggle('right'));
-
+        document.addEventListener('audioapp:muteToggled_left', () => handleMuteToggle('left')); // Listener added
+        document.addEventListener('audioapp:muteToggled_right', () => handleMuteToggle('right')); // Listener added
+        document.addEventListener('audioapp:soloToggled_left', () => handleSoloToggle('left')); // Listener added
+        document.addEventListener('audioapp:soloToggled_right', () => handleSoloToggle('right')); // Listener added
         // Global Playback & Seek
         document.addEventListener('audioapp:playPauseClicked', handlePlayPause);
         document.addEventListener('audioapp:jumpClicked', handleJump);
-        document.addEventListener('audioapp:seekRequested', handleSeek); // From canvas clicks
-        document.addEventListener('audioapp:seekBarInput', handleSeek); // From seek bar drag
+        document.addEventListener('audioapp:seekRequested', handleSeek);
+        document.addEventListener('audioapp:seekBarInput', handleSeek);
         document.addEventListener('audioapp:gainChanged', handleMasterGainChange);
-
         // VAD
-        document.addEventListener('audioapp:thresholdChanged', handleThresholdChange);
-
+        document.addEventListener('audioapp:thresholdChanged', handleThresholdChange); // Still only affects Left VAD recalc for now
         // Keyboard
         document.addEventListener('audioapp:keyPressed', handleKeyPress);
-
-        // Audio Engine Lifecycle & Errors
+        // Audio Engine Lifecycle & Errors (Events now include numeric trackId)
         document.addEventListener('audioapp:audioLoaded', handleAudioLoaded);
         document.addEventListener('audioapp:workletReady', handleWorkletReady);
         document.addEventListener('audioapp:decodingError', handleAudioError);
         document.addEventListener('audioapp:resamplingError', handleAudioError);
-        document.addEventListener('audioapp:playbackError', handleAudioError); // Not currently dispatched?
+        document.addEventListener('audioapp:playbackError', handleAudioError);
         document.addEventListener('audioapp:engineError', handleAudioError);
         document.addEventListener('audioapp:playbackEnded', handlePlaybackEnded);
         document.addEventListener('audioapp:playbackStateChanged', handlePlaybackStateChange);
-        document.addEventListener('audioapp:timeUpdated', handleTimeUpdate); // ** NEW Listener for drift **
-
+        document.addEventListener('audioapp:timeUpdated', handleTimeUpdate);
         // Window Events
         window.addEventListener('resize', handleWindowResize);
         window.addEventListener('beforeunload', handleBeforeUnload);
     }
 
-    // --- Helper Functions ---
-    /** Finds a track state object by its side ('left' or 'right'). */
-    function findTrackBySide(side) {
-        return tracks.find(t => t.side === side);
+    // --- Helper Functions (Refactored State Access) ---
+    /** Finds the first index in tracksData that is null, or adds a new slot. */
+    function findFirstAvailableSlot() {
+        const nullIndex = tracksData.findIndex(slot => slot === null);
+        if (nullIndex !== -1) return nullIndex;
+        tracksData.push(null); // Add a new slot if no empty ones found
+        return tracksData.length - 1;
     }
 
-    /** Finds a track state object by its ID ('track_left' or 'track_right'). */
-    function findTrackById(id) {
-        return tracks.find(t => t.id === id);
+    /** Safely gets track data by index. */
+    function getTrackDataByIndex(index) {
+        return (index >= 0 && index < tracksData.length) ? tracksData[index] : null;
     }
 
-    /** Checks if all currently *active* tracks are loaded and ready. */
+    /** Gets the track index currently assigned to a UI side ('left' or 'right'). */
+    function getTrackIndexForSide(side) {
+        return side === 'left' ? leftChannelTrackIndex : rightChannelTrackIndex;
+    }
+
+    /** Checks if a UI side currently has a track assigned. */
+    function isSideAssigned(side) {
+        return getTrackIndexForSide(side) !== -1;
+    }
+
+    /** Checks if all currently *assigned* tracks (in L/R channels) are loaded and ready. */
     function areAllActiveTracksReady() {
-        if (!tracks[0]?.isReady) return false;
-        if (multiTrackModeActive && !tracks[1]?.isReady) return false;
-        return true;
+        const leftTrack = getTrackDataByIndex(leftChannelTrackIndex);
+        if (!leftTrack?.isReady) return false; // Left must always be ready if assigned
+        // If right is assigned, it must also be ready
+        if (rightChannelTrackIndex !== -1) {
+            const rightTrack = getTrackDataByIndex(rightChannelTrackIndex);
+            if (!rightTrack?.isReady) return false;
+        }
+        return true; // All assigned tracks are ready
     }
 
-    /** Counts how many tracks are currently ready. */
-    function getReadyTrackCount() {
-        return tracks.filter(t => t?.isReady).length;
+    /** Counts how many valid (non-null) track state objects exist. */
+    function getLoadedTrackCount() {
+        return tracksData.filter(t => t !== null).length;
     }
 
-    /** Calculates the maximum effective duration considering track offsets. */
+    /** Calculates the maximum effective duration considering offsets of *assigned* tracks. */
     function calculateMaxEffectiveDuration() {
         let maxDuration = 0;
-        tracks.forEach(track => {
-            if (track?.audioBuffer) {
-                maxDuration = Math.max(maxDuration, track.parameters.offsetSeconds + track.audioBuffer.duration);
-            }
-        });
+        const leftTrack = getTrackDataByIndex(leftChannelTrackIndex);
+        const rightTrack = getTrackDataByIndex(rightChannelTrackIndex);
+        if (leftTrack?.audioBuffer) maxDuration = Math.max(maxDuration, leftTrack.parameters.offsetSeconds + leftTrack.audioBuffer.duration);
+        if (rightTrack?.audioBuffer) maxDuration = Math.max(maxDuration, rightTrack.parameters.offsetSeconds + rightTrack.audioBuffer.duration);
         return isNaN(maxDuration) ? 0 : maxDuration;
     }
 
 
     /**
-     * Computes and draws the waveform and spectrogram for a specific track.
-     * @param {TrackState} track - The track state object.
+     * Computes and draws visuals (waveform, spectrogram) for the track
+     * currently assigned to a specific UI side. Includes VAD highlighting
+     * on the waveform if VAD results exist for that track.
+     * @param {'left' | 'right'} side - The UI side ('left' or 'right').
      * @private
      */
-    async function drawTrackVisuals(track) {
-        if (!track?.audioBuffer) {
-            console.warn(`App: Cannot draw visuals for ${track?.side}, no buffer.`);
+    async function drawTrackVisuals(side) {
+        const trackIndex = getTrackIndexForSide(side);
+        const track = getTrackDataByIndex(trackIndex);
+        const targetVizRefs = vizRefs[side]; // Get viz refs for the target UI side
+
+        if (!track?.audioBuffer || !targetVizRefs) {
+            console.warn(`App: Cannot draw visuals for UI side ${side}, track data or viz refs missing.`);
             return;
         }
-        console.log(`App: Drawing/Redrawing visuals for ${track.side}...`);
-        try {
-            const waveformViz = (track.side === 'left') ? waveformVizLeft : waveformVizRight;
-            const specViz = (track.side === 'left') ? specVizLeft : specVizRight;
-            // Get initial VAD regions only for the left track
-            const initialRegions = (track.side === 'left') ? (track.vad.results?.regions || []) : null;
+        console.log(`App: Drawing/Redrawing visuals for track #${trackIndex} on UI side ${side}...`);
 
-            if (waveformViz?.computeAndDrawWaveform) {
-                await waveformViz.computeAndDrawWaveform(track.audioBuffer, initialRegions);
+        try {
+            // *** MODIFIED: Fetch VAD regions based on the *track's* data, not the UI side ***
+            // Check if VAD results exist *for this specific track object*.
+            const vadRegions = track.vad.results ? (track.vad.results.regions || []) : null;
+            // Log if we found regions for this track
+            // console.log(`App: Drawing visuals for track #${trackIndex} (UI: ${side}). Found ${vadRegions ? vadRegions.length : 0} VAD regions in track data.`);
+
+            // Draw Waveform (Pass VAD regions if they exist for this track)
+            if (targetVizRefs.waveform?.computeAndDrawWaveform) {
+                await targetVizRefs.waveform.computeAndDrawWaveform(track.audioBuffer, vadRegions);
             } else {
-                console.warn(`App: Waveform Visualizer for ${track.side} not available.`);
+                console.warn(`App: Waveform Visualizer for UI side ${side} not available.`);
             }
 
-            if (specViz?.computeAndDrawSpectrogram) {
-                await specViz.computeAndDrawSpectrogram(track.audioBuffer);
+            // Draw Spectrogram (Doesn't use VAD regions)
+            if (targetVizRefs.spec?.computeAndDrawSpectrogram) {
+                await targetVizRefs.spec.computeAndDrawSpectrogram(track.audioBuffer);
             } else {
-                console.warn(`App: Spectrogram Visualizer for ${track.side} not available.`);
+                console.warn(`App: Spectrogram Visualizer for UI side ${side} not available.`);
             }
         } catch (visError) {
-            console.error(`App: Error drawing visuals for ${track.side}:`, visError);
+            console.error(`App: Error drawing visuals for UI side ${side} (Track #${trackIndex}):`, visError);
         }
     }
 
 
-    // --- Event Handler Functions ---
+    // --- Event Handler Functions (Refactored Logic) ---
 
     /**
-     * Handles file selection for either the left or right track.
-     * Resets state if loading the left track. Sets up multi-track mode if loading right.
-     * Initiates audio processing via audioEngine.
-     * @param {CustomEvent<{file: File, trackId: 'left' | 'right'}>} e - Event detail contains file and target track side.
+     * Handles file selection for a UI side ('left' or 'right').
+     * Finds an available slot in tracksData, assigns it to the UI side, and starts processing.
+     * Handles initial load vs adding a second track.
+     * @param {CustomEvent<{file: File, trackId: 'left' | 'right'}>} e - Event uses 'trackId' for side.
      * @private
      */
     async function handleFileSelected(e) {
-        const {file, trackId: trackSide} = e.detail;
-        const track = findTrackBySide(trackSide);
-        if (!track || !file) return;
-        // Prevent loading right track if left isn't ready
-        if (track.side === 'right' && !tracks[0]?.isReady) {
-            console.warn(`App: Cannot load Right track before Left is ready.`);
-            AudioApp.uiManager.updateFileName('right', 'Load Left First!');
-            return;
-        }
-        console.log(`App: File selected for track ${track.side} -`, file.name);
+        const {file, trackId: side} = e.detail; // Rename trackId from event to 'side'
+        if (!file) return;
 
-        // --- State Reset Logic ---
-        if (track.side === 'left') { // Resetting everything if loading left track
-            console.log("App: Loading Left track - resetting global state.");
-            // Cancel pending play timeouts
-            tracks.forEach(t => {
-                if (t.playTimeoutId) {
-                    clearTimeout(t.playTimeoutId);
-                    t.playTimeoutId = null;
-                }
-            });
-            stopUIUpdateLoop(); // Stop UI updates
-            globalPlaybackState = 'stopped';
-            playbackStartTimeContext = null;
-            playbackStartSourceTime = 0.0;
-            currentGlobalSpeed = 1.0;
-            // If right track exists, clean it up fully
-            if (tracks[1]?.audioBuffer || tracks[1]?.file) {
-                await handleRemoveTrackInternal(false);
-            } // Don't reset UI yet
-            AudioApp.uiManager.resetUI(); // Full UI reset *after* potential right track cleanup
-            waveformVizLeft?.clearVisuals();
-            specVizLeft?.clearVisuals();
-            // Reset track state objects fully
-            tracks = [createInitialTrackState('left'), createInitialTrackState('right')];
-            const currentLeftTrack = tracks[0]; // Get the newly created state object
-            Object.assign(currentLeftTrack, {file: file, isLoading: true}); // Assign file and loading state
-        } else { // Loading right track
-            console.log("App: Loading Right track - setting up multi-track mode.");
-            // Reset only the right track's state
-            if (track.playTimeoutId) {
-                clearTimeout(track.playTimeoutId);
-                track.playTimeoutId = null;
+        console.log(`App: File selected for UI side ${side} - ${file.name}`);
+
+        let targetTrackIndex = -1;
+        let isReplacingLeft = false;
+
+        // Determine target index and handle replacements/resets
+        if (side === 'left') {
+            // Always reset everything when loading into the left slot
+            console.log("App: Loading Left channel - resetting application state.");
+            isReplacingLeft = true;
+            await resetAppStateAndUI(); // Includes cleaning up engine tracks if any
+            targetTrackIndex = findFirstAvailableSlot(); // Will be 0 after reset
+            leftChannelTrackIndex = targetTrackIndex;
+        } else { // Loading into Right slot
+            if (leftChannelTrackIndex === -1) {
+                console.warn("App: Cannot load Right channel before Left channel.");
+                AudioApp.uiManager.updateFileName('right', 'Load Left First!');
+                return;
             }
-            const currentRightTrack = createInitialTrackState('right'); // Create new state
-            tracks[1] = currentRightTrack; // Replace old right track state
-            Object.assign(currentRightTrack, {file: file, isLoading: true}); // Assign file and loading state
-            AudioApp.uiManager.setFileInfo(track.side, `Loading: ${file.name}...`);
-            AudioApp.uiManager.enableTrackControls(track.side, false);
-            waveformVizRight?.clearVisuals();
-            specVizRight?.clearVisuals();
-            multiTrackModeActive = true;
+            if (rightChannelTrackIndex !== -1) {
+                // If right is already loaded, implicitly remove it first
+                console.log("App: Right channel already loaded, replacing existing track.");
+                await handleRemoveTrackInternal(false); // Remove without full UI reset
+            }
+            targetTrackIndex = findFirstAvailableSlot();
+            rightChannelTrackIndex = targetTrackIndex;
+            // Setup multi-track UI elements
             AudioApp.uiManager.showMultiTrackUI(true);
+            AudioApp.uiManager.enableSwapButton(false); // Disable during load
+            AudioApp.uiManager.enableRemoveButton(false); // Disable during load
         }
 
-        // Disable playback controls during load
+        // Create and store track state
+        const newTrack = createInitialTrackState(targetTrackIndex);
+        newTrack.file = file;
+        newTrack.isLoading = true;
+        tracksData[targetTrackIndex] = newTrack;
+        console.log(`App: Assigned file to track index #${targetTrackIndex} for UI side ${side}.`);
+
+        // Update UI immediately
+        AudioApp.uiManager.updateFileName(side, file.name);
+        AudioApp.uiManager.setFileInfo(side, `Loading...`);
+        AudioApp.uiManager.enableTrackControls(side, false);
         AudioApp.uiManager.enablePlaybackControls(false);
         AudioApp.uiManager.enableSeekBar(false);
-        if (track.side === 'right') { // Disable swap/remove while loading right
-            AudioApp.uiManager.enableSwapButton(false);
-            AudioApp.uiManager.enableRemoveButton(false);
-        }
 
-        // Start processing the loaded file
-        const targetTrack = findTrackBySide(trackSide); // Get the potentially new track state object
+        // Start processing via audioEngine using the numeric index
         try {
-            await AudioApp.audioEngine.setupTrack(targetTrack.id, file);
-        } catch (error) { // Handle errors during audioEngine setup
-            console.error(`App: Error initiating file processing for ${targetTrack.side}`, error);
-            targetTrack.isLoading = false;
-            AudioApp.uiManager.setFileInfo(targetTrack.side, `Error: ${error.message}`);
-            if (targetTrack.side === 'left') {
-                AudioApp.uiManager.resetUI();
-            } // Full reset on left load error
+            await AudioApp.audioEngine.setupTrack(targetTrackIndex, file);
+        } catch (error) {
+            console.error(`App: Error initiating processing for track #${targetTrackIndex} on UI side ${side}`, error);
+            // Reset state for the failed track
+            tracksData[targetTrackIndex] = null;
+            if (side === 'left') {
+                leftChannelTrackIndex = -1;
+                resetAppStateAndUI();
+            } // Full reset on left fail
             else {
-                AudioApp.uiManager.updateFileName(targetTrack.side, 'Load Error!');
-                multiTrackModeActive = false;
+                rightChannelTrackIndex = -1;
+                isMultiChannelModeActive = false;
                 AudioApp.uiManager.showMultiTrackUI(false);
-            } // Revert multi-track UI
-            // Ensure controls remain disabled if not all tracks are ready
+            }
+            AudioApp.uiManager.updateFileName(side, 'Load Error!');
+            AudioApp.uiManager.setFileInfo(side, `Error: ${error.message}`);
+            // Ensure controls remain disabled if needed
             if (!areAllActiveTracksReady()) {
                 AudioApp.uiManager.enablePlaybackControls(false);
                 AudioApp.uiManager.enableSeekBar(false);
@@ -350,381 +400,494 @@ AudioApp = (function () {
     }
 
     /**
-     * Handles the `audioLoaded` event from the audioEngine.
-     * Stores the decoded AudioBuffer and triggers VAD/visualizations for the left track.
-     * @param {CustomEvent<{audioBuffer: AudioBuffer, trackId: string}>} e - Event details.
+     * Handles `audioLoaded` event from audioEngine. Stores buffer, triggers VAD/Visuals.
+     * @param {CustomEvent<{audioBuffer: AudioBuffer, trackId: number}>} e - Event uses numeric trackId.
      * @private
      */
     async function handleAudioLoaded(e) {
-        const {audioBuffer, trackId} = e.detail;
-        const track = findTrackById(trackId);
-        // Ignore if track doesn't exist, already has a buffer, or isn't marked as loading
+        const {audioBuffer, trackId: trackIndex} = e.detail; // Use numeric trackIndex
+        const track = getTrackDataByIndex(trackIndex);
         if (!track || track.audioBuffer || !track.isLoading) {
-            console.warn(`App: handleAudioLoaded ignored for ${trackId}. Track:`, track);
+            console.warn(`App: handleAudioLoaded ignored for track #${trackIndex}.`);
             return;
         }
-        console.log(`App: Audio decoded for ${track.side}. Duration: ${audioBuffer.duration.toFixed(2)}s`);
+        console.log(`App: Audio decoded for track #${trackIndex}. Duration: ${audioBuffer.duration.toFixed(2)}s`);
+
         track.audioBuffer = audioBuffer;
         track.isLoading = false;
-        AudioApp.uiManager.setFileInfo(track.side, `Ready: ${track.file?.name || 'Unknown'}`);
+        const uiSide = (trackIndex === leftChannelTrackIndex) ? 'left' : (trackIndex === rightChannelTrackIndex) ? 'right' : null;
 
-        // Specific actions based on track side
-        if (track.side === 'left') {
-            const duration = calculateMaxEffectiveDuration(); // Use helper for duration
-            AudioApp.uiManager.updateTimeDisplay(0, duration);
-            AudioApp.uiManager.updateSeekBar(0);
-            playbackStartSourceTime = 0.0; // Reset global time reference
-            runVadInBackground(track); // Start VAD for left track
-            await drawTrackVisuals(track); // Draw left visuals now
-        } else {
-            // Only draw right visuals if the visualizers exist (created on workletReady for right)
-            if (waveformVizRight && specVizRight) {
-                await drawTrackVisuals(track);
+        if (uiSide) { // Only update UI if the track is currently assigned to a side
+            AudioApp.uiManager.setFileInfo(uiSide, `Ready: ${track.file?.name || 'Unknown'}`);
+            // Trigger VAD only for the track currently in the LEFT channel slot
+            // ** TODO: Adapt this when implementing Right VAD **
+            if (trackIndex === leftChannelTrackIndex) {
+                runVadInBackground(trackIndex);
             }
-            const duration = calculateMaxEffectiveDuration(); // Update global duration display
-            AudioApp.uiManager.updateTimeDisplay(playbackStartSourceTime, duration);
+            await drawTrackVisuals(uiSide); // Draw visuals for the side it's assigned to
+        } else {
+            console.warn(`App: Audio loaded for unassigned track index #${trackIndex}. No UI update.`);
         }
+
+        // Update max duration display if needed
+        const maxDuration = calculateMaxEffectiveDuration();
+        const currentTime = calculateEstimatedSourceTime();
+        AudioApp.uiManager.updateTimeDisplay(currentTime, maxDuration);
     }
 
     /**
-     * Handles the `workletReady` event from the audioEngine.
-     * Marks the track as ready, applies initial parameters, draws visuals (for right track),
-     * and enables relevant UI controls.
-     * @param {CustomEvent<{trackId: string}>} e - Event details.
+     * Handles the `workletReady` event from the audioEngine. Sets pan, draws visuals, enables controls.
+     * Manages activation of multi-channel mode and panning. Enables Right Load button.
+     * @param {CustomEvent<{trackId: number}>} e - Event uses numeric trackId.
      * @private
      */
     async function handleWorkletReady(e) {
-        const trackId = e.detail.trackId;
-        const track = findTrackById(trackId);
-        // Ignore if track/buffer doesn't exist
+        const trackIndex = e.detail.trackId; // Numeric index from engine event
+        const track = getTrackDataByIndex(trackIndex);
+
+        // *** ADDED Log: Entry and basic check ***
+        console.log(`App: handleWorkletReady called for track #${trackIndex}.`);
+
         if (!track || !track.audioBuffer) {
-            console.warn(`App: Worklet ready event ignored for ${trackId}, track/buffer missing.`);
+            console.warn(`App: Worklet ready event ignored for track #${trackIndex}, track/buffer missing.`);
             return;
         }
-        console.log(`App: Worklet ready for ${track.side}. Applying initial parameters.`);
+        console.log(`App: Worklet ready for track #${trackIndex}. Applying initial parameters.`);
 
         track.isReady = true;
         track.isLoading = false;
         track.hasEnded = false;
-        track.lastReportedTime = 0.0; // Reset reported time
+        track.lastReportedTime = 0.0;
 
-        // Enable track-specific UI controls
-        AudioApp.uiManager.enableTrackControls(track.side, true);
+        // Determine which UI side this track is currently assigned to (if any)
+        const uiSide = (trackIndex === leftChannelTrackIndex) ? 'left' : (trackIndex === rightChannelTrackIndex) ? 'right' : null;
 
-        // Apply initial parameters via audioEngine
-        AudioApp.audioEngine.setVolume(track.id, track.parameters.volume);
-        AudioApp.audioEngine.setPan(track.id, track.parameters.pan);
-        AudioApp.audioEngine.setTrackSpeed(track.id, track.parameters.speed);
-        AudioApp.audioEngine.setTrackPitch(track.id, track.parameters.pitch);
-        // Note: Offset is not applied here, it's used during play/seek calculation
+        // Apply initial parameters (Volume, Speed, Pitch - Pan is handled below)
+        AudioApp.audioEngine.setVolume(trackIndex, track.parameters.volume);
+        AudioApp.audioEngine.setTrackSpeed(trackIndex, track.parameters.speed);
+        AudioApp.audioEngine.setTrackPitch(trackIndex, track.parameters.pitch);
 
-        // Side-specific UI enablement and actions
-        if (track.side === 'left') {
-            AudioApp.uiManager.enableRightTrackLoadButton(true); // Allow loading right track
-            // Enable VAD controls only if VAD analysis is complete
-            if (track.vad.results && !track.vad.isProcessing) {
-                AudioApp.uiManager.enableVadControls(true);
+        // Create Right Visualizers ONLY when the track assigned to the RIGHT channel is ready
+        // Note: This check uses trackIndex === rightChannelTrackIndex, ensuring it only happens once for the right track
+        if (trackIndex === rightChannelTrackIndex && !vizRefs.right.waveform) {
+            console.log("App: Creating Right visualizer instances.");
+            try {
+                vizRefs.right.waveform = AudioApp.waveformVisualizer.createInstance({
+                    canvasId: 'waveformCanvas_right',
+                    indicatorId: 'waveformProgressIndicator_right'
+                });
+            } catch (err) {
+                console.error("Failed creating waveformVizRight", err);
             }
-        } else { // Right track is ready
-            multiTrackModeActive = true;
-            // Create Right Visualizers if they don't exist
-            if (!waveformVizRight) {
-                try {
-                    waveformVizRight = AudioApp.waveformVisualizer.createInstance({
-                        canvasId: 'waveformCanvas_right',
-                        indicatorId: 'waveformProgressIndicator_right'
-                    });
-                } catch (err) {
-                    console.error("Failed creating waveformVizRight", err);
-                }
+            try {
+                vizRefs.right.spec = AudioApp.spectrogramVisualizer.createInstance({
+                    canvasId: 'spectrogramCanvas_right',
+                    spinnerId: 'spectrogramSpinner_right',
+                    indicatorId: 'spectrogramProgressIndicator_right'
+                });
+            } catch (err) {
+                console.error("Failed creating specVizRight", err);
             }
-            if (!specVizRight) {
-                try {
-                    specVizRight = AudioApp.spectrogramVisualizer.createInstance({
-                        canvasId: 'spectrogramCanvas_right',
-                        spinnerId: 'spectrogramSpinner_right',
-                        indicatorId: 'spectrogramProgressIndicator_right'
-                    });
-                } catch (err) {
-                    console.error("Failed creating specVizRight", err);
-                }
-            }
-
-            AudioApp.uiManager.showMultiTrackUI(true); // Ensure multi-track UI is visible
-            await drawTrackVisuals(track); // Draw Right visuals now that it's ready and viz exist
-            // Enable multi-track interaction buttons (Swap/Remove)
-            AudioApp.uiManager.enableSwapButton(true);
-            AudioApp.uiManager.enableRemoveButton(true);
+            AudioApp.uiManager.showMultiTrackUI(true); // Ensure UI is visible
         }
 
-        // Check if all *active* tracks are now ready to enable global playback
+        // --- Panning Logic ---
+        // Set initial pan to Center (0) for the newly ready track
+        AudioApp.audioEngine.setPan(trackIndex, 0);
+        track.parameters.pan = 0; // Update state
+
+        // Check if multi-channel mode should be activated/deactivated
+        const leftIdx = leftChannelTrackIndex;
+        const rightIdx = rightChannelTrackIndex;
+        const leftTrackReady = getTrackDataByIndex(leftIdx)?.isReady ?? false;
+        const rightTrackReady = getTrackDataByIndex(rightIdx)?.isReady ?? false;
+
+        if (leftIdx !== -1 && rightIdx !== -1 && leftTrackReady && rightTrackReady) {
+            // Both channels assigned and ready: Activate multi-channel panning
+            if (!isMultiChannelModeActive) {
+                console.log("App: Both tracks ready, activating multi-channel L/R panning.");
+                isMultiChannelModeActive = true;
+                AudioApp.audioEngine.setPan(leftIdx, -1);
+                getTrackDataByIndex(leftIdx).parameters.pan = -1;
+                AudioApp.audioEngine.setPan(rightIdx, 1);
+                getTrackDataByIndex(rightIdx).parameters.pan = 1;
+                // Enable Swap/Remove now that both are ready and panned
+                AudioApp.uiManager.enableSwapButton(true);
+                AudioApp.uiManager.enableRemoveButton(true);
+            }
+        } else {
+            // Conditions not met for multi-channel mode, ensure it's off and tracks are centered
+            if (isMultiChannelModeActive) { // If it WAS active, turn it off
+                console.log("App: Conditions for multi-channel mode no longer met, deactivating.");
+                isMultiChannelModeActive = false;
+                // Re-center any assigned tracks
+                if (leftIdx !== -1 && leftTrackReady) {
+                    AudioApp.audioEngine.setPan(leftIdx, 0);
+                    getTrackDataByIndex(leftIdx).parameters.pan = 0;
+                }
+                if (rightIdx !== -1 && rightTrackReady) {
+                    AudioApp.audioEngine.setPan(rightIdx, 0);
+                    getTrackDataByIndex(rightIdx).parameters.pan = 0;
+                }
+                // Disable Swap/Remove as multi-channel mode is off
+                AudioApp.uiManager.enableSwapButton(false);
+                AudioApp.uiManager.enableRemoveButton(false);
+            }
+            // If it wasn't active, pan is already 0 from initial set above.
+        }
+        // --- End Panning Logic ---
+
+        // Update UI controls and visuals for the specific side, if assigned
+        if (uiSide) {
+            AudioApp.uiManager.enableTrackControls(uiSide, true);
+            // *** ADDED Log: Check before enabling Right Load Button ***
+            console.log(`App: Checking conditions for UI side ${uiSide}. Is Left Channel Index? ${trackIndex === leftChannelTrackIndex}`);
+            if (trackIndex === leftChannelTrackIndex) { // Extra UI updates if this is the track in the LEFT slot
+                console.log("App: Enabling Right Track Load Button."); // Log the attempt
+                AudioApp.uiManager.enableRightTrackLoadButton(true); // Allow loading right track
+                if (track.vad.results && !track.vad.isProcessing) {
+                    AudioApp.uiManager.enableVadControls(true);
+                }
+            }
+            // Draw visuals if they exist (Right viz might have just been created)
+            await drawTrackVisuals(uiSide);
+        } else {
+            // *** ADDED Log: Track ready but not assigned ***
+            console.warn(`App: Worklet for track #${trackIndex} is ready, but it is not currently assigned to Left or Right UI channel.`);
+        }
+
+        // Check overall readiness for global controls
         if (areAllActiveTracksReady()) {
-            console.log("App: All active tracks ready. Enabling global playback.");
+            console.log("App: All assigned tracks ready. Enabling global playback.");
             AudioApp.uiManager.enablePlaybackControls(true);
             AudioApp.uiManager.enableSeekBar(true);
-            // Update max duration display now that all active buffers are loaded
             const maxDuration = calculateMaxEffectiveDuration();
             AudioApp.uiManager.updateTimeDisplay(playbackStartSourceTime, maxDuration);
         } else {
-            console.log("App: Waiting for other track(s) to become ready.");
+            console.log("App: Waiting for other assigned track(s) to become ready.");
             AudioApp.uiManager.enablePlaybackControls(false);
             AudioApp.uiManager.enableSeekBar(false);
         }
+        // *** ADDED Log: End of handler ***
+        console.log(`App: handleWorkletReady finished for track #${trackIndex}.`);
     }
 
-    // --- Multi-Track Handlers ---
+    // --- Multi-Track Handlers (Refactored) ---
 
     /** Handles click on 'Remove Right' button */
     async function handleRemoveTrack() {
-        console.log("App: Remove Right track requested.");
+        console.log("App: Remove Right UI channel track requested.");
         await handleRemoveTrackInternal();
     }
 
-    /** Internal logic to remove the right track state and UI elements. */
+    /** Internal logic to remove the track assigned to the Right UI channel. */
     async function handleRemoveTrackInternal(resetUICall = true) {
-        const rightTrack = tracks[1];
-        if (!rightTrack) return;
-        const trackId = rightTrack.id;
+        const trackIndexToRemove = rightChannelTrackIndex;
+        if (trackIndexToRemove === -1) {
+            console.log("App: No track assigned to Right channel to remove.");
+            return;
+        }
+        const track = getTrackDataByIndex(trackIndexToRemove);
+
+        console.log(`App: Removing track index #${trackIndexToRemove} assigned to Right channel.`);
 
         // Cancel pending play timeout
-        if (rightTrack.playTimeoutId) {
-            clearTimeout(rightTrack.playTimeoutId);
-            rightTrack.playTimeoutId = null;
+        if (track?.playTimeoutId) {
+            clearTimeout(track.playTimeoutId);
+            track.playTimeoutId = null;
         }
 
-        // Clean up audio engine resources for the track
-        await AudioApp.audioEngine.cleanupTrack(trackId);
+        // Clean up audio engine resources
+        await AudioApp.audioEngine.cleanupTrack(trackIndexToRemove);
 
-        // Reset the right track state
-        tracks[1] = createInitialTrackState('right');
-        multiTrackModeActive = false;
+        // Mark slot as empty and reset channel assignment
+        tracksData[trackIndexToRemove] = null;
+        rightChannelTrackIndex = -1;
 
-        // Nullify visualizer instances (allowing garbage collection)
-        waveformVizRight = null;
-        specVizRight = null;
+        // Deactivate multi-channel mode and re-center the remaining left track
+        isMultiChannelModeActive = false;
+        const leftTrack = getTrackDataByIndex(leftChannelTrackIndex);
+        if (leftChannelTrackIndex !== -1 && leftTrack?.isReady) {
+            console.log(`App: Re-centering pan for remaining Left track #${leftChannelTrackIndex}`);
+            AudioApp.audioEngine.setPan(leftChannelTrackIndex, 0);
+            leftTrack.parameters.pan = 0;
+        }
 
         // Update UI
-        if (resetUICall) AudioApp.uiManager.showMultiTrackUI(false); // Hide multi-track sections
-        AudioApp.uiManager.enableRightTrackLoadButton(true); // Re-enable load button
-        AudioApp.uiManager.enableSwapButton(false);
-        AudioApp.uiManager.enableRemoveButton(false);
+        if (resetUICall) {
+            AudioApp.uiManager.showMultiTrackUI(false); // Hide multi-track sections
+            AudioApp.uiManager.enableRightTrackLoadButton(true); // Re-enable load
+            AudioApp.uiManager.enableSwapButton(false);
+            AudioApp.uiManager.enableRemoveButton(false);
+            // Refresh the right UI side to show empty state
+            AudioApp.uiManager.refreshTrackUI('right');
+        }
 
-        // Re-evaluate global playback readiness
-        if (tracks[0]?.isReady) { // If left track is still ready
+        // Clear Right visualizer refs
+        vizRefs.right.waveform = null;
+        vizRefs.right.spec = null;
+
+        // Re-evaluate global playback readiness (based only on Left now)
+        if (leftTrack?.isReady) {
             AudioApp.uiManager.enablePlaybackControls(true);
             AudioApp.uiManager.enableSeekBar(true);
-            // Update max duration display based only on left track now
             const maxDuration = calculateMaxEffectiveDuration();
             AudioApp.uiManager.updateTimeDisplay(playbackStartSourceTime, maxDuration);
-        } else { // If left track isn't ready (shouldn't happen unless unloading?)
+        } else {
             AudioApp.uiManager.enablePlaybackControls(false);
             AudioApp.uiManager.enableSeekBar(false);
         }
-        console.log("App: Right track removed.");
+        console.log(`App: Track index #${trackIndexToRemove} removed.`);
     }
 
-    /** Placeholder for Swap Tracks functionality */
-    function handleSwapTracks() {
-        console.warn("Swap tracks not implemented yet.");
+    /**
+     * Handles click on 'Swap L/R' button. Swaps track assignments between the
+     * Left and Right UI channels, updates panning in the audio engine, refreshes
+     * UI controls, and **redraws visualizers** for both sides.
+     * Only active if in multi-channel mode.
+     * @private
+     */
+    async function handleSwapTracks() { // Made async to await drawing
+        // 1. Check if swap is possible
+        if (!isMultiChannelModeActive) {
+            console.warn("App: Cannot swap, not in multi-channel mode.");
+            return;
+        }
+        if (leftChannelTrackIndex === -1 || rightChannelTrackIndex === -1) {
+            console.error("App: Swap requested but channel indices are invalid.");
+            isMultiChannelModeActive = false;
+            AudioApp.uiManager.enableSwapButton(false);
+            return;
+        }
+
+        console.log(`App: Swapping Left (idx ${leftChannelTrackIndex}) and Right (idx ${rightChannelTrackIndex}).`);
+
+        // 2. Swap index pointers
+        const tempIndex = leftChannelTrackIndex;
+        leftChannelTrackIndex = rightChannelTrackIndex;
+        rightChannelTrackIndex = tempIndex;
+
+        // 3. Update panning in audio engine
+        AudioApp.audioEngine.setPan(leftChannelTrackIndex, -1);
+        AudioApp.audioEngine.setPan(rightChannelTrackIndex, 1);
+
+        // 4. Update track state parameters (Optional but good practice)
+        const newLeftTrack = getTrackDataByIndex(leftChannelTrackIndex);
+        const newRightTrack = getTrackDataByIndex(rightChannelTrackIndex);
+        if (newLeftTrack) newLeftTrack.parameters.pan = -1;
+        if (newRightTrack) newRightTrack.parameters.pan = 1;
+
+        // 5. Refresh UI Controls for both sides
+        console.log("App: Refreshing UI controls after swap...");
+        AudioApp.uiManager.refreshTrackUI('left', newLeftTrack);
+        AudioApp.uiManager.refreshTrackUI('right', newRightTrack);
+
+        // *** NEW: 6. Redraw Visualizers for both sides ***
+        console.log("App: Redrawing visualizers after swap...");
+        // We need to await these potentially long operations
+        // Use Promise.all to run redraws potentially concurrently
+        try {
+            await Promise.all([
+                drawTrackVisuals('left'),  // Redraws left UI side using new leftChannelTrackIndex data
+                drawTrackVisuals('right') // Redraws right UI side using new rightChannelTrackIndex data
+            ]);
+        } catch (drawError) {
+            console.error("App: Error redrawing visuals after swap:", drawError);
+            // Handle error appropriately, maybe refresh UI again to show error state?
+        }
+
+        // Re-fetch current time to update indicators correctly after redraws
+        const currentTime = calculateEstimatedSourceTime();
+        updateUIWithTime(currentTime);
+
+        console.log(`App: Swap complete. Left is now idx ${leftChannelTrackIndex}, Right is now idx ${rightChannelTrackIndex}.`);
     }
 
     /** Handles toggling the speed link button */
     function handleLinkSpeedToggle(e) {
         speedLinked = e.detail.linked;
-        console.log("App: SpeedLink set to", speedLinked);
-        AudioApp.uiManager.setLinkButtonState(AudioApp.linkSpeedButton, speedLinked);
+        console.log("App: SpeedLink set to", speedLinked); /* UI update handled by uiManager */
     }
 
     /** Handles toggling the pitch link button */
     function handleLinkPitchToggle(e) {
         pitchLinked = e.detail.linked;
-        console.log("App: PitchLink set to", pitchLinked);
-        AudioApp.uiManager.setLinkButtonState(AudioApp.linkPitchButton, pitchLinked);
+        console.log("App: PitchLink set to", pitchLinked); /* UI update handled by uiManager */
     }
 
     /** Handler for individual track volume changes from UI */
-    function handleVolumeChange(trackSide, volume) {
-        const track = findTrackBySide(trackSide);
-        if (!track || !track.isReady) return; // Ignore if track not ready
-        const newVolume = Math.max(0, Math.min(parseFloat(volume) || 1.0, 1.5)); // Clamp 0-1.5
-        console.log(`App: Volume change for ${trackSide} to ${newVolume.toFixed(2)}`);
+    function handleVolumeChange(side, volume) {
+        const trackIndex = getTrackIndexForSide(side);
+        if (trackIndex === -1) return;
+        const track = getTrackDataByIndex(trackIndex);
+        if (!track || !track.isReady) return;
+        const newVolume = Math.max(0, Math.min(parseFloat(volume) || 1.0, 1.5));
+        console.log(`App: Volume change for track #${trackIndex} (UI Side: ${side}) to ${newVolume.toFixed(2)}`);
         track.parameters.volume = newVolume;
-        AudioApp.audioEngine.setVolume(track.id, newVolume);
-        // Mute/Solo interaction logic would go here
+        AudioApp.audioEngine.setVolume(trackIndex, newVolume);
+        // TODO: Mute/Solo interaction logic
     }
 
-    /**
-     * Handler for individual track delay input changes from UI.
-     * Updates the track's offset parameter. If playing, triggers a global seek
-     * to immediately reflect the change in playback synchronization.
-     * @param {'left' | 'right'} trackSide - The side ('left' or 'right') of the track whose delay changed.
-     * @param {string} valueStr - The raw string value from the input field.
-     * @private
-     */
-    function handleDelayChange(trackSide, valueStr) {
-        const track = findTrackBySide(trackSide);
-        if (!track) return; // Should not happen
+    /** Handler for individual track delay input changes from UI */
+    function handleDelayChange(side, valueStr) {
+        const trackIndex = getTrackIndexForSide(side);
+        if (trackIndex === -1) return;
+        const track = getTrackDataByIndex(trackIndex);
+        if (!track) return;
 
-        const newOffsetSeconds = AudioApp.uiManager.parseDelayInput(valueStr); // Use UI manager's parser
+        const newOffsetSeconds = AudioApp.uiManager.parseDelayInput(valueStr);
 
-        // Check if the value actually changed
         if (track.parameters.offsetSeconds !== newOffsetSeconds) {
-            console.log(`App: Delay change for ${trackSide} to ${newOffsetSeconds.toFixed(3)}s`);
+            console.log(`App: Delay change for track #${trackIndex} (UI Side: ${side}) to ${newOffsetSeconds.toFixed(3)}s`);
             track.parameters.offsetSeconds = newOffsetSeconds;
+            AudioApp.uiManager.setDelayValue(side, newOffsetSeconds); // Update UI input
 
-            // Update UI input to show potentially formatted/validated value
-            AudioApp.uiManager.setDelayValue(trackSide, newOffsetSeconds);
-
-            // Recalculate and update max duration display in the UI
-            const maxDuration = calculateMaxEffectiveDuration();
-            const currentDisplayTime = calculateEstimatedSourceTime(); // Get current time for display update
+            const maxDuration = calculateMaxEffectiveDuration(); // Update max duration display
+            const currentDisplayTime = calculateEstimatedSourceTime();
             AudioApp.uiManager.updateTimeDisplay(currentDisplayTime, maxDuration);
 
-            // *** NEW: If currently playing, trigger a seek to resync audio ***
+            // If currently playing, trigger a seek to resync audio immediately
             if (globalPlaybackState === 'playing') {
                 console.log(`App: Delay changed while playing. Triggering seek to resync.`);
                 const currentGlobalTime = calculateEstimatedSourceTime();
-                handleSeekInternal(currentGlobalTime); // Resync using the current time
+                handleSeekInternal(currentGlobalTime);
             }
-            // If paused or stopped, the new offset will be used on the next play/seek automatically.
         }
     }
 
     /** Placeholder for Mute toggle */
-    function handleMuteToggle(trackSide) {
-        console.warn("Mute toggle not implemented yet.");
+    function handleMuteToggle(side) {
+        console.warn(`Mute toggle for ${side} not implemented yet.`); /* TODO: Implement Phase M1 */
     }
 
     /** Placeholder for Solo toggle */
-    function handleSoloToggle(trackSide) {
-        console.warn("Solo toggle not implemented yet.");
+    function handleSoloToggle(side) {
+        console.warn(`Solo toggle for ${side} not implemented yet.`); /* TODO: Implement Phase M1 */
     }
 
-    // --- VAD Processing ---
+    // --- VAD Processing (Adapted) ---
     /**
-     * Initiates VAD analysis for the left track in the background.
-     * Handles resampling, calling the analyzer, and updating UI/visuals.
-     * @param {TrackState} track - The track state object (should be left track).
+     * Initiates VAD analysis for a given track index.
+     * @param {number} trackIndex - The index of the track in tracksData to analyze.
      * @private
      */
-    async function runVadInBackground(track) {
-        // Only run for the left track, if it has an audio buffer, and viz exists
-        if (track.side !== 'left' || !track.audioBuffer || !waveformVizLeft) return;
-        // Check dependencies
-        if (!AudioApp.vadAnalyzer || !AudioApp.sileroWrapper || !AudioApp.audioEngine || !AudioApp.uiManager) {
-            console.error("App (VAD Task): Missing VAD dependencies.");
-            track.vad.isProcessing = false;
+    async function runVadInBackground(trackIndex) {
+        const track = getTrackDataByIndex(trackIndex);
+        const uiSide = (trackIndex === leftChannelTrackIndex) ? 'left' : (trackIndex === rightChannelTrackIndex) ? 'right' : null;
+
+        // Need buffer, VAD analyzer, and Silero wrapper
+        if (!track?.audioBuffer || !AudioApp.vadAnalyzer || !AudioApp.sileroWrapper || !AudioApp.audioEngine || !AudioApp.uiManager) {
+            console.error(`App (VAD Task #${trackIndex}): Missing dependencies or track data.`);
             return;
         }
+        // Only run VAD if VAD section is relevant (currently tied to Left UI, expand later if needed)
+        // ** TODO: Adapt VAD target logic for Right VAD Phase **
+        if (uiSide !== 'left') {
+            console.log(`App (VAD Task #${trackIndex}): Skipping VAD as track is not on Left UI side.`);
+            return;
+        }
+
         if (track.vad.isProcessing) {
-            console.warn("App: VAD already running for Left track.");
+            console.warn(`App: VAD already running for track #${trackIndex}.`);
             return;
         }
 
         track.vad.isProcessing = true;
         track.vad.results = null;
         let pcm16k = null;
-        let vadSucceeded = false;
-        AudioApp.uiManager.setFileInfo(track.side, `Processing VAD...`);
-        AudioApp.uiManager.showVadProgress(true);
-        AudioApp.uiManager.updateVadProgress(0);
+
+        // Update specific UI side info if assigned
+        if (uiSide) AudioApp.uiManager.setFileInfo(uiSide, `Processing VAD...`);
+        // ** TODO: Handle VAD progress display if needed for Right track later **
+        if (uiSide === 'left') {
+            AudioApp.uiManager.showVadProgress(true);
+            AudioApp.uiManager.updateVadProgress(0);
+        }
 
         try {
-            // Ensure ONNX model/session is ready (idempotent)
             if (!vadModelReady) {
                 vadModelReady = await AudioApp.sileroWrapper.create(AudioApp.Constants.VAD_SAMPLE_RATE);
                 if (!vadModelReady) throw new Error("Failed VAD model create.");
             }
-
-            // Resample audio
             pcm16k = await AudioApp.audioEngine.resampleTo16kMono(track.audioBuffer);
             if (!pcm16k || pcm16k.length === 0) throw new Error("Resampling yielded no data");
 
-            // Setup progress callback
+            // Setup progress callback (currently only updates Left UI progress)
             const vadProgressCallback = (p) => {
-                AudioApp.uiManager?.updateVadProgress(p.totalFrames > 0 ? (p.processedFrames / p.totalFrames) * 100 : 0);
+                if (uiSide === 'left') AudioApp.uiManager?.updateVadProgress(p.totalFrames > 0 ? (p.processedFrames / p.totalFrames) * 100 : 0);
             };
 
             // Analyze using vadAnalyzer
             track.vad.results = await AudioApp.vadAnalyzer.analyze(pcm16k, {onProgress: vadProgressCallback});
             const regions = track.vad.results.regions || [];
-            console.log(`App (VAD Task): VAD done for Left. Found ${regions.length} regions.`);
+            console.log(`App (VAD Task #${trackIndex}): VAD done. Found ${regions.length} regions.`);
 
-            // Update UI with initial results
-            AudioApp.uiManager.updateVadDisplay(track.vad.results.initialPositiveThreshold, track.vad.results.initialNegativeThreshold);
-            AudioApp.uiManager.setSpeechRegionsText(regions); // Currently unused UI element
-            if (track.isReady) AudioApp.uiManager.enableVadControls(true); // Enable sliders if track worklet is ready
-
-            // Update waveform highlighting
-            waveformVizLeft.redrawWaveformHighlight(regions); // Use instance method
-            AudioApp.uiManager.updateVadProgress(100); // Mark progress as complete
-            vadSucceeded = true;
+            // Update UI/Visuals only if the track is still assigned to the corresponding UI side
+            const currentUiSide = (trackIndex === leftChannelTrackIndex) ? 'left' : (trackIndex === rightChannelTrackIndex) ? 'right' : null;
+            if (currentUiSide === uiSide && currentUiSide === 'left') { // Only update Left UI VAD elements for now
+                AudioApp.uiManager.updateVadDisplay(track.vad.results.initialPositiveThreshold, track.vad.results.initialNegativeThreshold);
+                AudioApp.uiManager.setSpeechRegionsText(regions); // This UI element might be removed later
+                if (track.isReady) AudioApp.uiManager.enableVadControls(true);
+                vizRefs.left.waveform?.redrawWaveformHighlight(regions);
+                AudioApp.uiManager.updateVadProgress(100);
+            } else {
+                console.log(`App (VAD Task #${trackIndex}): VAD finished, but track no longer assigned to original UI side ${uiSide} or not Left UI. Skipping VAD UI update.`);
+            }
 
         } catch (error) {
-            console.error("App (VAD Task): VAD Error -", error);
-            AudioApp.uiManager.setSpeechRegionsText(`VAD Error: ${error.message}`);
-            AudioApp.uiManager.enableVadControls(false);
-            AudioApp.uiManager.updateVadProgress(0); // Reset progress bar
-            track.vad.results = null; // Clear results on error
+            console.error(`App (VAD Task #${trackIndex}): VAD Error -`, error);
+            const currentUiSide = (trackIndex === leftChannelTrackIndex) ? 'left' : (trackIndex === rightChannelTrackIndex) ? 'right' : null;
+            if (currentUiSide === uiSide && currentUiSide === 'left') { // Only update Left UI on error
+                AudioApp.uiManager.setSpeechRegionsText(`VAD Error: ${error.message}`);
+                AudioApp.uiManager.enableVadControls(false);
+                AudioApp.uiManager.updateVadProgress(0);
+            }
+            track.vad.results = null;
         } finally {
             track.vad.isProcessing = false;
-            // Restore "Ready" status if buffer still exists
-            if (track.audioBuffer) AudioApp.uiManager.setFileInfo(track.side, `Ready: ${track.file ? track.file.name : 'Unknown'}`);
-            AudioApp.uiManager.showVadProgress(false); // Hide progress bar container
+            const currentUiSide = (trackIndex === leftChannelTrackIndex) ? 'left' : (trackIndex === rightChannelTrackIndex) ? 'right' : null;
+            if (currentUiSide === uiSide) { // Update file info if still assigned
+                if (track.audioBuffer) AudioApp.uiManager.setFileInfo(currentUiSide, `Ready: ${track.file ? track.file.name : 'Unknown'}`);
+            }
+            if (uiSide === 'left') AudioApp.uiManager.showVadProgress(false);
         }
     }
 
-    /**
-     * Generic handler for audio-related errors dispatched from audioEngine.
-     * Updates UI and potentially resets state based on the error.
-     * @param {CustomEvent<{type?: string, error: Error, trackId?: string}>} e - Event details.
-     * @private
-     */
+    /** Generic handler for audio-related errors. */
     function handleAudioError(e) {
         const errorType = e.detail.type || 'Unknown';
         const errorMessage = e.detail.error ? e.detail.error.message : 'An unknown error occurred';
-        const trackId = e.detail.trackId;
-        const track = findTrackById(trackId);
-        const trackSide = track ? track.side : 'global';
+        const trackIndex = (typeof e.detail.trackId === 'number') ? e.detail.trackId : -1; // Expect numeric index
 
-        console.error(`App: Audio Error - Track: ${trackSide}, Type: ${errorType}, Msg: ${errorMessage}`, e.detail.error);
+        console.error(`App: Audio Error - Track Index: #${trackIndex}, Type: ${errorType}, Msg: ${errorMessage}`, e.detail.error);
 
-        if (track) {
+        if (trackIndex !== -1 && trackIndex < tracksData.length && tracksData[trackIndex]) {
             // Error specific to a track
+            const track = tracksData[trackIndex];
             track.isLoading = false;
             track.isReady = false;
-            // Cancel pending play timeout if track had one
             if (track.playTimeoutId) {
                 clearTimeout(track.playTimeoutId);
                 track.playTimeoutId = null;
             }
-            AudioApp.uiManager.setFileInfo(track.side, `Error (${errorType})`);
-            AudioApp.uiManager.enableTrackControls(track.side, false);
-            if (track.side === 'right') { // Disable multi-track buttons if right track failed
-                AudioApp.uiManager.enableSwapButton(false);
-                AudioApp.uiManager.enableRemoveButton(false);
-            }
-        } else {
-            // Global error (e.g., context creation, resource fetch) - requires full reset
-            console.log("App: Handling global audio error - resetting application.");
-            stopUIUpdateLoop();
-            // Cancel all pending play timeouts
-            tracks.forEach(t => {
-                if (t.playTimeoutId) {
-                    clearTimeout(t.playTimeoutId);
-                    t.playTimeoutId = null;
+
+            // Find which UI side (if any) this track was on
+            const uiSide = (trackIndex === leftChannelTrackIndex) ? 'left' : (trackIndex === rightChannelTrackIndex) ? 'right' : null;
+
+            if (uiSide) {
+                AudioApp.uiManager.setFileInfo(uiSide, `Error (${errorType})`);
+                AudioApp.uiManager.enableTrackControls(uiSide, false);
+                if (uiSide === 'right') {
+                    AudioApp.uiManager.enableSwapButton(false);
+                    AudioApp.uiManager.enableRemoveButton(false);
                 }
-            });
-            AudioApp.uiManager.resetUI();
-            // Fully reset track state objects
-            tracks = [createInitialTrackState('left'), createInitialTrackState('right')];
-            multiTrackModeActive = false;
-            globalPlaybackState = 'stopped';
-            waveformVizLeft?.clearVisuals();
-            specVizLeft?.clearVisuals();
-            waveformVizRight = null;
-            specVizRight = null;
-            // Display global error on left track info area
+            }
+            // Mark the track slot as empty? Or leave it in error state? Let's leave it for now.
+            // tracksData[trackIndex] = null; // Maybe too aggressive?
+
+        } else { // Global error or unknown track index
+            console.log("App: Handling global audio error - resetting application.");
+            resetAppStateAndUI(); // Full reset
             AudioApp.uiManager.setFileInfo('left', `Fatal Error (${errorType}): ${errorMessage}`);
         }
 
@@ -735,18 +898,20 @@ AudioApp = (function () {
         }
     }
 
+    // --- Global Playback Handlers (Adapted) ---
 
-    // --- Global Playback Handlers ---
-
-    /**
-     * Handles the Play/Pause button click. Orchestrates starting or stopping playback
-     * for all ready tracks, respecting their offsets using setTimeout for delayed starts.
-     * @private
-     */
+    /** Handles Play/Pause button click using orchestrated start. */
     function handlePlayPause() {
         console.log("App: Play/Pause button clicked.");
-        if (!areAllActiveTracksReady()) { console.warn("App: Play/Pause ignored - Tracks not ready."); return; }
-        const audioCtx = AudioApp.audioEngine.getAudioContext(); if (!audioCtx) { console.error("App: AudioContext missing."); return; }
+        if (!areAllActiveTracksReady()) {
+            console.warn("App: Play/Pause ignored - Tracks not ready.");
+            return;
+        }
+        const audioCtx = AudioApp.audioEngine.getAudioContext();
+        if (!audioCtx) {
+            console.error("App: AudioContext missing.");
+            return;
+        }
 
         const isCurrentlyPlaying = (globalPlaybackState === 'playing');
         const targetStatePlay = !isCurrentlyPlaying;
@@ -754,30 +919,32 @@ AudioApp = (function () {
         if (targetStatePlay) { // --- Play/Resume Logic ---
             console.log("App: Handling Play/Resume request.");
             const ctxPlayTime = audioCtx.currentTime;
-            const srcPlayTime = calculateEstimatedSourceTime(); // Get current estimated source time
-
+            const srcPlayTime = calculateEstimatedSourceTime();
             console.log(`App: Starting playback from global source time ${srcPlayTime.toFixed(3)}s at context time ${ctxPlayTime.toFixed(3)}s`);
-            globalPlaybackState = 'playing'; // Set state AFTER getting srcPlayTime
+            globalPlaybackState = 'playing';
             playbackStartTimeContext = ctxPlayTime;
             playbackStartSourceTime = srcPlayTime;
 
-            // Schedule play for each ready track
-            tracks.forEach(track => {
+            // Get indices of currently assigned tracks
+            const indicesToPlay = [leftChannelTrackIndex, rightChannelTrackIndex].filter(idx => idx !== -1);
+
+            indicesToPlay.forEach(trackIndex => {
+                const track = getTrackDataByIndex(trackIndex);
                 if (track?.isReady) {
-                    // 1. Cancel any existing scheduled play for this track
-                    if (track.playTimeoutId) { clearTimeout(track.playTimeoutId); track.playTimeoutId = null; }
-                    // 2. Calculate seek time and send seek command
+                    if (track.playTimeoutId) {
+                        clearTimeout(track.playTimeoutId);
+                        track.playTimeoutId = null;
+                    }
                     const trackSeekTime = Math.max(0, srcPlayTime - track.parameters.offsetSeconds);
-                    AudioApp.audioEngine.seekTrack(track.id, trackSeekTime);
+                    AudioApp.audioEngine.seekTrack(trackIndex, trackSeekTime);
                     track.hasEnded = false;
-                    // 3. Calculate delay and schedule play
                     const scheduledPlayTime = track.parameters.offsetSeconds;
                     const timeUntilStart = scheduledPlayTime - srcPlayTime;
                     const delayMs = Math.max(0, timeUntilStart * 1000);
-                    console.log(`App: Track ${track.side} - Offset: ${track.parameters.offsetSeconds.toFixed(3)}s, SeekTo: ${trackSeekTime.toFixed(3)}s, DelayMs: ${delayMs.toFixed(1)}ms`);
+                    console.log(`App: Track #${trackIndex} - Offset: ${track.parameters.offsetSeconds.toFixed(3)}s, SeekTo: ${trackSeekTime.toFixed(3)}s, DelayMs: ${delayMs.toFixed(1)}ms`);
                     track.playTimeoutId = setTimeout(() => {
-                        console.log(`App: Timeout fired - Playing track ${track.id}`);
-                        AudioApp.audioEngine.playTrack(track.id);
+                        console.log(`App: Timeout fired - Playing track #${trackIndex}`);
+                        AudioApp.audioEngine.playTrack(trackIndex);
                         track.playTimeoutId = null;
                     }, delayMs);
                 }
@@ -788,95 +955,63 @@ AudioApp = (function () {
 
         } else { // --- Pause Logic ---
             console.log("App: Handling Pause request.");
-
-            // *** FIX: Calculate time BEFORE changing state ***
             const timeAtPause = calculateEstimatedSourceTime();
             console.log(`App (Pause Debug): Calculated timeAtPause = ${timeAtPause.toFixed(5)}`);
-
-            // Now change state and stop loop
             globalPlaybackState = 'paused';
             stopUIUpdateLoop();
-
-            // Store the calculated time
             playbackStartSourceTime = timeAtPause;
-            playbackStartTimeContext = null; // Clear context start time
-
+            playbackStartTimeContext = null;
             console.log(`App (Pause Debug): Stored playbackStartSourceTime = ${playbackStartSourceTime.toFixed(5)}`);
 
-            // Cancel any pending play timeouts for all tracks
-            tracks.forEach(track => {
+            tracksData.forEach(track => {
                 if (track?.playTimeoutId) {
-                    console.log(`App: Clearing pending play timeout for track ${track.id}`);
                     clearTimeout(track.playTimeoutId);
                     track.playTimeoutId = null;
                 }
             });
-
-            // Send pause command to all worklets via audioEngine
-            AudioApp.audioEngine.togglePlayPause(false);
-
+            AudioApp.audioEngine.togglePlayPause(false); // Send pause to all engine tracks
             AudioApp.uiManager.setPlayButtonState(false);
-
-            // Update UI one last time with the correctly calculated paused time
             console.log(`App (Pause Debug): Calling updateUIWithTime with ${playbackStartSourceTime.toFixed(5)}`);
             updateUIWithTime(playbackStartSourceTime);
         }
     }
 
-    /**
-     * Handles jump forward/backward requests.
-     * @param {CustomEvent<{seconds: number}>} e - Event detail contains jump amount.
-     * @private
-     */
-    function handleJump(e) {
+    /** Handles jump forward/backward requests. */
+    function handleJump(e) { /* ... (Logic unchanged, uses calculateMaxEffectiveDuration and handleSeekInternal) ... */
         console.log("App: Handling Jump request.");
         if (!areAllActiveTracksReady()) return;
         const maxDuration = calculateMaxEffectiveDuration();
         if (maxDuration <= 0) return;
         const currentGlobalTime = calculateEstimatedSourceTime();
         const targetGlobalTime = Math.max(0, Math.min(currentGlobalTime + e.detail.seconds, maxDuration));
-        handleSeekInternal(targetGlobalTime); // Use internal seek handler
+        handleSeekInternal(targetGlobalTime);
     }
 
-    /**
-     * Handles seek requests from the seek bar or canvas clicks.
-     * @param {CustomEvent<{fraction: number, sourceCanvasId?: string}>} e - Event detail.
-     * @private
-     */
-    function handleSeek(e) {
+    /** Handles seek requests from seek bar or canvas clicks. */
+    function handleSeek(e) { /* ... (Logic mostly unchanged, uses calculateMaxEffectiveDuration, getTrackIndexForSide, getTrackDataByIndex and handleSeekInternal) ... */
         console.log("App: Handling Seek request from", e.detail.sourceCanvasId || "SeekBar");
         if (!areAllActiveTracksReady()) return;
         const maxDuration = calculateMaxEffectiveDuration();
         if (maxDuration <= 0) return;
-
         let targetGlobalTime = 0;
-        // Calculate target time based on source (canvas vs seekbar)
-        if (e.detail.sourceCanvasId) { // Clicked on a visualizer
+        if (e.detail.sourceCanvasId) {
             const side = e.detail.sourceCanvasId.includes('_right') ? 'right' : 'left';
-            const sourceTrack = findTrackBySide(side);
+            const trackIndex = getTrackIndexForSide(side);
+            const sourceTrack = getTrackDataByIndex(trackIndex);
             if (sourceTrack?.audioBuffer) {
-                // Calculate click position relative to the *track's* duration
                 const clickedTrackTargetTime = e.detail.fraction * sourceTrack.audioBuffer.duration;
-                // Convert track time to global time using offset
                 targetGlobalTime = clickedTrackTargetTime + sourceTrack.parameters.offsetSeconds;
             } else {
                 return;
-            } // Should not happen if track is ready
-        } else { // Dragged the global seek bar
+            }
+        } else {
             targetGlobalTime = e.detail.fraction * maxDuration;
         }
-
-        handleSeekInternal(targetGlobalTime); // Use internal seek handler
+        handleSeekInternal(targetGlobalTime);
     }
 
-    /**
-     * Internal function to handle the core logic of seeking the playback position globally.
-     * Manages pausing, seeking individual tracks respecting offsets, updating UI,
-     * and resuming playback if it was active before the seek.
-     * @param {number} targetGlobalTime - The desired global time position in seconds.
-     * @private
-     */
-    function handleSeekInternal(targetGlobalTime) {
+    /** Internal seek handler, manages pause/seek/resume orchestration. */
+    function handleSeekInternal(targetGlobalTime) { /* ... (Logic largely unchanged, but calls audioEngine with numeric indices, uses helpers for state access) ... */
         if (!areAllActiveTracksReady()) {
             console.warn("App: Seek ignored - tracks not ready.");
             return;
@@ -885,166 +1020,137 @@ AudioApp = (function () {
         if (!audioCtx) return;
         const maxDuration = calculateMaxEffectiveDuration();
         const clampedGlobalTime = Math.max(0, Math.min(targetGlobalTime, maxDuration));
-
         console.log(`App: Internal Seek. Target Global Time: ${clampedGlobalTime.toFixed(3)}s`);
         const wasPlaying = (globalPlaybackState === 'playing');
 
         // --- Pause Phase ---
         if (wasPlaying) {
             console.log("App (Seek): Pausing before seek...");
-            stopUIUpdateLoop(); // Stop UI updates temporarily
-            // Cancel any pending play timeouts (important!)
-            tracks.forEach(track => {
+            stopUIUpdateLoop();
+            tracksData.forEach(track => {
                 if (track?.playTimeoutId) {
                     clearTimeout(track.playTimeoutId);
                     track.playTimeoutId = null;
                 }
             });
-            // Send pause to all worklets
-            AudioApp.audioEngine.togglePlayPause(false);
+            AudioApp.audioEngine.togglePlayPause(false); // Send pause to all
         }
-        playbackStartTimeContext = null; // Clear context time reference
+        playbackStartTimeContext = null;
 
         // --- Seek Phase ---
-        playbackStartSourceTime = clampedGlobalTime; // Set the new global source time reference
-        console.log(`App (Seek): Seeking individual tracks relative to ${clampedGlobalTime.toFixed(3)}s...`);
-        tracks.forEach(track => {
+        playbackStartSourceTime = clampedGlobalTime;
+        console.log(`App (Seek): Seeking assigned tracks relative to ${clampedGlobalTime.toFixed(3)}s...`);
+        const indicesToSeek = [leftChannelTrackIndex, rightChannelTrackIndex].filter(idx => idx !== -1);
+        indicesToSeek.forEach(trackIndex => {
+            const track = getTrackDataByIndex(trackIndex);
             if (track?.isReady) {
                 const trackSeekTime = Math.max(0, clampedGlobalTime - track.parameters.offsetSeconds);
-                AudioApp.audioEngine.seekTrack(track.id, trackSeekTime);
-                track.hasEnded = false; // Seeking resets the ended flag
-                track.lastReportedTime = trackSeekTime; // Assume seek is accurate initially for drift
+                AudioApp.audioEngine.seekTrack(trackIndex, trackSeekTime);
+                track.hasEnded = false;
+                track.lastReportedTime = trackSeekTime;
             }
         });
 
         // --- UI Update Phase ---
-        updateUIWithTime(clampedGlobalTime); // Update UI immediately to reflect seek
+        updateUIWithTime(clampedGlobalTime);
 
         // --- Resume Phase (If applicable) ---
         if (wasPlaying) {
             console.log("App (Seek): Resuming playback after seek...");
-            // Execute the 'Play' logic using the new clampedGlobalTime
-            globalPlaybackState = 'playing'; // Set state back to playing
-            playbackStartTimeContext = audioCtx.currentTime; // Record new context start time
-            // playbackStartSourceTime is already set to clampedGlobalTime
-
-            // Reschedule play commands for each track based on the new position
-            tracks.forEach(track => {
+            globalPlaybackState = 'playing';
+            playbackStartTimeContext = audioCtx.currentTime;
+            indicesToSeek.forEach(trackIndex => {
+                const track = getTrackDataByIndex(trackIndex);
                 if (track?.isReady) {
-                    // Calculate delay relative to the new targetGlobalTime
                     const scheduledPlayTime = track.parameters.offsetSeconds;
                     const timeUntilStart = scheduledPlayTime - clampedGlobalTime;
                     const delayMs = Math.max(0, timeUntilStart * 1000);
-                    console.log(`App (Seek-Resume): Track ${track.side} - DelayMs: ${delayMs.toFixed(1)}ms`);
+                    console.log(`App (Seek-Resume): Track #${trackIndex} - DelayMs: ${delayMs.toFixed(1)}ms`);
                     track.playTimeoutId = setTimeout(() => {
-                        console.log(`App: Timeout fired (Seek-Resume) - Playing track ${track.id}`);
-                        AudioApp.audioEngine.playTrack(track.id);
+                        console.log(`App: Timeout fired (Seek-Resume) - Playing track #${trackIndex}`);
+                        AudioApp.audioEngine.playTrack(trackIndex);
                         track.playTimeoutId = null;
                     }, delayMs);
                 }
             });
-            startUIUpdateLoop(); // Restart UI updates
+            startUIUpdateLoop();
         }
-        // Seek complete
     }
 
+    // --- Parameter Change Handlers (Adapted) ---
 
-    // --- Parameter Change Handlers ---
-
-    /**
-     * Handles speed changes from UI sliders. Applies to one or both tracks based on linking state.
-     * Adjusts the global time base if playing and speed is linked.
-     * @param {'left' | 'right'} trackSide - The side of the slider that triggered the change.
-     * @param {number} speed - The new speed value.
-     * @private
-     */
-    function handleSpeedChange(trackSide, speed) {
-        const newSpeedValue = Math.max(0.25, Math.min(parseFloat(speed) || 1.0, 2.0)); // Clamp 0.25-2.0
-
+    /** Handles speed changes from UI sliders. */
+    function handleSpeedChange(side, speed) { /* ... (Logic unchanged, but uses getTrackIndexForSide, getTrackDataByIndex, calls engine with index) ... */
+        const newSpeedValue = Math.max(0.25, Math.min(parseFloat(speed) || 1.0, 2.0));
         if (speedLinked) {
-            // Apply to all ready tracks and update global speed reference
-            if (Math.abs(currentGlobalSpeed - newSpeedValue) < 1e-6) return; // No change
+            if (Math.abs(currentGlobalSpeed - newSpeedValue) < 1e-6) return;
             console.log(`App: Linked speed changed to ${newSpeedValue.toFixed(2)}x`);
-
             const oldGlobalSpeed = currentGlobalSpeed;
-            currentGlobalSpeed = newSpeedValue; // Update global speed reference
-
-            // Apply speed to both tracks and update their UI sliders
-            tracks.forEach(track => {
+            currentGlobalSpeed = newSpeedValue;
+            const indicesToChange = [leftChannelTrackIndex, rightChannelTrackIndex].filter(idx => idx !== -1);
+            indicesToChange.forEach(trackIndex => {
+                const track = getTrackDataByIndex(trackIndex);
                 if (track?.isReady) {
                     track.parameters.speed = newSpeedValue;
-                    AudioApp.audioEngine.setTrackSpeed(track.id, newSpeedValue);
-                    // Update the corresponding UI slider value directly
-                    AudioApp.uiManager.setSliderValue(document.getElementById(`speed_${track.side}`), newSpeedValue, document.getElementById(`speedValue_${track.side}`), 'x');
+                    AudioApp.audioEngine.setTrackSpeed(trackIndex, newSpeedValue);
+                    const currentSide = (trackIndex === leftChannelTrackIndex) ? 'left' : 'right';
+                    AudioApp.uiManager.setSliderValue(document.getElementById(`speed_${currentSide}`), newSpeedValue, document.getElementById(`speedValue_${currentSide}`), 'x');
                 }
             });
-
-            // Adjust time base if currently playing
             const audioCtx = AudioApp.audioEngine.getAudioContext();
             if (globalPlaybackState === 'playing' && playbackStartTimeContext !== null && audioCtx) {
                 const elapsedContextTime = audioCtx.currentTime - playbackStartTimeContext;
-                const elapsedSourceTime = elapsedContextTime * oldGlobalSpeed; // Time elapsed at the OLD speed
-                const previousSourceTime = playbackStartSourceTime + elapsedSourceTime; // Actual source time reached
-                playbackStartSourceTime = previousSourceTime; // Update base source time
-                playbackStartTimeContext = audioCtx.currentTime; // Reset context start time to NOW
+                const elapsedSourceTime = elapsedContextTime * oldGlobalSpeed;
+                playbackStartSourceTime = playbackStartSourceTime + elapsedSourceTime;
+                playbackStartTimeContext = audioCtx.currentTime;
             }
-            debouncedSyncEngine(); // Debounce a seek to ensure engine catches up after speed change
-
+            debouncedSyncEngine();
         } else {
-            // Apply only to the specific track that changed
-            const track = findTrackBySide(trackSide);
+            const trackIndex = getTrackIndexForSide(side);
+            if (trackIndex === -1) return;
+            const track = getTrackDataByIndex(trackIndex);
             if (!track || !track.isReady) return;
-            if (Math.abs(track.parameters.speed - newSpeedValue) < 1e-6) return; // No change for this track
-
-            console.log(`App: Unlinked speed for track ${track.side} changed to ${newSpeedValue.toFixed(2)}x`);
+            if (Math.abs(track.parameters.speed - newSpeedValue) < 1e-6) return;
+            console.log(`App: Unlinked speed for track #${trackIndex} (UI Side: ${side}) changed to ${newSpeedValue.toFixed(2)}x`);
             track.parameters.speed = newSpeedValue;
-            AudioApp.audioEngine.setTrackSpeed(track.id, newSpeedValue);
-            // Note: Global time calculation becomes less accurate with unlinked speeds.
-            // Drift measurement will still work based on worklet reports.
+            AudioApp.audioEngine.setTrackSpeed(trackIndex, newSpeedValue);
         }
     }
 
-    /**
-     * Handles pitch changes from UI sliders. Applies to one or both tracks based on linking state.
-     * @param {'left' | 'right'} trackSide - The side of the slider that triggered the change.
-     * @param {number} pitch - The new pitch value.
-     * @private
-     */
-    function handlePitchChange(trackSide, pitch) {
-        const newPitchValue = Math.max(0.25, Math.min(parseFloat(pitch) || 1.0, 2.0)); // Clamp 0.25-2.0
-
+    /** Handles pitch changes from UI sliders. */
+    function handlePitchChange(side, pitch) { /* ... (Logic unchanged, but uses getTrackIndexForSide, getTrackDataByIndex, calls engine with index) ... */
+        const newPitchValue = Math.max(0.25, Math.min(parseFloat(pitch) || 1.0, 2.0));
         if (pitchLinked) {
-            // Apply to all ready tracks
             console.log(`App: Linked pitch changed to ${newPitchValue.toFixed(2)}x`);
-            tracks.forEach(track => {
+            const indicesToChange = [leftChannelTrackIndex, rightChannelTrackIndex].filter(idx => idx !== -1);
+            indicesToChange.forEach(trackIndex => {
+                const track = getTrackDataByIndex(trackIndex);
                 if (track?.isReady) {
                     track.parameters.pitch = newPitchValue;
-                    AudioApp.audioEngine.setTrackPitch(track.id, newPitchValue);
-                    // Update the corresponding UI slider value directly
-                    AudioApp.uiManager.setSliderValue(document.getElementById(`pitch_${track.side}`), newPitchValue, document.getElementById(`pitchValue_${track.side}`), 'x');
+                    AudioApp.audioEngine.setTrackPitch(trackIndex, newPitchValue);
+                    const currentSide = (trackIndex === leftChannelTrackIndex) ? 'left' : 'right';
+                    AudioApp.uiManager.setSliderValue(document.getElementById(`pitch_${currentSide}`), newPitchValue, document.getElementById(`pitchValue_${currentSide}`), 'x');
                 }
             });
         } else {
-            // Apply only to the specific track
-            const track = findTrackBySide(trackSide);
+            const trackIndex = getTrackIndexForSide(side);
+            if (trackIndex === -1) return;
+            const track = getTrackDataByIndex(trackIndex);
             if (!track || !track.isReady) return;
-            if (Math.abs(track.parameters.pitch - newPitchValue) < 1e-6) return; // No change
-
-            console.log(`App: Unlinked pitch for track ${track.side} changed to ${newPitchValue.toFixed(2)}x`);
+            if (Math.abs(track.parameters.pitch - newPitchValue) < 1e-6) return;
+            console.log(`App: Unlinked pitch for track #${trackIndex} (UI Side: ${side}) changed to ${newPitchValue.toFixed(2)}x`);
             track.parameters.pitch = newPitchValue;
-            AudioApp.audioEngine.setTrackPitch(track.id, newPitchValue);
+            AudioApp.audioEngine.setTrackPitch(trackIndex, newPitchValue);
         }
-        // No time base adjustment or sync needed for pitch
     }
 
-    /** Handles master gain changes from UI */
+    /** Handles master gain changes from UI. */
     function handleMasterGainChange(e) {
         AudioApp.audioEngine?.setGain(e.detail.gain);
     }
 
-    /** Internal function to sync engine after debounced wait (e.g., after speed change) */
-    function syncEngineToEstimatedTime() {
-        // Check if playing and ready before syncing
+    /** Internal function to sync engine after debounced wait. */
+    function syncEngineToEstimatedTime() { /* ... (Logic unchanged, uses handleSeekInternal) ... */
         if (globalPlaybackState !== 'playing' || !areAllActiveTracksReady()) {
             console.log("App (Debounced Sync): Skipping sync - not playing or tracks not ready.");
             return;
@@ -1053,74 +1159,67 @@ AudioApp = (function () {
         if (!audioCtx) return;
         const targetGlobalTime = calculateEstimatedSourceTime();
         console.log(`App: Debounced sync executing. Seeking engine globally to estimated time: ${targetGlobalTime.toFixed(3)}.`);
-        handleSeekInternal(targetGlobalTime); // Use the seek logic to handle pause/resume correctly
+        handleSeekInternal(targetGlobalTime);
     }
 
-    /** Handles VAD threshold changes from UI (applies to Left track only) */
-    function handleThresholdChange(e) {
-        const track = tracks[0]; // VAD only on left track currently
+    /** Handles VAD threshold changes from UI (applies to track in Left UI only). */
+    function handleThresholdChange(e) { /* ... (Logic largely unchanged, but gets trackIndex from leftChannelTrackIndex, uses vadAnalyzer, updates Left viz) ... */
+        const trackIndex = leftChannelTrackIndex; // VAD sliders currently only control Left UI's track
+        if (trackIndex === -1) return;
+        const track = getTrackDataByIndex(trackIndex);
         if (!track || !track.vad.results || track.vad.isProcessing) return;
         const {type, value} = e.detail;
-        // Delegate update and recalculation to vadAnalyzer
-        const newRegions = AudioApp.vadAnalyzer.handleThresholdUpdate(type, value);
-        // Update UI text (if element exists)
+        const newRegions = AudioApp.vadAnalyzer.handleThresholdUpdate(type, value); // vadAnalyzer needs no index
         AudioApp.uiManager.setSpeechRegionsText(newRegions);
-        // Redraw waveform highlight if visualizer exists
-        if (track.audioBuffer && waveformVizLeft) {
-            waveformVizLeft.redrawWaveformHighlight(newRegions);
+        if (track.audioBuffer && vizRefs.left.waveform) { // Update Left waveform viz
+            vizRefs.left.waveform.redrawWaveformHighlight(newRegions);
         }
     }
 
-    /** Handles the `playbackEnded` event from a worklet */
-    function handlePlaybackEnded(e) {
-        const trackId = e.detail.trackId;
-        const track = findTrackById(trackId);
+    /** Handles the `playbackEnded` event from a worklet. */
+    function handlePlaybackEnded(e) { /* ... (Logic unchanged, but uses numeric trackId, getTrackDataByIndex, getLoadedTrackCount) ... */
+        const trackIndex = e.detail.trackId; // Numeric index
+        const track = getTrackDataByIndex(trackIndex);
         if (!track) return;
-        console.log(`App: Playback ended event received for track ${track.side}.`);
-        track.hasEnded = true; // Mark this track as ended
+        console.log(`App: Playback ended event received for track #${trackIndex}.`);
+        track.hasEnded = true;
 
-        // Check if *all* currently active and ready tracks have ended
-        const activeTracksStillPlaying = tracks.filter(t => t?.isReady && !t.hasEnded && (multiTrackModeActive || t.side === 'left'));
+        // Check if *all* currently assigned and ready tracks have ended
+        const assignedIndices = [leftChannelTrackIndex, rightChannelTrackIndex].filter(idx => idx !== -1);
+        const activeTracksStillPlaying = assignedIndices.filter(idx => {
+            const t = getTrackDataByIndex(idx);
+            return t?.isReady && !t.hasEnded;
+        });
 
-        if (activeTracksStillPlaying.length === 0 && getReadyTrackCount() > 0) {
-            console.log("App: All active tracks have ended playback.");
-            globalPlaybackState = 'stopped'; // Change global state
-            stopUIUpdateLoop(); // Stop UI updates
-            playbackStartTimeContext = null; // Clear context time
-            // Set final time to max duration
+        if (activeTracksStillPlaying.length === 0 && assignedIndices.length > 0) { // Only stop if tracks were assigned
+            console.log("App: All assigned tracks have ended playback.");
+            globalPlaybackState = 'stopped';
+            stopUIUpdateLoop();
+            playbackStartTimeContext = null;
             const maxDuration = calculateMaxEffectiveDuration();
             playbackStartSourceTime = maxDuration;
-            updateUIWithTime(maxDuration); // Update UI to show end time
-            AudioApp.uiManager.setPlayButtonState(false); // Set button to 'Play'
+            updateUIWithTime(maxDuration);
+            AudioApp.uiManager.setPlayButtonState(false);
         }
     }
 
-    /** Informational handler for playback state changes from worklet */
-    function handlePlaybackStateChange(e) { /* console.log(`App: Worklet ${e.detail.trackId} reported playing state: ${e.detail.isPlaying}`); */
+    /** Informational handler for playback state changes. */
+    function handlePlaybackStateChange(e) { /* console.log(`App: Worklet #${e.detail.trackId} reported playing state: ${e.detail.isPlaying}`); */
     }
 
-    /**
-     * Handles the `timeUpdated` event from the audioEngine (forwarded from worklets).
-     * Stores the reported time for the specific track, used for drift calculation.
-     * @param {CustomEvent<{currentTime: number, trackId: string}>} e - Event details.
-     * @private
-     */
-    function handleTimeUpdate(e) {
-        const {currentTime, trackId} = e.detail;
-        const track = findTrackById(trackId);
+    /** Handles `timeUpdated` event for drift calculation. */
+    function handleTimeUpdate(e) { /* ... (Logic unchanged, uses numeric trackId, getTrackDataByIndex) ... */
+        const {currentTime, trackId: trackIndex} = e.detail; // Use numeric index
+        const track = getTrackDataByIndex(trackIndex);
         if (track) {
             track.lastReportedTime = currentTime;
-            // Drift calculation happens within the rAF loop (updateUIWithTime)
         }
     }
 
-    /** Handles keyboard shortcuts */
-    function handleKeyPress(e) {
+    /** Handles keyboard shortcuts. */
+    function handleKeyPress(e) { /* ... (Logic unchanged, uses areAllActiveTracksReady) ... */
         console.log("App: Key pressed", e.detail.key);
-        // Only handle if controls are generally enabled
-        if (!areAllActiveTracksReady() && e.detail.key !== 'Space') return; // Allow space maybe? Let's restrict for now.
         if (!areAllActiveTracksReady()) return;
-
         const key = e.detail.key;
         const jumpTimeValue = AudioApp.uiManager.getJumpTime();
         switch (key) {
@@ -1136,46 +1235,42 @@ AudioApp = (function () {
         }
     }
 
-    /** Cleans up resources before the page unloads */
-    function handleBeforeUnload() {
+    /** Cleans up resources before page unload. */
+    function handleBeforeUnload() { /* ... (Logic unchanged, iterates tracksData) ... */
         console.log("App: Unloading page...");
-        // Cancel any pending timeouts
-        tracks.forEach(track => {
+        tracksData.forEach(track => {
             if (track?.playTimeoutId) {
                 clearTimeout(track.playTimeoutId);
             }
         });
         stopUIUpdateLoop();
-        AudioApp.audioEngine?.cleanup(); // Tell engine to release context and worklets
+        AudioApp.audioEngine?.cleanup();
     }
 
-    /** Handles window resize events - redraws visuals */
-    function handleWindowResize() {
+    /** Handles window resize events - redraws visuals. */
+    function handleWindowResize() { /* ... (Logic unchanged, calls vizRefs methods, uses calculateEstimatedSourceTime, updateUIWithTime) ... */
         const currentTime = calculateEstimatedSourceTime();
-        // Resize and redraw visualizers (they handle caching internally)
-        waveformVizLeft?.resizeAndRedraw();
-        specVizLeft?.resizeAndRedraw();
-        if (multiTrackModeActive) {
-            waveformVizRight?.resizeAndRedraw();
-            specVizRight?.resizeAndRedraw();
+        vizRefs.left.waveform?.resizeAndRedraw();
+        vizRefs.left.spec?.resizeAndRedraw();
+        if (isMultiChannelModeActive) {
+            vizRefs.right.waveform?.resizeAndRedraw();
+            vizRefs.right.spec?.resizeAndRedraw();
         }
-        // Update UI time/indicators immediately after resize
         updateUIWithTime(currentTime);
     }
 
 
-    // --- Main Thread Time Calculation & UI Update ---
+    // --- Main Thread Time Calculation & UI Update (Adapted) ---
 
-    /** Starts the requestAnimationFrame loop for UI updates. */
+    /** Starts the UI update loop. */
     function startUIUpdateLoop() {
-        // Prevent multiple loops
         if (rAFUpdateHandle === null) {
             console.log("App: Starting UI update loop.");
             rAFUpdateHandle = requestAnimationFrame(updateUIBasedOnContextTime);
         }
     }
 
-    /** Stops the requestAnimationFrame loop. */
+    /** Stops the UI update loop. */
     function stopUIUpdateLoop() {
         if (rAFUpdateHandle !== null) {
             console.log("App: Stopping UI update loop.");
@@ -1184,99 +1279,72 @@ AudioApp = (function () {
         }
     }
 
-    /**
-     * Calculates the estimated current global source time based on context time and speed.
-     * @returns {number} The estimated global source time in seconds.
-     */
-    function calculateEstimatedSourceTime() {
+    /** Calculates estimated global source time. (Logic unchanged) */
+    function calculateEstimatedSourceTime() { /* ... (Implementation unchanged, uses calculateMaxEffectiveDuration) ... */
         const audioCtx = AudioApp.audioEngine.getAudioContext();
         const maxDuration = calculateMaxEffectiveDuration();
-
-        // If not playing, or context/duration invalid, return the last known source time
         if (globalPlaybackState !== 'playing' || playbackStartTimeContext === null || !audioCtx || maxDuration <= 0) {
             return playbackStartSourceTime;
         }
-        // Avoid division by zero or negative speeds
         if (currentGlobalSpeed <= 0) {
             return playbackStartSourceTime;
         }
-
         const elapsedContextTime = audioCtx.currentTime - playbackStartTimeContext;
-        const elapsedSourceTime = elapsedContextTime * currentGlobalSpeed; // Time progressed since play/resume
+        const elapsedSourceTime = elapsedContextTime * currentGlobalSpeed;
         let estimatedCurrentGlobalTime = playbackStartSourceTime + elapsedSourceTime;
-
-        // Clamp to bounds [0, maxDuration]
         return Math.max(0, Math.min(estimatedCurrentGlobalTime, maxDuration));
     }
 
-    /**
-     * Updates the UI time display, seek bar, drift display, and visualization progress indicators.
-     * Called within the rAF loop or after seeks/pauses.
-     * @param {number} globalTime - The current estimated global time.
-     * @private
-     */
-    function updateUIWithTime(globalTime) {
-        // // *** ADD Log at start of function ***
-        // console.log(`App (Pause Debug): updateUIWithTime called with globalTime = ${globalTime.toFixed(5)}`);
-
+    /** Updates UI time, seek bar, drift, and visualization indicators. */
+    function updateUIWithTime(globalTime) { /* ... (Logic largely unchanged, uses helpers for state access, updates vizRefs) ... */
         const maxEffectiveDuration = calculateMaxEffectiveDuration();
         const clampedGlobalTime = Math.max(0, Math.min(globalTime, maxEffectiveDuration));
         const fraction = maxEffectiveDuration > 0 ? clampedGlobalTime / maxEffectiveDuration : 0;
 
-        // Update Time Display & Seek Bar
         AudioApp.uiManager.updateTimeDisplay(clampedGlobalTime, maxEffectiveDuration);
-        AudioApp.uiManager.updateSeekBar(fraction); // UI Manager handles not fighting user input
+        AudioApp.uiManager.updateSeekBar(fraction);
 
-        // --- Calculate and Update Drift ---
+        // Calculate and Update Drift
         let driftMs = 0;
-        const leftTrack = tracks[0];
-        const rightTrack = tracks[1];
-        // Only calculate drift if in multi-track mode and both tracks have reported time
-        if (multiTrackModeActive && leftTrack?.isReady && rightTrack?.isReady) {
-            // Use the last reported times stored in the track state
+        const leftTrack = getTrackDataByIndex(leftChannelTrackIndex);
+        const rightTrack = getTrackDataByIndex(rightChannelTrackIndex);
+        if (isMultiChannelModeActive && leftTrack?.isReady && rightTrack?.isReady) {
             driftMs = (leftTrack.lastReportedTime - rightTrack.lastReportedTime) * 1000;
         }
         AudioApp.uiManager.updateDriftDisplay(driftMs);
 
-        // --- Update Visualizer Progress Indicators ---
-        // Left Track
-        if (leftTrack?.audioBuffer && waveformVizLeft?.updateProgressIndicator) {
-            waveformVizLeft.updateProgressIndicator(clampedGlobalTime, leftTrack.parameters.offsetSeconds, leftTrack.audioBuffer.duration);
+        // Update Visualizer Progress Indicators
+        if (leftTrack?.audioBuffer && vizRefs.left.waveform?.updateProgressIndicator) {
+            vizRefs.left.waveform.updateProgressIndicator(clampedGlobalTime, leftTrack.parameters.offsetSeconds, leftTrack.audioBuffer.duration);
         }
-        if (leftTrack?.audioBuffer && specVizLeft?.updateProgressIndicator) {
-            specVizLeft.updateProgressIndicator(clampedGlobalTime, leftTrack.parameters.offsetSeconds, leftTrack.audioBuffer.duration);
+        if (leftTrack?.audioBuffer && vizRefs.left.spec?.updateProgressIndicator) {
+            vizRefs.left.spec.updateProgressIndicator(clampedGlobalTime, leftTrack.parameters.offsetSeconds, leftTrack.audioBuffer.duration);
         }
-        // Right Track (only if active)
-        if (multiTrackModeActive && rightTrack?.audioBuffer && waveformVizRight?.updateProgressIndicator) {
-            waveformVizRight.updateProgressIndicator(clampedGlobalTime, rightTrack.parameters.offsetSeconds, rightTrack.audioBuffer.duration);
+        if (isMultiChannelModeActive && rightTrack?.audioBuffer && vizRefs.right.waveform?.updateProgressIndicator) {
+            vizRefs.right.waveform.updateProgressIndicator(clampedGlobalTime, rightTrack.parameters.offsetSeconds, rightTrack.audioBuffer.duration);
         }
-        if (multiTrackModeActive && rightTrack?.audioBuffer && specVizRight?.updateProgressIndicator) {
-            specVizRight.updateProgressIndicator(clampedGlobalTime, rightTrack.parameters.offsetSeconds, rightTrack.audioBuffer.duration);
+        if (isMultiChannelModeActive && rightTrack?.audioBuffer && vizRefs.right.spec?.updateProgressIndicator) {
+            vizRefs.right.spec.updateProgressIndicator(clampedGlobalTime, rightTrack.parameters.offsetSeconds, rightTrack.audioBuffer.duration);
         }
     }
 
-    /**
-     * The function called by requestAnimationFrame to update the UI based on current time.
-     * @param {DOMHighResTimeStamp} timestamp - Provided by requestAnimationFrame.
-     * @private
-     */
-    function updateUIBasedOnContextTime(timestamp) {
-        // Ensure loop stops if state is not 'playing'
+    /** The rAF loop function. (Logic unchanged) */
+    function updateUIBasedOnContextTime(timestamp) { /* ... (Implementation unchanged) ... */
         if (globalPlaybackState !== 'playing') {
-            rAFUpdateHandle = null; // Ensure handle is cleared
+            rAFUpdateHandle = null;
             return;
         }
         const estimatedGlobalTime = calculateEstimatedSourceTime();
         updateUIWithTime(estimatedGlobalTime);
-        // Schedule the next frame
         rAFUpdateHandle = requestAnimationFrame(updateUIBasedOnContextTime);
     }
-
 
     // --- Public Interface ---
     return {
         init: init // Expose only the init function
-        // All other functions are private or event handlers
+        // Internal helper functions (for potential future use or testing, but not strictly needed by other modules)
+        // getTrackDataByIndex: getTrackDataByIndex, // Might be useful for uiManager?
+        // getTrackIndexForSide: getTrackIndexForSide // Might be useful for uiManager?
     };
 })(); // End of AudioApp IIFE
 // --- /vibe-player/js/app.js ---
