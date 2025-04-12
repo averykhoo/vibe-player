@@ -77,3 +77,11 @@ This file tracks potential improvements, features, and known issues requiring fu
     *   **Track Deletion/Reordering:** Consider support beyond just L/R swap.
 
 <!-- /vibe-player/TODO.md -->
+
+
+
+move speed to central
+zoom in, click and drag to slide
+fix single track ui
+VAD all tracks
+drift update in real time
