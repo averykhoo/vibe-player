@@ -40,7 +40,7 @@
 
 </section>
 
-<!-- === Track Controls Section (Initially Hidden/Empty placeholder) === -->
+<!-- === Track Controls Section (Individual Speed Removed) === -->
 <!-- This section will be populated and shown by uiManager when multi-track mode is active -->
 <section id="track-controls" style="display: none;">
     <h2>Track Controls</h2>
@@ -67,17 +67,7 @@
                     <label for="delay_left">Delay (ss.ms):</label>
                     <input type="text" id="delay_left" value="0.000" size="8" disabled>
                </div>
-              <!-- Speed Placeholder (copied structure from global controls) -->
-               <div class="control-group slider-unit">
-                    <div class="slider-label-value">
-                        <label for="speed_left">Speed:</label>
-                        <span id="speedValue_left">1.00x</span>
-                    </div>
-                    <input type="range" id="speed_left" min="0.25" max="2.0" value="1.0" step="0.01" disabled>
-                    <div class="slider-markers" id="speedMarkers_left">
-                        <span data-value="0.5">0.5x</span><span data-value="1.0">1.0x</span><span data-value="1.5">1.5x</span><span data-value="2.0">2.0x</span>
-                    </div>
-               </div>
+              <!-- *** SPEED PLACEHOLDER REMOVED *** -->
               <!-- Pitch Placeholder -->
                <div class="control-group slider-unit">
                    <div class="slider-label-value">
@@ -91,10 +81,9 @@
                </div>
          </div>
 
-         <!-- Linking Controls Column (Populated by JS) -->
+         <!-- Linking Controls Column (Speed link button removed) -->
           <div id="track-controls-linking" class="track-controls-linking-column">
-               <!-- Link buttons will be added here -->
-               <button id="linkSpeedButton" class="link-button active" title="Link Speed Controls">🔗</button>
+               <!-- *** SPEED LINK BUTTON REMOVED *** -->
                <button id="linkPitchButton" class="link-button active" title="Link Pitch Controls">🔗</button>
                <!-- Volume linking maybe later -->
           </div>
@@ -120,17 +109,7 @@
                      <label for="delay_right">Delay (ss.ms):</label>
                      <input type="text" id="delay_right" value="0.000" size="8" disabled>
                 </div>
-               <!-- Speed Placeholder -->
-                <div class="control-group slider-unit">
-                     <div class="slider-label-value">
-                         <label for="speed_right">Speed:</label>
-                         <span id="speedValue_right">1.00x</span>
-                     </div>
-                     <input type="range" id="speed_right" min="0.25" max="2.0" value="1.0" step="0.01" disabled>
-                     <div class="slider-markers" id="speedMarkers_right">
-                        <span data-value="0.5">0.5x</span><span data-value="1.0">1.0x</span><span data-value="1.5">1.5x</span><span data-value="2.0">2.0x</span>
-                     </div>
-                </div>
+               <!-- *** SPEED PLACEHOLDER REMOVED *** -->
                <!-- Pitch Placeholder -->
                 <div class="control-group slider-unit">
                     <div class="slider-label-value">
@@ -152,8 +131,6 @@
     <!-- Keep this title -->
     <h2>Global Playback</h2>
 
-    <!-- Remove individual Speed/Pitch/Gain units from here -->
-
      <!-- Master Gain Control Unit -->
      <div class="control-group slider-unit" style="max-width: 300px; margin: 0 auto 10px auto;"> <!-- Center master gain -->
          <div class="slider-label-value">
@@ -165,6 +142,23 @@
              <span data-value="0">0x</span><span data-value="0.5">0.5x</span><span data-value="1.0">1x</span><span data-value="1.5">1.5x</span><span data-value="2.0">2x</span>
          </div>
      </div>
+
+     <!-- *** GLOBAL SPEED CONTROL MOVED HERE *** -->
+     <div class="control-group slider-unit" style="max-width: 300px; margin: 0 auto 10px auto;">
+          <div class="slider-label-value">
+              <!-- ** NEW ID/Label ** -->
+              <label for="globalSpeedControl">Global Speed:</label>
+              <span id="globalSpeedValue">1.00x</span>
+          </div>
+          <!-- ** NEW ID ** -->
+          <input type="range" id="globalSpeedControl" min="0.25" max="2.0" value="1.0" step="0.01">
+          <!-- ** NEW ID ** -->
+          <div class="slider-markers" id="globalSpeedMarkers">
+              <span data-value="0.5">0.5x</span><span data-value="1.0">1.0x</span><span data-value="1.5">1.5x</span><span data-value="2.0">2.0x</span>
+          </div>
+     </div>
+     <!-- *** END GLOBAL SPEED CONTROL *** -->
+
 
     <!-- Jump Controls (Keep) -->
     <div class="control-group jump-controls">
@@ -190,7 +184,7 @@
 
 <!-- === VAD Tuning Section (Keep as is, applies to Left Track) === -->
 <section id="vad-tuning">
-    <h2>Voice Activity Detection (Silero) <small>- Applies to Left Track</small></h2>
+    <h2>Voice Activity Detection (Silero) <small>- Recalculation applies only to Left Track</small></h2> <!-- Clarified VAD scope -->
     <div id="vadProgressContainer" class="progress-indicator segmented vad-progress-indicator-container" style="margin-top: 5px; margin-bottom: 5px;">
         <span id="vadProgressBar" class="progress-indicator-bar" style="width: 0;"></span>
     </div>
@@ -218,7 +212,7 @@
 
 
 <!-- === Visualizations Section === -->
-<!-- Left Track Visualizations (Modified IDs) -->
+<!-- Left Track Visualizations -->
 <section id="visualization_left" class="visualization">
     <h3>Left Track Waveform <small>(Speech in Yellow)</small></h3>
     <div class="canvas-container">
@@ -240,7 +234,7 @@
 
 <!-- Right Track Visualizations (Initially Hidden) -->
 <section id="visualization_right" class="visualization" style="display: none;">
-     <h3>Right Track Waveform <small>(Speech Highlighting Not Implemented)</small></h3> <!-- VAD only on Left -->
+     <h3>Right Track Waveform <small>(Speech Highlighting TBD)</small></h3> <!-- Updated comment -->
      <div class="canvas-container">
          <canvas id="waveformCanvas_right"></canvas>
          <div id="waveformProgressBar_right" class="progress-bar">
