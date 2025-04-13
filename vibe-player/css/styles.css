@@ -3,7 +3,7 @@
 /* --- Global Styles --- */
 body {
   font-family: "Pixelated MS Sans Serif", Arial;
-  font-size: 15px;
+  font-size: 15px; /* Base font size */
   margin: 8px;
   background-color: silver;
   color: #222;
@@ -16,14 +16,18 @@ body {
   image-rendering: crisp-edges;
 }
 
-/* Style H2 and H3 */
+/* Consistent font size for UI elements */
+button, input, label, legend, select, table, span, p, div {
+    font-size: 15px;
+}
+
 h2, h3 {
   border-bottom: 1px solid grey;
   padding-bottom: 1px;
   margin-top: 0.8em;
   margin-bottom: 0.4em;
   font-weight: bold;
-  font-size: 15px;
+  font-size: 15px; /* Match base font size */
 }
 
 /* --- Layout Sections --- */
@@ -40,168 +44,228 @@ section h2, section h3 {
 }
 
 /* --- File Input --- */
-#hiddenAudioFile {
-    display: none;
+#hiddenAudioFile_left, #hiddenAudioFile_right { display: none; }
+#file-loader .field-row { align-items: baseline; }
+#file-loader button { flex-shrink: 0; min-height: 26px; padding: 1px 10px; }
+#file-loader span { margin-left: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 80px; line-height: 1.4; }
+#file-loader p { margin: 0 0 0 10px; flex-grow: 1; color: grey; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#multi-track-options { padding-left: 75px; }
+#multi-track-options button { margin-right: 5px; }
+
+/* --- Track Controls Section --- */
+#track-controls { }
+#track-controls-container {
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: space-between;
+    gap: 10px; /* Gap between columns */
 }
-#file-loader .field-row {
-    align-items: baseline;
+.track-controls-column {
+    flex: 1;
+    min-width: 200px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* Consistent gap between control groups */
 }
-#file-loader .field-row button {
-    flex-shrink: 0;
-    font-size: 15px;
-    min-height: 26px;
-    padding: 1px 10px;
-}
-#file-loader .field-row span#fileNameDisplay {
-    margin-left: 6px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex-shrink: 1;
-    min-width: 80px;
-    font-size: 15px;
-    line-height: 1.4;
-}
-#file-loader p#fileInfo {
-    margin: 0 0 0 10px;
-    flex-grow: 1;
-    font-size: 15px;
-    color: grey;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+.track-controls-column h3 {
+    margin-bottom: 6px;
+    text-align: center;
 }
 
-/* --- REMOVED Old VAD Progress Bar Styles --- */
-/* (No rules here anymore) */
-
-/* --- NEW: Style for 98.css VAD progress bar container --- */
-#vadProgressContainer {
-    margin-top: 5px; /* Add space above the progress bar */
-    display: block; /* Ensure it's always visible */
-    /* Height is determined by 98.css */
+/* --- Linking Controls Column - Revised Alignment --- */
+.track-controls-linking-column {
+    flex: 0 0 auto; /* Don't grow/shrink */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end; /* Align button towards the bottom */
+    align-items: center;
+    /* Calculate padding/margin to align with Pitch */
+    /* This relies on the relative height of elements above */
+    padding-bottom: 25px; /* Adjust padding to align with pitch slider bottom area */
+    /* border: 1px dashed blue; */ /* Debug border */
+}
+.link-button {
+    min-width: 24px;
+    min-height: 24px;
+    padding: 2px;
+    font-size: 18px;
+    line-height: 1;
+    margin: 0; /* Reset margin */
+    /* border: 1px dashed green; */ /* Debug border */
+}
+.link-button.active {
+    box-shadow: inset -1px -1px #fff,inset 1px 1px #0a0a0a,inset -2px -2px #dfdfdf,inset 2px 2px grey;
+    background-color: #ccc;
+    padding-top: 4px;
+    padding-left: 6px;
 }
 
-
-/* --- Seek Bar Section --- */
-#playback-progress {
+/* --- Individual Track Controls --- */
+#track-controls .slider-unit {
+    padding: 6px 10px 1.0em 10px; /* Reduced bottom padding slightly */
+    width: 100%;
+    box-sizing: border-box;
+    /* Make slider units flex containers to manage children */
+    display: flex;
+    flex-direction: column;
+}
+#track-controls .control-group {
+    margin-bottom: 5px; /* Space below each control group */
+    min-height: 26px; /* Consistent minimum height */
     display: flex;
     align-items: center;
-    padding: 2px 0px;
-    margin-bottom: 4px;
-    background: none;
-    box-shadow: none;
-    border-image: none;
-    border: none;
+    gap: 5px;
 }
-#playback-progress input[type=range]#seekBar {
-    flex-grow: 1;
-    margin: 0 8px;
-    height: auto;
-    vertical-align: middle;
+/* Ensure Mute button group doesn't take extra space if alone */
+#track-controls .control-group:has(button#mute_left),
+#track-controls .control-group:has(button#mute_right) {
+    margin-bottom: 8px; /* Add slightly more space after mute */
 }
-#playback-progress #timeDisplay {
-    margin: 0;
-    flex-shrink: 0;
-    font-size: 15px;
-    font-weight: normal;
+#track-controls label {
+    display: block; /* Make label block for delay */
+    margin-bottom: 2px;
 }
-.visually-hidden {
-  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
-  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+#track-controls input[type=text] { /* Delay input */
+    width: 70px;
+    height: 26px;
+    padding: 2px 4px;
+    box-sizing: border-box; /* Include padding/border in size */
 }
 
+/* --- Mute Button Active State --- */
+#track-controls .control-group button.active {
+    box-shadow: inset -1px -1px #fff,inset 1px 1px #0a0a0a,inset -2px -2px #dfdfdf,inset 2px 2px grey;
+    background-color: #ccc;
+    padding-top: 4px;
+    padding-left: 6px;
+}
 
-/* --- Controls Section --- */
-#controls button, #controls input[type=number] {
-  margin: 0 4px;
-  cursor: pointer;
-  vertical-align: middle;
-  font-size: 15px;
+/* --- Global Controls Section --- */
+#controls {
+    /* Container for Gain/Speed/Jump/Seek */
 }
-#controls button {
-    min-height: 26px;
-    padding: 1px 10px;
+
+/* --- Gain/Speed Side-by-Side Layout --- */
+/* Create a wrapper div around the Gain and Speed units in index.html if needed, or use flex here */
+/* Assuming they are direct children of #controls for now */
+#controls > .slider-unit { /* Target only direct children slider-units */
+    /* Removed centering margins */
+    margin-bottom: 10px;
 }
-#controls .control-group {
-    margin-bottom: 5px;
+/* Use Flexbox on the #controls section itself, or a dedicated wrapper */
+#controls {
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping on small screens */
+    justify-content: center; /* Center items horizontally */
+    gap: 15px; /* Space between items */
+    align-items: flex-start; /* Align tops */
 }
-#controls .control-group:last-child {
-    margin-bottom: 0;
+/* Style for the Gain and Speed containers */
+#controls .slider-unit[style*="max-width"] { /* Target Gain and Speed specifically */
+    flex: 1 1 250px; /* Allow shrinking, basis of 250px */
+    max-width: 350px; /* Max width */
+    min-width: 200px; /* Min width */
 }
+
+/* --- Jump Controls - Center below Gain/Speed --- */
 #controls .jump-controls {
+    /* Force jump controls onto a new line and center */
+    width: 100%; /* Take full width */
+    order: 3; /* Ensure it comes after Gain/Speed */
+    margin-top: 0; /* Adjust top margin if needed */
     margin-bottom: 8px;
-    margin-top: 6px;
     display: flex;
     align-items: center;
     justify-content: center;
 }
+#controls .jump-controls button,
 #controls .jump-controls input[type=number] {
-    width: 50px;
-    height: 26px;
-    padding: 2px 3px;
+    margin: 0 4px;
+    cursor: pointer;
+    vertical-align: middle;
+}
+#controls .jump-controls button { min-height: 26px; padding: 1px 10px; }
+#controls .jump-controls input[type=number] {
+    width: 50px; height: 26px; padding: 2px 3px;
     box-shadow: inset -1px -1px #fff,inset 1px 1px grey,inset -2px -2px #dfdfdf,inset 2px 2px #0a0a0a;
-    border: none;
-    text-align: center; /* Center the number */
+    border: none; text-align: center;
 }
 
-/* Horizontal Slider Layout (Applies to Controls and VAD) */
-.horizontal-sliders {
+/* --- Seek Bar Section - Center below Jump --- */
+#controls #playback-progress {
+    width: 100%; /* Full width */
+    order: 4; /* Ensure it comes after Jump */
     display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 6px;
-    align-items: flex-start;
+    align-items: center;
+    padding: 2px 0px;
+    margin-bottom: 4px;
+    background: none; box-shadow: none; border: none; /* Reset section style */
 }
-.horizontal-sliders .slider-unit {
-    flex: 1;
-    min-width: 180px;
-    margin-bottom: 0;
-    padding: 6px 15px 1.0em 15px;
+#controls #playback-progress input[type=range]#seekBar {
+    flex-grow: 1; margin: 0 8px; height: auto; vertical-align: middle;
+}
+#controls #playback-progress #timeDisplay {
+    margin: 0; flex-shrink: 0; font-weight: normal;
 }
 
+/* --- Drift Display - Center below Seek --- */
+#controls #drift-display {
+    width: 100%; /* Full width */
+    order: 5; /* Ensure it comes last */
+    text-align: center;
+    margin-top: 5px;
+    font-size: 0.9em;
+    color: #555;
+}
+#controls #driftValueMs {
+    font-weight: bold;
+}
 
-/* --- Slider Units Styling (General) --- */
+/* --- Shared Slider Unit Styling --- */
+/* (Applies to Gain, Speed, Track Volume, Track Pitch, VAD Thresholds) */
 .slider-unit {
     position: relative;
     border: 2px groove transparent;
     border-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='5' height='5' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='gray' d='M0 0h4v1H0z'/%3E%3Cpath fill='gray' d='M0 0h1v4H0z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h2v1H1z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h1v2H1z'/%3E%3Cpath fill='%23fff' d='M0 4h5v1H0z'/%3E%3Cpath fill='%23fff' d='M4 0h1v5H4z'/%3E%3Cpath fill='%23dfdfdf' d='M3 1h1v3H3z'/%3E%3Cpath fill='%23dfdfdf' d='M1 3h3v1H1z'/%3E%3C/svg%3E") 2;
     box-sizing: border-box;
     background-color: silver;
+    padding: 6px 15px 1.0em 15px; /* Default padding */
+    display: flex; /* Use flex for internal layout */
+    flex-direction: column; /* Stack label/slider/markers */
 }
 .slider-label-value {
     margin-bottom: 2px;
-    font-size: 15px;
 }
 .slider-label-value label {
     margin-right: 4px;
     font-weight: bold;
     display: inline;
-    font-size: 15px;
 }
 .slider-label-value span {
     display: inline;
     margin-left: 3px;
-    font-size: 15px;
 }
-input[type=range] {
+.slider-unit input[type=range] {
     width: 100%;
     box-sizing: border-box;
-    margin: 4px 0 4px 0;
+    margin: 4px 0 0 0; /* Removed bottom margin */
     height: 21px;
     cursor: pointer;
     display: block;
     vertical-align: middle;
+    order: 1; /* Ensure slider is above markers */
 }
 .slider-markers {
-    position: relative;
+    position: relative; /* Keep relative for absolute children */
     width: 100%;
-    height: 1.3em;
-    margin-top: 2px;
+    height: 1.3em; /* Height for text */
+    margin-top: -2px; /* Pull markers up closer to slider track */
+    order: 2; /* Ensure markers are below slider */
+    /* border: 1px dashed red; */ /* Debug border */
 }
 .slider-markers span {
     position: absolute;
-    bottom: 0;
+    bottom: 0; /* Align text to bottom of container */
     color: #222;
     cursor: pointer;
     transform: translateX(-50%);
@@ -212,13 +276,20 @@ input[type=range] {
     color: #00f;
 }
 
-
-/* --- VAD Tuning Section --- */
+/* --- VAD Tuning Section Layout --- */
 #vad-tuning .horizontal-sliders {
     margin-top: 0;
+    /* Use flexbox for side-by-side layout */
+    display: flex;
+    flex-wrap: wrap; /* Allow wrapping */
+    gap: 15px; /* Space between sliders */
+    justify-content: center; /* Center sliders if they wrap */
 }
 #vad-tuning .slider-unit {
     padding: 6px 15px 6px 15px;
+    flex: 1 1 250px; /* Allow shrinking, basis */
+    max-width: 350px;
+    min-width: 200px;
 }
 #vad-tuning .control-group {
     margin-bottom: 0;
@@ -229,18 +300,21 @@ input[type=range] {
      align-items: center;
      width: 100%;
      margin-bottom: 2px;
-     font-size: 15px;
 }
-#vad-tuning .slider-label-value label {
-    font-size: 15px;
-}
-#vad-tuning .slider-label-value span {
-    margin-left: 6px;
-    font-size: 15px;
-}
+#vad-tuning .slider-label-value label { }
+#vad-tuning .slider-label-value span { margin-left: 6px; }
 #vad-tuning input[type=range] {
-    margin: 4px 0 4px 0;
+    margin: 4px 0 0 0; /* Align with other sliders */
     height: 21px;
+}
+#vad-tuning .slider-markers {
+    margin-top: -2px; /* Align with other markers */
+}
+/* VAD Progress */
+#vadProgressContainer {
+    margin-top: 5px;
+    margin-bottom: 5px;
+    display: block;
 }
 
 
@@ -253,121 +327,30 @@ input[type=range] {
     padding: 7px 7px;
     background-color: silver;
 }
-.canvas-container {
-    position: relative;
-}
-.visualization h3 {
-    margin: 0 0 4px 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: none;
-    font-size: 15px;
-}
-.visualization h3 small {
-    font-size: 15px;
-    font-weight: normal;
-}
-/* Removed .vad-indicator styles */
-canvas {
-    display: block;
-    width: 100%;
-    height: 120px;
-    cursor: crosshair;
-    box-sizing: border-box;
-    border: 1px solid grey;
-    box-shadow: inset 1px 1px #dfdfdf, inset -1px -1px grey;
-    image-rendering: pixelated;
-}
-#waveformCanvas {
-    background-color: #000;
-}
-#spectrogramCanvas {
-    height: 200px;
-    background-color: #000;
-}
+.canvas-container { position: relative; }
+.visualization h3 { margin: 0 0 4px 0; display: flex; justify-content: space-between; align-items: center; border-bottom: none; }
+.visualization h3 small { font-weight: normal; }
+canvas { display: block; width: 100%; cursor: crosshair; box-sizing: border-box; border: 1px solid grey; box-shadow: inset 1px 1px #dfdfdf, inset -1px -1px grey; image-rendering: pixelated; background-color: #000; }
+#waveformCanvas_left, #waveformCanvas_right { height: 120px; }
+#spectrogramCanvas_left, #spectrogramCanvas_right { height: 200px; }
 
-
-/* ---* --- Progress Bar Overlay --- */
-/* Container for the overlay elements */
-.progress-bar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    pointer-events: none; /* Allow clicks through */
-    box-sizing: border-box;
-}
-/* Match height to corresponding canvas */
-#waveformProgressBar { height: 120px; }
-#spectrogramProgressBar { height: 200px; }
-
-/* The actual red line indicator - uses the NEW class name */
-.playback-position-indicator {
-    position: absolute;
-    top: 0;
-    bottom: 0;
-    left: 0px; /* Position set by JS */
-    width: 2px; /* Width of the red line */
-    background: rgba(255, 0, 0, 0.7); /* Semi-transparent red */
-    pointer-events: none; /* Allow clicks through */
-    /* Reset styles inherited from 98.css if necessary */
-    height: 100%; /* Make sure it spans full height */
-    padding: 0;
-    margin: 0;
-    box-shadow: none;
-    min-height: auto; /* Override 98.css min-height */
-}
+/* --- Progress Bar Overlay --- */
+.progress-bar { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; box-sizing: border-box; overflow: hidden; }
+.playback-position-indicator { position: absolute; top: 0; bottom: 0; left: 0px; width: 2px; background: rgba(255, 0, 0, 0.7); pointer-events: none; height: 100%; padding: 0; margin: 0; box-shadow: none; min-height: auto; }
+.playback-position-indicator.inactive { background: rgba(80, 80, 80, 0.7); }
 
 /* --- UI Elements --- */
-.spinner {
-    display: none;
-    font-size: 15px;
-    color: #222;
-    font-weight: normal;
-}
-#speechRegionsDisplay {
-    white-space: pre-wrap; word-break: break-all; max-height: 120px; overflow-y: auto;
-    border: 2px groove transparent;
-    border-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='5' height='5' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='gray' d='M0 0h4v1H0z'/%3E%3Cpath fill='gray' d='M0 0h1v4H0z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h2v1H1z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h1v2H1z'/%3E%3Cpath fill='%23fff' d='M0 4h5v1H0z'/%3E%3Cpath fill='%23fff' d='M4 0h1v5H4z'/%3E%3Cpath fill='%23dfdfdf' d='M3 1h1v3H3z'/%3E%3Cpath fill='%23dfdfdf' d='M1 3h3v1H1z'/%3E%3C/svg%3E") 2;
-    background-color: #fff;
-    padding: 2px 3px;
-    font-family: monospace;
-    font-size: 15px;
-    line-height: 1.2;
-}
-
+.spinner { display: none; color: #222; font-weight: normal; }
+#speechRegionsDisplay { /* Styles unchanged */ white-space: pre-wrap; word-break: break-all; max-height: 120px; overflow-y: auto; border: 2px groove transparent; border-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='5' height='5' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='gray' d='M0 0h4v1H0z'/%3E%3Cpath fill='gray' d='M0 0h1v4H0z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h2v1H1z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h1v2H1z'/%3E%3Cpath fill='%23fff' d='M0 4h5v1H0z'/%3E%3Cpath fill='%23fff' d='M4 0h1v5H4z'/%3E%3Cpath fill='%23dfdfdf' d='M3 1h1v3H3z'/%3E%3Cpath fill='%23dfdfdf' d='M1 3h3v1H1z'/%3E%3C/svg%3E") 2; background-color: #fff; padding: 2px 3px; font-family: monospace; line-height: 1.2; }
 
 /* --- Keybinds Table --- */
 #keybinds { margin-top: 8px; }
-#keybinds table {
-    width: 100%; border-collapse: collapse;
-    border: 2px groove transparent;
-    border-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='5' height='5' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='gray' d='M0 0h4v1H0z'/%3E%3Cpath fill='gray' d='M0 0h1v4H0z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h2v1H1z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h1v2H1z'/%3E%3Cpath fill='%23fff' d='M0 4h5v1H0z'/%3E%3Cpath fill='%23fff' d='M4 0h1v5H4z'/%3E%3Cpath fill='%23dfdfdf' d='M3 1h1v3H3z'/%3E%3Cpath fill='%23dfdfdf' d='M1 3h3v1H1z'/%3E%3C/svg%3E") 2;
-    background-color: #fff;
-    font-size: 15px;
-}
-#keybinds th, #keybinds td {
-    padding: 2px 4px;
-    border-bottom: 1px solid silver;
-    text-align: left;
-    font-size: 15px;
-}
-#keybinds tr:last-child td {
-    border-bottom: none;
-}
-#keybinds th {
-    background: silver;
-    box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px grey, inset 2px 2px #dfdfdf;
-    box-sizing: border-box; font-weight: normal;
-    padding: 2px 4px;
-    border-bottom: 1px solid #0a0a0a;
-    font-size: 15px;
-}
+#keybinds table { width: 100%; border-collapse: collapse; border: 2px groove transparent; border-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='5' height='5' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='gray' d='M0 0h4v1H0z'/%3E%3Cpath fill='gray' d='M0 0h1v4H0z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h2v1H1z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h1v2H1z'/%3E%3Cpath fill='%23fff' d='M0 4h5v1H0z'/%3E%3Cpath fill='%23fff' d='M4 0h1v5H4z'/%3E%3Cpath fill='%23dfdfdf' d='M3 1h1v3H3z'/%3E%3Cpath fill='%23dfdfdf' d='M1 3h3v1H1z'/%3E%3C/svg%3E") 2; background-color: #fff; }
+#keybinds th, #keybinds td { padding: 2px 4px; border-bottom: 1px solid silver; text-align: left; }
+#keybinds tr:last-child td { border-bottom: none; }
+#keybinds th { background: silver; box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px grey, inset 2px 2px #dfdfdf; box-sizing: border-box; font-weight: normal; padding: 2px 4px; border-bottom: 1px solid #0a0a0a; }
 
 /* --- Small Tag --- */
-small {
-  font-size: 15px;
-}
+small { /* Styles unchanged */ }
 
 /* /vibe-player/styles.css */

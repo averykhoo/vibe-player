@@ -179,23 +179,97 @@ AudioApp = (function() {
     }
     /** Handles `audioLoaded` event. */
     async function handleAudioLoaded(e) { /* ... (Implementation unchanged) ... */ const { audioBuffer, trackId: trackIndex } = e.detail; const sm = AudioApp.stateManager; const track = sm.getTrackByIndex(trackIndex); if (!track || track.audioBuffer || !track.isLoading) { console.warn(`App: handleAudioLoaded ignored for track #${trackIndex}.`); return; } console.log(`App: Audio decoded for track #${trackIndex}. Duration: ${audioBuffer.duration.toFixed(2)}s`); track.audioBuffer = audioBuffer; track.isLoading = false; const uiSide = (trackIndex === sm.getLeftTrackIndex()) ? 'left' : (trackIndex === sm.getRightTrackIndex()) ? 'right' : null; if (uiSide) { AudioApp.uiManager.setFileInfo(uiSide, `Ready: ${track.file?.name || 'Unknown'}`); if (trackIndex === sm.getLeftTrackIndex()) { runVadInBackground(trackIndex); } await drawTrackVisuals(uiSide); } else { console.warn(`App: Audio loaded for unassigned track index #${trackIndex}. No UI update.`); } const maxDuration = sm.calculateMaxEffectiveDuration(); const currentTime = calculateEstimatedSourceTime(); AudioApp.uiManager.updateTimeDisplay(currentTime, maxDuration); }
-    /** Handles `workletReady` event. */
-    async function handleWorkletReady(e) { /* ... (Panning logic slightly simplified as solo isn't a factor) ... */
-        const trackIndex = e.detail.trackId; const sm = AudioApp.stateManager; const track = sm.getTrackByIndex(trackIndex); console.log(`App: handleWorkletReady called for track #${trackIndex}.`); if (!track || !track.audioBuffer) { console.warn(`App: Worklet ready event ignored for track #${trackIndex}, track/buffer missing.`); return; } console.log(`App: Worklet ready for track #${trackIndex}. Applying initial parameters.`); track.isReady = true; track.isLoading = false; track.hasEnded = false; track.lastReportedTime = 0.0; const uiSide = (trackIndex === sm.getLeftTrackIndex()) ? 'left' : (trackIndex === sm.getRightTrackIndex()) ? 'right' : null;
-        AudioApp.audioEngine.setVolume(trackIndex, track.parameters.volume); AudioApp.audioEngine.setTrackSpeed(trackIndex, track.parameters.speed); AudioApp.audioEngine.setTrackPitch(trackIndex, track.parameters.pitch);
-        if (trackIndex === sm.getRightTrackIndex() && !vizRefs.right.waveform) { console.log("App: Creating Right visualizer instances."); try { vizRefs.right.waveform = AudioApp.waveformVisualizer.createInstance({ canvasId: 'waveformCanvas_right', indicatorId: 'waveformProgressIndicator_right' }); } catch(err) { console.error("Failed creating waveformVizRight", err); } try { vizRefs.right.spec = AudioApp.spectrogramVisualizer.createInstance({ canvasId: 'spectrogramCanvas_right', spinnerId: 'spectrogramSpinner_right', indicatorId: 'spectrogramProgressIndicator_right' }); } catch(err) { console.error("Failed creating specVizRight", err); } AudioApp.uiManager.showMultiTrackUI(true); }
+    /**
+     * Handles `workletReady` event from audioEngine. Sets pan, applies mute state,
+     * draws visuals, enables controls, manages multi-channel mode activation,
+     * and enables Swap/Remove buttons when appropriate. Includes diagnostic logging.
+     * @param {CustomEvent<{trackId: number}>} e - Event uses numeric trackId.
+     * @private
+     */
+    async function handleWorkletReady(e) {
+        const trackIndex = e.detail.trackId; // Numeric index from engine event
+        const sm = AudioApp.stateManager;
+        const track = sm.getTrackByIndex(trackIndex);
+        // *** Log Entry ***
+        console.log(`App: handleWorkletReady called for track #${trackIndex}.`);
+        if (!track || !track.audioBuffer) { console.warn(`App: Worklet ready event ignored for track #${trackIndex}, track/buffer missing.`); return; }
+        console.log(`App: Worklet ready for track #${trackIndex}. Applying initial parameters.`);
+        track.isReady = true; track.isLoading = false; track.hasEnded = false; track.lastReportedTime = 0.0;
+        const uiSide = (trackIndex === sm.getLeftTrackIndex()) ? 'left' : (trackIndex === sm.getRightTrackIndex()) ? 'right' : null;
+
+        // Apply initial parameters
+        AudioApp.audioEngine.setVolume(trackIndex, track.parameters.volume);
+        AudioApp.audioEngine.setTrackSpeed(trackIndex, track.parameters.speed);
+        AudioApp.audioEngine.setTrackPitch(trackIndex, track.parameters.pitch);
+
+        // Create Right Visualizers if needed
+        if (trackIndex === sm.getRightTrackIndex() && !vizRefs.right.waveform) { /* ... create viz ... */ console.log("App: Creating Right visualizer instances."); try { vizRefs.right.waveform = AudioApp.waveformVisualizer.createInstance({ canvasId: 'waveformCanvas_right', indicatorId: 'waveformProgressIndicator_right' }); } catch(err) { console.error("Failed creating waveformVizRight", err); } try { vizRefs.right.spec = AudioApp.spectrogramVisualizer.createInstance({ canvasId: 'spectrogramCanvas_right', spinnerId: 'spectrogramSpinner_right', indicatorId: 'spectrogramProgressIndicator_right' }); } catch(err) { console.error("Failed creating specVizRight", err); } AudioApp.uiManager.showMultiTrackUI(true); }
+
         // --- Panning Logic ---
-        AudioApp.audioEngine.setPan(trackIndex, 0); track.parameters.pan = 0;
-        const leftIdx = sm.getLeftTrackIndex(); const rightIdx = sm.getRightTrackIndex(); const leftTrackReady = sm.getTrackByIndex(leftIdx)?.isReady ?? false; const rightTrackReady = sm.getTrackByIndex(rightIdx)?.isReady ?? false;
-        if (leftIdx !== -1 && rightIdx !== -1 && leftTrackReady && rightTrackReady) { if (!sm.getIsMultiChannelModeActive()) { console.log("App: Both tracks ready, activating multi-channel L/R panning."); sm.updateMultiChannelMode(); AudioApp.audioEngine.setPan(leftIdx, -1); sm.getTrackByIndex(leftIdx).parameters.pan = -1; AudioApp.audioEngine.setPan(rightIdx, 1); sm.getTrackByIndex(rightIdx).parameters.pan = 1; AudioApp.uiManager.enableSwapButton(true); AudioApp.uiManager.enableRemoveButton(true); } }
-        else { if (sm.getIsMultiChannelModeActive()) { console.log("App: Conditions for multi-channel mode no longer met, deactivating."); sm.updateMultiChannelMode(); if (leftIdx !== -1 && leftTrackReady) { AudioApp.audioEngine.setPan(leftIdx, 0); sm.getTrackByIndex(leftIdx).parameters.pan = 0;} if (rightIdx !== -1 && rightTrackReady) { AudioApp.audioEngine.setPan(rightIdx, 0); sm.getTrackByIndex(rightIdx).parameters.pan = 0;} AudioApp.uiManager.enableSwapButton(false); AudioApp.uiManager.enableRemoveButton(false); } }
+        AudioApp.audioEngine.setPan(trackIndex, 0); track.parameters.pan = 0; // Set initial pan & state
+        const leftIdx = sm.getLeftTrackIndex(); const rightIdx = sm.getRightTrackIndex();
+        const leftTrack = sm.getTrackByIndex(leftIdx);
+        const rightTrack = sm.getTrackByIndex(rightIdx);
+        // Re-evaluate readiness AFTER marking current track ready
+        const leftTrackReady = leftTrack?.isReady ?? false;
+        const rightTrackReady = rightTrack?.isReady ?? false;
+        let multiModeNowActive = false; // Track if mode becomes active *in this call*
+
+        // *** Diagnostic Log: Check conditions for multi-channel mode ***
+        console.log(`App (handleWorkletReady #${trackIndex}): Checking multi-channel conditions - LeftIdx=${leftIdx}, RightIdx=${rightIdx}, LeftReady=${leftTrackReady}, RightReady=${rightTrackReady}`);
+
+        if (leftIdx !== -1 && rightIdx !== -1 && leftTrackReady && rightTrackReady) { // Both assigned and ready
+            if (!sm.getIsMultiChannelModeActive()) { // Check previous state
+                 console.log("App: Both tracks ready, activating multi-channel L/R panning.");
+                 sm.updateMultiChannelMode(); // Update state flag
+                 multiModeNowActive = true; // Mark that mode was activated now
+                 AudioApp.audioEngine.setPan(leftIdx, -1); if(leftTrack) leftTrack.parameters.pan = -1;
+                 AudioApp.audioEngine.setPan(rightIdx, 1); if(rightTrack) rightTrack.parameters.pan = 1;
+            } else {
+                 console.log("App: Multi-channel mode already active.");
+                 multiModeNowActive = true; // It remains active
+            }
+        } else { // Conditions not met
+            if (sm.getIsMultiChannelModeActive()) { // If it WAS active
+                 console.log("App: Conditions for multi-channel mode no longer met, deactivating.");
+                 sm.updateMultiChannelMode(); // Update state flag
+                 multiModeNowActive = false; // Mode deactivated
+                 // Re-center pan
+                 if (leftIdx !== -1 && leftTrackReady) { AudioApp.audioEngine.setPan(leftIdx, 0); if(leftTrack) leftTrack.parameters.pan = 0;}
+                 if (rightIdx !== -1 && rightTrackReady) { AudioApp.audioEngine.setPan(rightIdx, 0); if(rightTrack) rightTrack.parameters.pan = 0;}
+            } else {
+                 console.log("App: Conditions not met, multi-channel mode remains inactive.");
+                 multiModeNowActive = false;
+            }
+        }
         // --- End Panning Logic ---
-        if (uiSide) { AudioApp.uiManager.enableTrackControls(uiSide, true); console.log(`App: Checking conditions for UI side ${uiSide}. Is Left Channel Index? ${trackIndex === sm.getLeftTrackIndex()}`); if (trackIndex === sm.getLeftTrackIndex()) { console.log("App: Enabling Right Track Load Button."); AudioApp.uiManager.enableRightTrackLoadButton(true); if (track.vad.results && !track.vad.isProcessing) { AudioApp.uiManager.enableVadControls(true); } } await drawTrackVisuals(uiSide); }
-        else { console.warn(`App: Worklet for track #${trackIndex} is ready, but it is not currently assigned to Left or Right UI channel.`); }
-        if (areAllActiveTracksReady()) { console.log("App: All assigned tracks ready. Enabling global playback."); AudioApp.uiManager.enablePlaybackControls(true); AudioApp.uiManager.enableSeekBar(true); const maxDuration = sm.calculateMaxEffectiveDuration(); AudioApp.uiManager.updateTimeDisplay(sm.getPlaybackStartSourceTime(), maxDuration); }
-        else { console.log("App: Waiting for other assigned track(s) to become ready."); AudioApp.uiManager.enablePlaybackControls(false); AudioApp.uiManager.enableSeekBar(false); }
-        // *** NEW: Apply mute state when track becomes ready ***
+
+        // ** Set Swap/Remove button state based on calculated multiModeNowActive **
+        console.log(`App (handleWorkletReady #${trackIndex}): Setting Swap/Remove enabled state based on multiModeNowActive = ${multiModeNowActive}`);
+        AudioApp.uiManager.enableSwapButton(multiModeNowActive);
+        AudioApp.uiManager.enableRemoveButton(multiModeNowActive);
+
+
+        // Apply mute state after potentially changing pan/multi-mode
         applyMuteState();
+
+        // Update UI for the specific side
+        if (uiSide) {
+             AudioApp.uiManager.enableTrackControls(uiSide, true);
+             console.log(`App: Checking conditions for UI side ${uiSide}. Is Left Channel Index? ${trackIndex === sm.getLeftTrackIndex()}`);
+             if (trackIndex === sm.getLeftTrackIndex()) { // Track assigned to Left UI
+                 console.log("App: Enabling Right Track Load Button."); AudioApp.uiManager.enableRightTrackLoadButton(true);
+                 if (track.vad.results && !track.vad.isProcessing) { AudioApp.uiManager.enableVadControls(true); }
+             }
+             await drawTrackVisuals(uiSide);
+        } else { console.warn(`App: Worklet for track #${trackIndex} is ready, but it is not currently assigned to Left or Right UI channel.`); }
+
+        // Check overall readiness for global controls
+        if (areAllActiveTracksReady()) {
+            console.log("App: All assigned tracks ready. Enabling global playback.");
+            AudioApp.uiManager.enablePlaybackControls(true); AudioApp.uiManager.enableSeekBar(true);
+            const maxDuration = sm.calculateMaxEffectiveDuration(); AudioApp.uiManager.updateTimeDisplay(sm.getPlaybackStartSourceTime(), maxDuration);
+        } else { console.log("App: Waiting for other assigned track(s) to become ready."); AudioApp.uiManager.enablePlaybackControls(false); AudioApp.uiManager.enableSeekBar(false); }
         console.log(`App: handleWorkletReady finished for track #${trackIndex}.`);
     }
 
