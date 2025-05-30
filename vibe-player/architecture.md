@@ -20,12 +20,13 @@
 
 ## 3. Code Structure (`js/` directory)
 
-*   **`app.js` (Controller):** Initializes modules, manages application state (including the `tracks` array), orchestrates loading/VAD/playback flow for **multiple tracks**, handles events, calculates global time and track offsets, manages UI state via `uiManager`, drives visualizer updates.
+*   **`app.js` (Controller):** Initializes modules, coordinates with `stateManager.js` for managing application state (like track data, playback status), orchestrates loading/VAD/playback flow for **multiple tracks**, handles events, calculates global time and track offsets, manages UI state via `uiManager`, drives visualizer updates.
 *   **`constants.js`:** Shared constants.
 *   **`utils.js`:** Shared utility functions.
 *   **`uiManager.js` (View/UI Logic):** Handles all DOM manipulation, UI event listeners. Manages **progressive display** of Left/Right track elements, updates track-specific controls, handles link/swap/remove button states, parses/formats delay input, updates drift display.
+*   **`stateManager.js` (State Logic):** Centralizes the core application state. Manages the `tracksData` array (holding `TrackState` objects with buffer, file, parameters, VAD results, etc., per track), UI channel assignments (`leftChannelTrackIndex`, `rightChannelTrackIndex`), `isMultiChannelModeActive` status, global playback parameters (state, speed, time references), VAD model readiness, and parameter linking states. Provides getters and setters for `app.js` to interact with the application state in a controlled manner.
 *   **`js/player/`:**
-    *   **`audioEngine.js` (Audio Backend):** Manages Web Audio API context, **master gain**. Creates/manages audio graph nodes **per track** (`Worklet -> Panner -> VolumeGain -> MuteGain -> MasterGain`) using an internal Map keyed by `trackId`. Handles `AudioWorkletNode` lifecycle/communication per track. Provides track-specific control methods (`setVolume`, `setPan`, `setTrackSpeed`, `playTrack`, `seekTrack`, etc.) and adapted global methods (`togglePlayPause`, `seekAllTracks`).
+    *   **`audioEngine.js` (Audio Backend):** Manages Web Audio API context, **master gain**. Creates/manages audio graph nodes **per track** (`Worklet -> Panner -> VolumeGain -> MuteGain -> MasterGain`) using an internal Map keyed by numeric `trackIndex`. Handles `AudioWorkletNode` lifecycle/communication per track. Provides track-specific control methods (`setVolume`, `setPan`, `setTrackSpeed`, `playTrack`, `seekTrack`, etc.) and adapted global methods (`togglePlayPause`, `seekAllTracks`).
     *   **`rubberbandProcessor.js` (AudioWorklet):** Runs in worklet thread. Interfaces with Rubberband WASM. Accepts `trackId` for logging/messaging. **One instance runs per loaded audio track.**
 *   **`js/vad/`:**
     *   **`sileroWrapper.js` (VAD ONNX Interface):** Wraps ONNX Runtime session for the Silero VAD model. Handles inference calls and state tensors.
@@ -52,7 +53,7 @@
 *   **Playback Control:** `UI (Play)` -> `app.js (handlePlayPause)` -> Calculates global time, calculates target seek time for *each ready track* respecting offset -> `audioEngine.seekAllTracks(Map<trackId, seekTime>)` -> `audioEngine` sends individual `seek` messages -> `app.js` calls `audioEngine.togglePlayPause(true)` -> `audioEngine` sends `play` message to each ready track worklet. Pause skips seek and sends `pause`.
 *   **Parameter Control (Linked Speed Example):** `UI (Speed Slider Left)` -> `uiManager` (`speedChanged_left` event) -> `app.js (handleSpeedChange)` -> Checks `speedLinked` flag -> Updates `currentGlobalSpeed` -> Updates `tracks[0].parameters.speed` & `tracks[1].parameters.speed` -> Calls `uiManager` to update *both* slider positions -> Calls `audioEngine.setTrackSpeed('track_left', newSpeed)` & `audioEngine.setTrackSpeed('track_right', newSpeed)`. Calls debounced sync. (Pitch similar, Volume/Delay target specific track).
 *   **Offset Application:** Managed entirely within `app.js` when calculating seek times for `handlePlayPause`, `handleJump`, `handleSeek`. Formula: `trackSeekTime = Math.max(0, globalTargetTime - track.parameters.offsetSeconds)`.
-*   **State:** `app.js` manages `tracks` array (holds buffer, file, parameters, state flags per track), `multiTrackModeActive`, link flags, global playback state. `audioEngine` manages the `trackNodesMap` (mapping `trackId` to AudioNode references). Visualizers manage their own internal state (canvas refs, cached data) per instance.
+*   **State:** **`stateManager.js`** is the central module for application state. It manages the `tracksData` array (holding `TrackState` objects with buffer, file, parameters, VAD results, etc., per track), `leftChannelTrackIndex`, `rightChannelTrackIndex`, `isMultiChannelModeActive` status, global playback parameters (state, speed, time references), VAD model readiness, and parameter linking states. `app.js` acts as the primary controller that utilizes `stateManager.js` to read and modify this state. `audioEngine.js` manages its own map of audio nodes (`trackNodesMap`) keyed by numeric `trackIndex`. Visualizer instances manage their own internal UI-related state (canvas refs, cached data).
 
 ## 5. Design Decisions, Constraints & Tradeoffs
 
@@ -87,6 +88,6 @@
 *   **Rubberband Engine Choice:** `EngineFiner` caused stuttering; using default (faster) engine.
 *   **Rubberband Drift:** Potential for minor drift between tracks over long durations, currently only corrected by user Play/Seek actions. Active correction deferred.
 *   **Playback Indicator Drift (Mitigated):** Reliance on main-thread calculation and sync-on-pause/speed-change significantly reduces drift compared to trusting worklet time reports, but minor visual discrepancies *during* rapid parameter changes might still occur due to inherent system latencies.
-*   **Unimplemented Controls:** Mute, Solo, Volume, Delay, Pitch, Swap, Linking logic handlers in `app.js` are placeholders.
+*   **Unimplemented Controls:** Solo functionality has been explicitly removed. Other control handlers (Mute, Volume, Delay, Pitch, Swap, Linking) are implemented in `app.js`.
 
 <!-- /vibe-player/architecture.md -->

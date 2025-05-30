@@ -9,24 +9,46 @@ AudioApp.audioEngine = (function () {
     'use strict';
 
     // === Web Audio API State ===
+    /** @type {AudioContext|null} The main Web Audio API AudioContext. */
     let audioCtx = null;
+    /** @type {GainNode|null} The master gain node for overall volume control. */
     let masterGainNode = null;
+
+    /**
+     * @typedef {object} TrackNodes
+     * @property {AudioWorkletNode} workletNode - The AudioWorkletNode running Rubberband.
+     * @property {StereoPannerNode} pannerNode - For stereo panning.
+     * @property {GainNode} volumeGainNode - For individual track volume.
+     * @property {GainNode} muteGainNode - For individual track muting.
+     * @description Holds all Web Audio API nodes associated with a single track.
+     */
     /** @type {Map<number, TrackNodes>} */
     let trackNodesMap = new Map();
 
     // --- Worklet State ---
+    /** @type {boolean} Flag indicating if the AudioWorklet module has been successfully added. */
     let workletModuleAdded = false;
 
     // --- WASM Resources ---
+    /** @type {ArrayBuffer|null} The fetched WebAssembly binary for the Rubberband processor. */
     let wasmBinary = null;
+    /** @type {string|null} The text content of the Rubberband WASM loader script. */
     let loaderScriptText = null;
 
     // ** NEW: Promise for Resource Readiness **
+    /** @type {Promise<void>|null} A promise that resolves when WASM resources (binary and loader script) are successfully fetched. */
     let resourceReadyPromise = null;
+    /** @type {Function|null} Function to resolve the resourceReadyPromise. */
     let resolveResourceReady = null;
+    /** @type {Function|null} Function to reject the resourceReadyPromise. */
     let rejectResourceReady = null;
 
-    /** Initializes the resource readiness promise */
+    /**
+     * Initializes or re-initializes the `resourceReadyPromise` which tracks the
+     * loading state of essential WASM resources (binary and loader script).
+     * If resources are already loaded, it resolves the promise immediately.
+     * @private
+     */
     function initializeResourcePromise() {
         resourceReadyPromise = new Promise((resolve, reject) => {
             resolveResourceReady = resolve;
@@ -58,11 +80,41 @@ AudioApp.audioEngine = (function () {
 
     // === Setup & Resource Fetching ===
 
-    /** Creates or resets the AudioContext and Master GainNode. */
-    function setupAudioContext() { /* ... (Implementation unchanged) ... */
-        if (audioCtx && audioCtx.state !== 'closed') { return true; }
-        try { if (audioCtx && audioCtx.state === 'closed') { console.log("AudioEngine: Recreating closed AudioContext."); cleanupAllTracks(); } audioCtx = new (window.AudioContext || window.webkitAudioContext)(); masterGainNode = audioCtx.createGain(); masterGainNode.gain.value = 1.0; masterGainNode.connect(audioCtx.destination); workletModuleAdded = false; console.log(`AudioEngine: AudioContext created/reset (state: ${audioCtx.state}). Sample Rate: ${audioCtx.sampleRate}`); if (audioCtx.state === 'suspended') { console.warn("AudioEngine: AudioContext is suspended. User interaction needed."); } return true;
-        } catch (e) { console.error("AudioEngine: Failed to create AudioContext.", e); audioCtx = null; masterGainNode = null; workletModuleAdded = false; dispatchEngineEvent('audioapp:engineError', { type: 'context', error: new Error("Web Audio API not supported") }); return false; }
+    /**
+     * Creates or resets the main AudioContext and master GainNode.
+     * If an AudioContext exists and is closed, it attempts to clean up tracks
+     * before creating a new one. Sets `workletModuleAdded` to false upon reset.
+     * Dispatches an 'audioapp:engineError' event on failure.
+     * @returns {boolean} True if context is set up, false on failure.
+     * @private
+     */
+    function setupAudioContext() {
+        if (audioCtx && audioCtx.state !== 'closed') {
+            return true;
+        }
+        try {
+            if (audioCtx && audioCtx.state === 'closed') {
+                console.log("AudioEngine: Recreating closed AudioContext.");
+                cleanupAllTracks(); // Attempt to clean up before nuking
+            }
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            masterGainNode = audioCtx.createGain();
+            masterGainNode.gain.value = 1.0;
+            masterGainNode.connect(audioCtx.destination);
+            workletModuleAdded = false; // Reset flag as module needs to be re-added to new context
+            console.log(`AudioEngine: AudioContext created/reset (state: ${audioCtx.state}). Sample Rate: ${audioCtx.sampleRate}`);
+            if (audioCtx.state === 'suspended') {
+                console.warn("AudioEngine: AudioContext is suspended. User interaction needed.");
+            }
+            return true;
+        } catch (e) {
+            console.error("AudioEngine: Failed to create AudioContext.", e);
+            audioCtx = null;
+            masterGainNode = null;
+            workletModuleAdded = false;
+            dispatchEngineEvent('audioapp:engineError', { type: 'context', error: new Error("Web Audio API not supported") });
+            return false;
+        }
     }
 
     /**
@@ -108,9 +160,37 @@ AudioApp.audioEngine = (function () {
         }
     }
 
-    /** Adds the Rubberband AudioWorklet module if preconditions are met. */
-    async function addWorkletModule() { /* ... (Implementation unchanged) ... */
-        if (workletModuleAdded) return true; if (!audioCtx || audioCtx.state === 'closed' || !wasmBinary || !loaderScriptText) { console.warn("AudioEngine: Cannot add worklet module - prerequisites missing (Context/WASM/Loader)."); return false; } if (audioCtx.state === 'suspended') { console.log("AudioEngine: Deferring addModule until context is resumed."); return false; } try { console.log(`[AudioEngine] Adding AudioWorklet module: ${AudioApp.Constants.PROCESSOR_SCRIPT_URL}`); await audioCtx.audioWorklet.addModule(AudioApp.Constants.PROCESSOR_SCRIPT_URL); console.log("[AudioEngine] AudioWorklet module added successfully."); workletModuleAdded = true; return true; } catch (error) { console.error("[AudioEngine] Error adding AudioWorklet module:", error); workletModuleAdded = false; dispatchEngineEvent('audioapp:engineError', { type: 'workletLoad', error: error }); return false; }
+    /**
+     * Adds the Rubberband AudioWorklet module (from `AudioApp.Constants.PROCESSOR_SCRIPT_URL`)
+     * to the AudioContext. Ensures prerequisites (AudioContext, WASM resources)
+     * are met and that the context is not suspended.
+     * @returns {Promise<boolean>} True if module added successfully or already added, false otherwise.
+     * @async
+     * @private
+     */
+    async function addWorkletModule() {
+        if (workletModuleAdded) return true;
+        if (!audioCtx || audioCtx.state === 'closed' || !wasmBinary || !loaderScriptText) {
+            console.warn("AudioEngine: Cannot add worklet module - prerequisites missing (Context/WASM/Loader).");
+            return false;
+        }
+        if (audioCtx.state === 'suspended') {
+            console.log("AudioEngine: Deferring addModule until context is resumed.");
+            // It's up to the calling function to handle resume and retry.
+            return false;
+        }
+        try {
+            console.log(`[AudioEngine] Adding AudioWorklet module: ${AudioApp.Constants.PROCESSOR_SCRIPT_URL}`);
+            await audioCtx.audioWorklet.addModule(AudioApp.Constants.PROCESSOR_SCRIPT_URL);
+            console.log("[AudioEngine] AudioWorklet module added successfully.");
+            workletModuleAdded = true;
+            return true;
+        } catch (error) {
+            console.error("[AudioEngine] Error adding AudioWorklet module:", error);
+            workletModuleAdded = false;
+            dispatchEngineEvent('audioapp:engineError', { type: 'workletLoad', error: error });
+            return false;
+        }
     }
 
     // --- Track Setup, Loading, Decoding ---
@@ -178,84 +258,398 @@ AudioApp.audioEngine = (function () {
         }
     }
 
-    /** Sets up message handling for a specific worklet node. */
-    function setupWorkletMessageHandler(workletNode, trackIndex) { /* ... (Implementation unchanged, expects numeric IDs) ... */
-        if (!workletNode || !workletNode.port) { console.error(`[AudioEngine] Cannot setup message handler for track #${trackIndex}: Node or port missing.`); return; }
-        workletNode.port.onmessage = (event) => { const data = event.data; const messageTrackId = (typeof data.trackId === 'number') ? data.trackId : trackIndex; switch (data.type) { case 'status': console.log(`[WorkletStatus #${messageTrackId}] ${data.message}`); if (data.message === 'processor-ready') { dispatchEngineEvent('audioapp:workletReady', { trackId: messageTrackId }); } else if (data.message === 'Playback ended') { dispatchEngineEvent('audioapp:playbackEnded', { trackId: messageTrackId }); } break; case 'error': console.error(`[WorkletError #${messageTrackId}] ${data.message}`); dispatchEngineEvent('audioapp:engineError', { type: 'workletRuntime', error: new Error(data.message), trackId: messageTrackId }); break; case 'playback-state': dispatchEngineEvent('audioapp:playbackStateChanged', { isPlaying: data.isPlaying, trackId: messageTrackId }); break; case 'time-update': if (typeof data.currentTime === 'number') { dispatchEngineEvent('audioapp:timeUpdated', { currentTime: data.currentTime, trackId: messageTrackId }); } else { console.warn(`[AudioEngine] Received malformed time-update from #${messageTrackId}:`, data); } break; default: console.warn(`[AudioEngine] Unhandled message from worklet #${messageTrackId}:`, data.type); } };
-        workletNode.onprocessorerror = (event) => { console.error(`[AudioEngine] Critical Processor Error for track #${trackIndex}:`, event); dispatchEngineEvent('audioapp:engineError', { type: 'workletProcessor', error: new Error("Processor crashed"), trackId: trackIndex }); cleanupTrack(trackIndex); }; console.log(`AudioEngine: Message handler set up for track #${trackIndex}.`);
+    /**
+     * Sets up the 'onmessage' and 'onprocessorerror' handlers for a given AudioWorkletNode.
+     * Messages from the worklet (e.g., status updates, errors, playback state changes)
+     * are dispatched as document events for other modules (like app.js) to handle.
+     * @param {AudioWorkletNode} workletNode - The worklet node to attach handlers to.
+     * @param {number} trackIndex - The numeric index of the track this worklet belongs to, used in event details.
+     * @private
+     */
+    function setupWorkletMessageHandler(workletNode, trackIndex) {
+        if (!workletNode || !workletNode.port) {
+            console.error(`[AudioEngine] Cannot setup message handler for track #${trackIndex}: Node or port missing.`);
+            return;
+        }
+        workletNode.port.onmessage = (event) => {
+            const data = event.data;
+            const messageTrackId = (typeof data.trackId === 'number') ? data.trackId : trackIndex; // Prefer trackId from message if available
+
+            switch (data.type) {
+                case 'status':
+                    console.log(`[WorkletStatus #${messageTrackId}] ${data.message}`);
+                    if (data.message === 'processor-ready') {
+                        dispatchEngineEvent('audioapp:workletReady', { trackId: messageTrackId });
+                    } else if (data.message === 'Playback ended') {
+                        dispatchEngineEvent('audioapp:playbackEnded', { trackId: messageTrackId });
+                    }
+                    break;
+                case 'error':
+                    console.error(`[WorkletError #${messageTrackId}] ${data.message}`);
+                    dispatchEngineEvent('audioapp:engineError', { type: 'workletRuntime', error: new Error(data.message), trackId: messageTrackId });
+                    break;
+                case 'playback-state': // e.g., { type: 'playback-state', isPlaying: true, trackId: ... }
+                    dispatchEngineEvent('audioapp:playbackStateChanged', { isPlaying: data.isPlaying, trackId: messageTrackId });
+                    break;
+                case 'time-update': // e.g., { type: 'time-update', currentTime: 1.234, trackId: ... }
+                    if (typeof data.currentTime === 'number') {
+                        dispatchEngineEvent('audioapp:timeUpdated', { currentTime: data.currentTime, trackId: messageTrackId });
+                    } else {
+                        console.warn(`[AudioEngine] Received malformed time-update from #${messageTrackId}:`, data);
+                    }
+                    break;
+                default:
+                    console.warn(`[AudioEngine] Unhandled message from worklet #${messageTrackId}:`, data.type);
+            }
+        };
+        workletNode.onprocessorerror = (event) => {
+            console.error(`[AudioEngine] Critical Processor Error for track #${trackIndex}:`, event);
+            dispatchEngineEvent('audioapp:engineError', { type: 'workletProcessor', error: new Error("Processor crashed"), trackId: trackIndex });
+            cleanupTrack(trackIndex); // Attempt to clean up the errored track
+        };
+        console.log(`AudioEngine: Message handler set up for track #${trackIndex}.`);
     }
 
-    /** Safely posts messages to a specific worklet via its numeric trackIndex. */
-    function postMessageToTrack(trackIndex, message, transferList = []) { /* ... (Implementation unchanged) ... */
-        const nodes = trackNodesMap.get(trackIndex); if (nodes && nodes.workletNode) { postWorkletMessage(nodes.workletNode, message, transferList); } else { if (message.type !== 'cleanup' && message.type !== 'load-audio') { console.warn(`[AudioEngine] Cannot post msg (${message.type}) to track #${trackIndex}: Worklet node not found.`); } }
+    /**
+     * Safely posts a message to a specific worklet identified by its track index.
+     * Retrieves the worklet node from the internal `trackNodesMap`.
+     * @param {number} trackIndex - The numeric index of the target track.
+     * @param {object} message - The message object to send to the worklet.
+     * @param {Transferable[]} [transferList=[]] - Optional array of Transferable objects if message involves transferring ownership.
+     * @private
+     */
+    function postMessageToTrack(trackIndex, message, transferList = []) {
+        const nodes = trackNodesMap.get(trackIndex);
+        if (nodes && nodes.workletNode) {
+            postWorkletMessage(nodes.workletNode, message, transferList);
+        } else {
+            // Avoid logging for 'cleanup' or 'load-audio' as the node might be legitimately gone or not yet created.
+            if (message.type !== 'cleanup' && message.type !== 'load-audio') {
+                 console.warn(`[AudioEngine] Cannot post msg (${message.type}) to track #${trackIndex}: Worklet node not found.`);
+            }
+        }
     }
-    /** Helper to post messages safely. */
-    function postWorkletMessage(workletNode, message, transferList = []) { /* ... (Implementation unchanged, error logging uses index if possible) ... */
-        if (workletNode && workletNode.port) { try { workletNode.port.postMessage(message, transferList); } catch (error) { let errorTrackIndex = -1; for (const [index, nodes] of trackNodesMap.entries()) { if (nodes.workletNode === workletNode) { errorTrackIndex = index; break; } } console.error(`[AudioEngine] Error posting message type ${message?.type} to track #${errorTrackIndex}:`, error); dispatchEngineEvent('audioapp:engineError', {type: 'workletComm', error: error, trackId: errorTrackIndex}); } }
+
+    /**
+     * Low-level helper to post a message to an AudioWorkletNode's port.
+     * Includes error handling for the `postMessage` call itself, dispatching
+     * an 'audioapp:engineError' event upon failure.
+     * @param {AudioWorkletNode} workletNode - The AudioWorkletNode to send the message to.
+     * @param {object} message - The message object to send.
+     * @param {Transferable[]} [transferList=[]] - Optional array of Transferable objects.
+     * @private
+     */
+    function postWorkletMessage(workletNode, message, transferList = []) {
+        if (workletNode && workletNode.port) {
+            try {
+                workletNode.port.postMessage(message, transferList);
+            } catch (error) {
+                let errorTrackIndex = -1; // Try to find trackId for better error reporting
+                for (const [index, nodes] of trackNodesMap.entries()) {
+                    if (nodes.workletNode === workletNode) {
+                        errorTrackIndex = index;
+                        break;
+                    }
+                }
+                console.error(`[AudioEngine] Error posting message type ${message?.type} to track #${errorTrackIndex}:`, error);
+                dispatchEngineEvent('audioapp:engineError', {type: 'workletComm', error: error, trackId: errorTrackIndex});
+            }
+        }
     }
-    /** Public wrapper for resampling. */
-    async function resampleTo16kMono(audioBuffer) { /* ... (Implementation unchanged) ... */
-        console.log("AudioEngine: Resampling audio to 16kHz mono..."); try { const pcm16k = await convertAudioBufferTo16kHzMonoFloat32(audioBuffer); console.log(`AudioEngine: Resampled to ${pcm16k.length} samples @ 16kHz`); return pcm16k; } catch (error) { console.error("AudioEngine: Error during public resampling call:", error); dispatchEngineEvent('audioapp:resamplingError', {error: error, trackId: -1 }); throw error; }
+
+    /**
+     * Public wrapper to resample an AudioBuffer to 16kHz mono Float32Array,
+     * typically for VAD (Voice Activity Detection) processing.
+     * @param {AudioBuffer} audioBuffer - The input AudioBuffer.
+     * @returns {Promise<Float32Array>} A promise that resolves with the resampled audio data.
+     * @public
+     * @async
+     */
+    async function resampleTo16kMono(audioBuffer) {
+        console.log("AudioEngine: Resampling audio to 16kHz mono...");
+        try {
+            const pcm16k = await convertAudioBufferTo16kHzMonoFloat32(audioBuffer);
+            console.log(`AudioEngine: Resampled to ${pcm16k.length} samples @ 16kHz`);
+            return pcm16k;
+        } catch (error) {
+            console.error("AudioEngine: Error during public resampling call:", error);
+            dispatchEngineEvent('audioapp:resamplingError', {error: error, trackId: -1 }); // -1 for global/non-track specific
+            throw error;
+        }
     }
-    /** Internal resampling function. */
-    function convertAudioBufferTo16kHzMonoFloat32(audioBuffer) { /* ... (Implementation unchanged) ... */
-        if (!AudioApp.Constants) { return Promise.reject(new Error("AudioApp.Constants not found for resampling.")); } const targetSampleRate = AudioApp.Constants.VAD_SAMPLE_RATE; const targetLength = Math.ceil(audioBuffer.duration * targetSampleRate); if (!targetLength || targetLength <= 0) { return Promise.resolve(new Float32Array(0)); } try { const offlineCtx = new OfflineAudioContext(1, targetLength, targetSampleRate); const src = offlineCtx.createBufferSource(); src.buffer = audioBuffer; src.connect(offlineCtx.destination); src.start(); return offlineCtx.startRendering().then(renderedBuffer => renderedBuffer.getChannelData(0)).catch(err => { throw new Error(`Audio resampling failed: ${err.message}`); }); } catch (offlineCtxError) { return Promise.reject(new Error(`OfflineContext creation failed: ${offlineCtxError.message}`)); }
+
+    /**
+     * Internal function to perform audio resampling to 16kHz mono using an OfflineAudioContext.
+     * This is a common requirement for VAD models.
+     * @param {AudioBuffer} audioBuffer - The input AudioBuffer.
+     * @returns {Promise<Float32Array>} A promise that resolves with the resampled Float32Array,
+     *                                  or rejects if resampling fails.
+     * @private
+     */
+    function convertAudioBufferTo16kHzMonoFloat32(audioBuffer) {
+        if (!AudioApp.Constants) {
+            return Promise.reject(new Error("AudioApp.Constants not found for resampling."));
+        }
+        const targetSampleRate = AudioApp.Constants.VAD_SAMPLE_RATE;
+        const targetLength = Math.ceil(audioBuffer.duration * targetSampleRate);
+
+        if (!targetLength || targetLength <= 0) {
+            // Handle zero-duration or invalid audioBuffer
+            console.warn("AudioEngine: Cannot resample, target length is zero or invalid.");
+            return Promise.resolve(new Float32Array(0));
+        }
+        try {
+            const offlineCtx = new OfflineAudioContext(1, targetLength, targetSampleRate);
+            const src = offlineCtx.createBufferSource();
+            src.buffer = audioBuffer;
+            src.connect(offlineCtx.destination);
+            src.start();
+            return offlineCtx.startRendering().then(renderedBuffer => {
+                return renderedBuffer.getChannelData(0);
+            }).catch(err => {
+                // More specific error for rendering failure
+                throw new Error(`Audio resampling failed during OfflineAudioContext rendering: ${err.message}`);
+            });
+        } catch (offlineCtxError) {
+            // Error during OfflineAudioContext creation (e.g., if targetLength is too large)
+            return Promise.reject(new Error(`OfflineAudioContext creation failed for resampling: ${offlineCtxError.message}`));
+        }
     }
+
 
     // --- Playback Control Methods (Public - Using numeric index) ---
-    /** Sends pause command to all managed tracks. */
-    function togglePlayPause(play) { /* ... (Implementation unchanged, iterates map) ... */
-        if (play) { console.warn("AudioEngine: togglePlayPause(true) called, but app.js should use playTrack() for starting playback."); } else { const messageType = 'pause'; console.log(`AudioEngine: Sending '${messageType}' to all managed tracks.`); trackNodesMap.forEach((nodes, trackIndex) => { postMessageToTrack(trackIndex, {type: messageType}); }); }
+    /**
+     * Sends a 'pause' command to all managed track worklets.
+     * Note: For starting playback, app.js should use `playTrack()` for each track.
+     * This function is primarily for a global pause action.
+     * @param {boolean} play - If true, logs a warning. Only when false does it effectively pause.
+     * @public
+     */
+    function togglePlayPause(play) {
+        if (play) {
+            console.warn("AudioEngine: togglePlayPause(true) called, but app.js should use playTrack() for starting playback.");
+            // Consider if this should actually try to play all tracks, or if it's truly a "global pause" only utility
+        } else {
+            const messageType = 'pause';
+            console.log(`AudioEngine: Sending '${messageType}' to all managed tracks.`);
+            trackNodesMap.forEach((nodes, trackIndex) => {
+                postMessageToTrack(trackIndex, {type: messageType});
+            });
+        }
     }
-    /** Seeks all tracks based on a map of track indices to target times. */
-     function seekAllTracks(trackSeekTimes) { /* ... (Implementation unchanged, uses numeric index) ... */
-          console.log(`AudioEngine: seekAllTracks received Map:`); trackSeekTimes.forEach((time, index) => { console.log(`  - #${index}: ${time.toFixed(3)}s`); }); trackSeekTimes.forEach((targetSourceTime, trackIndex) => { seekTrack(trackIndex, targetSourceTime); });
+
+    /**
+     * Seeks multiple tracks to their respective target source times.
+     * @param {Map<number, number>} trackSeekTimes - A Map where keys are numeric track indices
+     *                                              and values are target source times in seconds.
+     * @public
+     */
+     function seekAllTracks(trackSeekTimes) {
+          console.log(`AudioEngine: seekAllTracks received Map:`);
+          trackSeekTimes.forEach((time, index) => {
+              console.log(`  - #${index}: ${time.toFixed(3)}s`);
+          });
+          trackSeekTimes.forEach((targetSourceTime, trackIndex) => {
+              seekTrack(trackIndex, targetSourceTime);
+          });
      }
-     /** Seeks a specific track (by index) to a target source time. */
-     function seekTrack(trackIndex, targetSourceTime) { /* ... (Implementation unchanged, uses numeric index) ... */
-          const clampedTime = Math.max(0, targetSourceTime); console.log(`AudioEngine: Seeking track #${trackIndex} WORKLET to ${clampedTime.toFixed(3)}s`); postMessageToTrack(trackIndex, { type: 'seek', positionSeconds: clampedTime });
+
+    /**
+     * Seeks a specific track's worklet to a target source time by sending a 'seek' message.
+     * The time is clamped to be non-negative.
+     * @param {number} trackIndex - The numeric index of the track.
+     * @param {number} targetSourceTime - The target time in seconds for the track's source audio.
+     * @public
+     */
+     function seekTrack(trackIndex, targetSourceTime) {
+          const clampedTime = Math.max(0, targetSourceTime);
+          console.log(`AudioEngine: Seeking track #${trackIndex} WORKLET to ${clampedTime.toFixed(3)}s`);
+          postMessageToTrack(trackIndex, { type: 'seek', positionSeconds: clampedTime });
      }
-    /** Plays a specific track (by index). */
-    function playTrack(trackIndex) { /* ... (Implementation unchanged, uses numeric index) ... */
-        console.log(`AudioEngine: Sending 'play' to track #${trackIndex}`); postMessageToTrack(trackIndex, {type: 'play'});
+
+    /**
+     * Sends a 'play' command to a specific track's worklet to start or resume its playback.
+     * @param {number} trackIndex - The numeric index of the track to play.
+     * @public
+     */
+    function playTrack(trackIndex) {
+        console.log(`AudioEngine: Sending 'play' to track #${trackIndex}`);
+        postMessageToTrack(trackIndex, {type: 'play'});
     }
-    /** Pauses a specific track (by index). */
-    function pauseTrack(trackIndex) { /* ... (Implementation unchanged, uses numeric index) ... */
-        console.log(`AudioEngine: Sending 'pause' to track #${trackIndex}`); postMessageToTrack(trackIndex, {type: 'pause'});
+
+    /**
+     * Sends a 'pause' command to a specific track's worklet to pause its playback.
+     * @param {number} trackIndex - The numeric index of the track to pause.
+     * @public
+     */
+    function pauseTrack(trackIndex) {
+        console.log(`AudioEngine: Sending 'pause' to track #${trackIndex}`);
+        postMessageToTrack(trackIndex, {type: 'pause'});
     }
-    /** Sets the playback speed for a specific track (by index). */
-    function setTrackSpeed(trackIndex, speed) { /* ... (Implementation unchanged, uses numeric index) ... */
-        const rate = Math.max(0.25, Math.min(parseFloat(speed) || 1.0, 2.0)); console.log(`AudioEngine: Setting speed for track #${trackIndex} to ${rate.toFixed(2)}x`); postMessageToTrack(trackIndex, {type: 'set-speed', value: rate});
+
+    /**
+     * Sets the playback speed for a specific track's worklet.
+     * The speed value is parsed, validated, and clamped between 0.25 and 2.0.
+     * @param {number} trackIndex - The numeric index of the track.
+     * @param {number|string} speed - The desired speed multiplier (e.g., 1.0 for normal speed).
+     * @public
+     */
+    function setTrackSpeed(trackIndex, speed) {
+        const rate = Math.max(0.25, Math.min(parseFloat(speed) || 1.0, 2.0));
+        console.log(`AudioEngine: Setting speed for track #${trackIndex} to ${rate.toFixed(2)}x`);
+        postMessageToTrack(trackIndex, {type: 'set-speed', value: rate});
     }
-    /** Sets the pitch scale for a specific track (by index). */
-    function setTrackPitch(trackIndex, pitch) { /* ... (Implementation unchanged, uses numeric index) ... */
-        const scale = Math.max(0.25, Math.min(parseFloat(pitch) || 1.0, 2.0)); console.log(`AudioEngine: Setting pitch for track #${trackIndex} to ${scale.toFixed(2)}x`); postMessageToTrack(trackIndex, {type: 'set-pitch', value: scale});
+
+    /**
+     * Sets the pitch scale for a specific track's worklet.
+     * The pitch value is parsed, validated, and clamped between 0.25 and 2.0.
+     * @param {number} trackIndex - The numeric index of the track.
+     * @param {number|string} pitch - The desired pitch multiplier (e.g., 1.0 for normal pitch).
+     * @public
+     */
+    function setTrackPitch(trackIndex, pitch) {
+        const scale = Math.max(0.25, Math.min(parseFloat(pitch) || 1.0, 2.0));
+        console.log(`AudioEngine: Setting pitch for track #${trackIndex} to ${scale.toFixed(2)}x`);
+        postMessageToTrack(trackIndex, {type: 'set-pitch', value: scale});
     }
-    /** Sets the formant scale for a specific track (by index). */
-    function setTrackFormant(trackIndex, formant) { /* ... (Implementation unchanged, uses numeric index) ... */
-        const scale = Math.max(0.5, Math.min(parseFloat(formant) || 1.0, 2.0)); console.log(`AudioEngine: Setting formant for track #${trackIndex} to ${scale.toFixed(2)}x`); postMessageToTrack(trackIndex, {type: 'set-formant', value: scale});
+
+    /**
+     * Sets the formant scale for a specific track's worklet.
+     * (Note: This feature is reported as non-functional in architecture.md).
+     * The formant value is parsed, validated, and clamped between 0.5 and 2.0.
+     * @param {number} trackIndex - The numeric index of the track.
+     * @param {number|string} formant - The desired formant scale multiplier.
+     * @public
+     */
+    function setTrackFormant(trackIndex, formant) {
+        const scale = Math.max(0.5, Math.min(parseFloat(formant) || 1.0, 2.0));
+        console.log(`AudioEngine: Setting formant for track #${trackIndex} to ${scale.toFixed(2)}x`);
+        postMessageToTrack(trackIndex, {type: 'set-formant', value: scale});
     }
-    /** Sets the stereo pan for a specific track (by index). */
-    function setPan(trackIndex, panValue) { /* ... (Implementation unchanged, uses numeric index) ... */
-        const nodes = trackNodesMap.get(trackIndex); if (nodes?.pannerNode && audioCtx && audioCtx.state === 'running') { const value = Math.max(-1, Math.min(parseFloat(panValue) || 0, 1)); console.log(`AudioEngine: Setting pan for track #${trackIndex} to ${value.toFixed(2)}`); nodes.pannerNode.pan.setValueAtTime(value, audioCtx.currentTime); } else { console.warn(`AudioEngine: Cannot set pan for track #${trackIndex} - PannerNode/Context not ready.`); }
+
+    /**
+     * Sets the stereo pan for a specific track using its StereoPannerNode.
+     * The pan value is parsed and clamped between -1 (full left) and 1 (full right).
+     * @param {number} trackIndex - The numeric index of the track.
+     * @param {number|string} panValue - The desired pan value.
+     * @public
+     */
+    function setPan(trackIndex, panValue) {
+        const nodes = trackNodesMap.get(trackIndex);
+        if (nodes?.pannerNode && audioCtx && audioCtx.state === 'running') {
+            const value = Math.max(-1, Math.min(parseFloat(panValue) || 0, 1));
+            console.log(`AudioEngine: Setting pan for track #${trackIndex} to ${value.toFixed(2)}`);
+            nodes.pannerNode.pan.setValueAtTime(value, audioCtx.currentTime);
+        } else {
+            console.warn(`AudioEngine: Cannot set pan for track #${trackIndex} - PannerNode/Context not ready.`);
+        }
     }
-    /** Sets the individual volume gain for a specific track (by index). */
-    function setVolume(trackIndex, volume) { /* ... (Implementation unchanged, uses numeric index) ... */
-        const nodes = trackNodesMap.get(trackIndex); if (nodes?.volumeGainNode && audioCtx && audioCtx.state === 'running') { const value = Math.max(0.0, parseFloat(volume) || 1.0); console.log(`AudioEngine: Setting volume for track #${trackIndex} to ${value.toFixed(2)}`); nodes.volumeGainNode.gain.setTargetAtTime(value, audioCtx.currentTime, 0.015); } else { console.warn(`AudioEngine: Cannot set volume for track #${trackIndex} - VolumeGainNode/Context not ready.`); }
+
+    /**
+     * Sets the individual volume gain for a specific track using its dedicated GainNode.
+     * The volume value is parsed and clamped to be non-negative.
+     * @param {number} trackIndex - The numeric index of the track.
+     * @param {number|string} volume - Desired volume level (e.g., 1.0 for normal gain).
+     * @public
+     */
+    function setVolume(trackIndex, volume) {
+        const nodes = trackNodesMap.get(trackIndex);
+        if (nodes?.volumeGainNode && audioCtx && audioCtx.state === 'running') {
+            const value = Math.max(0.0, parseFloat(volume) || 1.0); // Ensure non-negative
+            console.log(`AudioEngine: Setting volume for track #${trackIndex} to ${value.toFixed(2)}`);
+            nodes.volumeGainNode.gain.setTargetAtTime(value, audioCtx.currentTime, 0.015); // Smooth ramp
+        } else {
+            console.warn(`AudioEngine: Cannot set volume for track #${trackIndex} - VolumeGainNode/Context not ready.`);
+        }
     }
-    /** Sets the mute state for a specific track (by index). */
-    function setMute(trackIndex, isMuted) { /* ... (Implementation unchanged, uses numeric index) ... */
-        const nodes = trackNodesMap.get(trackIndex); if (nodes?.muteGainNode && audioCtx && audioCtx.state === 'running') { const targetGain = isMuted ? 1e-7 : 1.0; console.log(`AudioEngine: Setting mute for track #${trackIndex} to ${isMuted} (Target Gain: ${targetGain})`); nodes.muteGainNode.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.010); } else { console.warn(`AudioEngine: Cannot set mute for track #${trackIndex} - MuteGainNode/Context not ready.`); }
+
+    /**
+     * Sets the mute state for a specific track by adjusting its dedicated mute GainNode.
+     * Muting is achieved by setting gain to a very small value (near zero).
+     * @param {number} trackIndex - The numeric index of the track.
+     * @param {boolean} isMuted - True to mute the track, false to unmute.
+     * @public
+     */
+    function setMute(trackIndex, isMuted) {
+        const nodes = trackNodesMap.get(trackIndex);
+        if (nodes?.muteGainNode && audioCtx && audioCtx.state === 'running') {
+            const targetGain = isMuted ? 1e-7 : 1.0; // Use a very small value for mute to avoid clicks
+            console.log(`AudioEngine: Setting mute for track #${trackIndex} to ${isMuted} (Target Gain: ${targetGain})`);
+            nodes.muteGainNode.gain.setTargetAtTime(targetGain, audioCtx.currentTime, 0.010); // Short ramp
+        } else {
+            console.warn(`AudioEngine: Cannot set mute for track #${trackIndex} - MuteGainNode/Context not ready.`);
+        }
     }
-    /** Sets the master gain level smoothly. */
-    function setGain(gain) { /* ... (Implementation unchanged) ... */
-        console.log(`AudioEngine: setGain received input: ${gain} (Type: ${typeof gain})`); if (!masterGainNode || !audioCtx || audioCtx.state === 'closed') { console.warn("AudioEngine: Cannot set master gain - MasterGainNode/Context missing or closed."); return; } const MIN_GAIN = 0.0; const MAX_GAIN = 2.0; const RAMP_TIME_CONSTANT = 0.015; let parsedGain = parseFloat(gain); if (isNaN(parsedGain)) { console.warn(`AudioEngine: Invalid gain input '${gain}', defaulting to 1.0`); parsedGain = 1.0; } const clampedGain = Math.max(MIN_GAIN, Math.min(parsedGain, MAX_GAIN)); const targetGainValue = (clampedGain <= 0) ? 1e-7 : clampedGain; console.log(`AudioEngine: Setting master gain. Parsed: ${parsedGain}, Clamped: ${clampedGain}, Target: ${targetGainValue}`); try { masterGainNode.gain.cancelScheduledValues(audioCtx.currentTime); masterGainNode.gain.setTargetAtTime(targetGainValue, audioCtx.currentTime, RAMP_TIME_CONSTANT); } catch (e) { console.error(`AudioEngine: Error setting master gain: ${e.message}`); }
+
+    /**
+     * Sets the master gain level for the entire audio output smoothly using the master GainNode.
+     * The gain value is parsed and clamped between 0.0 (silent) and 2.0 (potential boost).
+     * @param {number|string} gain - Desired master gain level (e.g., 1.0 for normal).
+     * @public
+     */
+    function setGain(gain) {
+        console.log(`AudioEngine: setGain received input: ${gain} (Type: ${typeof gain})`);
+        if (!masterGainNode || !audioCtx || audioCtx.state === 'closed') {
+            console.warn("AudioEngine: Cannot set master gain - MasterGainNode/Context missing or closed.");
+            return;
+        }
+        const MIN_GAIN = 0.0;
+        const MAX_GAIN = 2.0; // Allow some boost
+        const RAMP_TIME_CONSTANT = 0.015; // Standard ramp time for smooth changes
+
+        let parsedGain = parseFloat(gain);
+        if (isNaN(parsedGain)) {
+            console.warn(`AudioEngine: Invalid gain input '${gain}', defaulting to 1.0`);
+            parsedGain = 1.0;
+        }
+
+        const clampedGain = Math.max(MIN_GAIN, Math.min(parsedGain, MAX_GAIN));
+        // Use a very small value instead of 0 for target gain to avoid potential issues with setTargetAtTime and 0.
+        const targetGainValue = (clampedGain <= MIN_GAIN + Number.EPSILON) ? 1e-7 : clampedGain;
+
+        console.log(`AudioEngine: Setting master gain. Parsed: ${parsedGain}, Clamped: ${clampedGain}, Target: ${targetGainValue}`);
+        try {
+            masterGainNode.gain.cancelScheduledValues(audioCtx.currentTime);
+            masterGainNode.gain.setTargetAtTime(targetGainValue, audioCtx.currentTime, RAMP_TIME_CONSTANT);
+        } catch (e) {
+            console.error(`AudioEngine: Error setting master gain: ${e.message}`);
+        }
     }
-    /** Provides access to the current AudioContext instance. */
-    function getAudioContext() { return audioCtx; }
-    /** Resumes context if suspended. */
-    async function resumeContextIfNeeded(reason = "Context resume needed.") { /* ... (Implementation unchanged) ... */
-        if (audioCtx && audioCtx.state === 'suspended') { console.log(`AudioEngine: ${reason} Attempting resume...`); try { await audioCtx.resume(); console.log(`AudioEngine: Context resumed (state: ${audioCtx.state})`); if (!workletModuleAdded) { await addWorkletModule(); } } catch (err) { console.error(`AudioEngine: Failed to resume AC: ${err}`); dispatchEngineEvent('audioapp:engineError', {type: 'contextResume', error: err}); throw err; } }
+
+    /**
+     * Provides access to the current AudioContext instance.
+     * @returns {AudioContext|null} The active Web Audio API AudioContext, or null if not initialized.
+     * @public
+     */
+    function getAudioContext() {
+        return audioCtx;
+    }
+
+    /**
+     * Resumes the AudioContext if it is in a 'suspended' state.
+     * This is often required due to browser auto-suspension policies and needs user interaction to resume.
+     * If resumed, it also attempts to add the worklet module if it wasn't added previously due to suspension.
+     * @param {string} [reason="Context resume needed."] - Optional string describing the reason for the resume attempt, for logging.
+     * @returns {Promise<void>} A promise that resolves when the resume attempt is complete.
+     * @public
+     * @async
+     */
+    async function resumeContextIfNeeded(reason = "Context resume needed.") {
+        if (audioCtx && audioCtx.state === 'suspended') {
+            console.log(`AudioEngine: ${reason} Attempting resume...`);
+            try {
+                await audioCtx.resume();
+                console.log(`AudioEngine: Context resumed (state: ${audioCtx.state})`);
+                // If context was suspended, worklet module might not have been added
+                if (!workletModuleAdded) {
+                    await addWorkletModule();
+                }
+            } catch (err) {
+                console.error(`AudioEngine: Failed to resume AC: ${err}`);
+                dispatchEngineEvent('audioapp:engineError', {type: 'contextResume', error: err});
+                throw err; // Re-throw so caller knows resume failed
+            }
+        }
     }
 
     // --- Cleanup ---
