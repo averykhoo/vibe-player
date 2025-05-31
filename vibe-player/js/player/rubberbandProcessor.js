@@ -34,7 +34,7 @@ class RubberbandProcessor extends AudioWorkletProcessor {
         console.log(`[Worklet #${this.trackId}] RubberbandProcessor created.`); // Updated log format
 
         // Audio properties (passed in options)
-        this.sampleRate = this.processorOpts.sampleRate || sampleRate;
+        this.sampleRate = this.processorOpts.sampleRate || sampleRate; // sampleRate is global in AudioWorkletGlobalScope
         this.numberOfChannels = this.processorOpts.numberOfChannels || 0;
         // WASM resources (passed via options)
         this.wasmBinary = this.processorOpts.wasmBinary;
@@ -497,7 +497,7 @@ class RubberbandProcessor extends AudioWorkletProcessor {
         console.log(`[Worklet #${this.trackId}] Resetting internal state variables.`);
         this.wasmReady = false; this.audioLoaded = false;
         this.originalChannels = null; this.wasmModule = null;
-        this.wasmBinary = null; this.loaderScriptText = null;
+        this.wasmBinary = null; this.loaderScriptText = null; // Clear WASM resources
         this.playbackPositionInSeconds = 0; this.streamEnded = true;
         this.finalBlockSent = false; this.resetNeeded = true;
         console.log(`[Worklet #${this.trackId}] Cleanup finished.`);
@@ -507,17 +507,24 @@ class RubberbandProcessor extends AudioWorkletProcessor {
 } // --- End RubberbandProcessor Class ---
 
 // --- Processor Registration ---
-try {
-    if (typeof registerProcessor === 'function' && typeof sampleRate !== 'undefined') {
+// Wrap in a check for environments where registerProcessor might not be defined (e.g. Jest)
+if (typeof registerProcessor === 'function') {
+    try {
+        // sampleRate is globally available in AudioWorkletGlobalScope, check if it's defined
+        if (typeof sampleRate === 'undefined') {
+             console.error("[Worklet Registration] global sampleRate not defined. This is unexpected in an AudioWorkletGlobalScope.");
+        }
         registerProcessor(PROCESSOR_NAME, RubberbandProcessor);
-    } else {
-        console.error("[Worklet Registration] registerProcessor or global sampleRate not defined.");
-        // ** MODIFIED: Add numeric trackId (-1 for registration context) **
-        try { if (self?.postMessage) self.postMessage({ type: 'error', message: 'registerProcessor or global sampleRate not defined.', trackId: -1 }); } catch(e) {}
+    } catch (error) {
+        console.error(`[Worklet Registration] Failed to register processor '${PROCESSOR_NAME}':`, error);
+        try { if (self?.postMessage) self.postMessage({ type: 'error', message: `Failed to register processor: ${error.message}`, trackId: -1 }); } catch(e) {}
     }
-} catch (error) {
-    console.error(`[Worklet Registration] Failed to register processor '${PROCESSOR_NAME}':`, error);
-     // ** MODIFIED: Add numeric trackId (-1 for registration context) **
-    try { if (self?.postMessage) self.postMessage({ type: 'error', message: `Failed to register processor: ${error.message}`, trackId: -1 }); } catch(e) {}
+} else {
+    console.warn("[Worklet Registration] registerProcessor is not defined. Skipping registration (expected in Jest).");
+}
+
+// Export the class for Jest testing
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = RubberbandProcessor;
 }
 // --- /vibe-player/js/player/rubberbandProcessor.js ---

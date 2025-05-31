@@ -8,6 +8,9 @@ var AudioApp = AudioApp || {};
 AudioApp.audioEngine = (function () {
     'use strict';
 
+    // === App Constants (Injectable) ===
+    let APP_CONSTANTS = null;
+
     // === Web Audio API State ===
     /** @type {AudioContext|null} The main Web Audio API AudioContext. */
     let audioCtx = null;
@@ -51,15 +54,16 @@ AudioApp.audioEngine = (function () {
      */
     function initializeResourcePromise() {
         resourceReadyPromise = new Promise((resolve, reject) => {
-            resolveResourceReady = resolve;
+            resolveResourceReady = resolve; // These are module-scoped
             rejectResourceReady = reject;
         });
         // Handle cases where resources might already be loaded if init is called multiple times
         if (wasmBinary && loaderScriptText) {
-            resolveResourceReady();
+            if (resolveResourceReady) resolveResourceReady(); // Ensure resolve is callable
         }
     }
-    initializeResourcePromise(); // Create the promise immediately
+    // initializeResourcePromise() is now called after setAppConstants,
+    // or by preFetchWorkletResources if needed, or at the end of IIFE.
 
     // === Initialization ===
     /**
@@ -68,6 +72,12 @@ AudioApp.audioEngine = (function () {
      */
     async function init() {
         console.log("AudioEngine: Initializing...");
+        if (!APP_CONSTANTS) {
+            console.error("AudioEngine: APP_CONSTANTS not set. Call setAppConstants before init.");
+            // Optionally throw an error or dispatch a specific event
+            dispatchEngineEvent('audioapp:engineError', { type: 'config', error: new Error("APP_CONSTANTS not set before init.") });
+            return; // Stop initialization if constants are missing
+        }
         setupAudioContext(); // Sync setup
         // Start fetching resources, but don't await here. Let setupTrack await the promise.
         preFetchWorkletResources().catch(err => {
@@ -128,19 +138,19 @@ AudioApp.audioEngine = (function () {
         // Avoid fetching again if already done
         if (wasmBinary && loaderScriptText) {
              console.log("AudioEngine: WASM resources already fetched.");
-             if (resolveResourceReady) resolveResourceReady(); // Ensure promise is resolved
+             if (resolveResourceReady) resolveResourceReady();
              return;
         }
 
         console.log("AudioEngine: Pre-fetching WASM resources...");
         try {
-            if (!AudioApp.Constants) throw new Error("AudioApp.Constants not found.");
-            const wasmResponse = await fetch(AudioApp.Constants.WASM_BINARY_URL);
-            if (!wasmResponse.ok) throw new Error(`Fetch failed ${wasmResponse.status} for ${AudioApp.Constants.WASM_BINARY_URL}`);
+            if (!APP_CONSTANTS) throw new Error("APP_CONSTANTS not set in audioEngine. Call setAppConstants first.");
+            const wasmResponse = await fetch(APP_CONSTANTS.WASM_BINARY_URL);
+            if (!wasmResponse.ok) throw new Error(`Fetch failed ${wasmResponse.status} for ${APP_CONSTANTS.WASM_BINARY_URL}`);
             const fetchedWasmBinary = await wasmResponse.arrayBuffer();
 
-            const loaderResponse = await fetch(AudioApp.Constants.LOADER_SCRIPT_URL);
-            if (!loaderResponse.ok) throw new Error(`Fetch failed ${loaderResponse.status} for ${AudioApp.Constants.LOADER_SCRIPT_URL}`);
+            const loaderResponse = await fetch(APP_CONSTANTS.LOADER_SCRIPT_URL);
+            if (!loaderResponse.ok) throw new Error(`Fetch failed ${loaderResponse.status} for ${APP_CONSTANTS.LOADER_SCRIPT_URL}`);
             const fetchedLoaderScript = await loaderResponse.text();
 
             // Store resources *after* both fetches succeed
@@ -161,7 +171,7 @@ AudioApp.audioEngine = (function () {
     }
 
     /**
-     * Adds the Rubberband AudioWorklet module (from `AudioApp.Constants.PROCESSOR_SCRIPT_URL`)
+     * Adds the Rubberband AudioWorklet module (from `APP_CONSTANTS.PROCESSOR_SCRIPT_URL`)
      * to the AudioContext. Ensures prerequisites (AudioContext, WASM resources)
      * are met and that the context is not suspended.
      * @returns {Promise<boolean>} True if module added successfully or already added, false otherwise.
@@ -176,12 +186,12 @@ AudioApp.audioEngine = (function () {
         }
         if (audioCtx.state === 'suspended') {
             console.log("AudioEngine: Deferring addModule until context is resumed.");
-            // It's up to the calling function to handle resume and retry.
             return false;
         }
         try {
-            console.log(`[AudioEngine] Adding AudioWorklet module: ${AudioApp.Constants.PROCESSOR_SCRIPT_URL}`);
-            await audioCtx.audioWorklet.addModule(AudioApp.Constants.PROCESSOR_SCRIPT_URL);
+            if (!APP_CONSTANTS) throw new Error("APP_CONSTANTS not set for addWorkletModule.");
+            console.log(`[AudioEngine] Adding AudioWorklet module: ${APP_CONSTANTS.PROCESSOR_SCRIPT_URL}`);
+            await audioCtx.audioWorklet.addModule(APP_CONSTANTS.PROCESSOR_SCRIPT_URL);
             console.log("[AudioEngine] AudioWorklet module added successfully.");
             workletModuleAdded = true;
             return true;
@@ -204,6 +214,10 @@ AudioApp.audioEngine = (function () {
      */
     async function setupTrack(trackIndex, file) {
         console.log(`AudioEngine: Setting up track index #${trackIndex}...`);
+         if (!APP_CONSTANTS) {
+            console.error("AudioEngine: APP_CONSTANTS not set. Call setAppConstants before setupTrack.");
+            throw new Error("APP_CONSTANTS not set before setupTrack.");
+        }
 
         // *** NEW: Wait for WASM resources ***
         try {
@@ -229,18 +243,18 @@ AudioApp.audioEngine = (function () {
 
         // 4. Decode Audio
         let decodedBuffer;
-        try { /* ... (Decoding logic unchanged) ... */
+        try {
             console.log(`AudioEngine: Decoding audio data for track #${trackIndex}...`); const arrayBuffer = await file.arrayBuffer(); decodedBuffer = await audioCtx.decodeAudioData(arrayBuffer); console.log(`AudioEngine: Decoded track #${trackIndex} (${decodedBuffer.duration.toFixed(2)}s @ ${decodedBuffer.sampleRate}Hz, ${decodedBuffer.numberOfChannels}ch)`); dispatchEngineEvent('audioapp:audioLoaded', { audioBuffer: decodedBuffer, trackId: trackIndex });
-        } catch (error) { /* ... (Error handling unchanged) ... */ console.error(`AudioEngine: Error decoding audio for track #${trackIndex}:`, error); dispatchEngineEvent('audioapp:decodingError', { error: error, trackId: trackIndex }); throw error; }
+        } catch (error) { console.error(`AudioEngine: Error decoding audio for track #${trackIndex}:`, error); dispatchEngineEvent('audioapp:decodingError', { error: error, trackId: trackIndex }); throw error; }
 
         // 5. Create Audio Graph Nodes
         console.log(`AudioEngine: Creating audio nodes for track #${trackIndex}...`);
         let nodes = {};
-        try { /* ... (Node creation logic unchanged) ... */
+        try {
             nodes.pannerNode = audioCtx.createStereoPanner(); nodes.volumeGainNode = audioCtx.createGain(); nodes.muteGainNode = audioCtx.createGain(); nodes.pannerNode.pan.value = 0; nodes.volumeGainNode.gain.value = 1.0; nodes.muteGainNode.gain.value = 1.0;
-            // Use module-scoped wasmBinary and loaderScriptText which are now guaranteed to be loaded
+            if (!APP_CONSTANTS) throw new Error("APP_CONSTANTS not set for AudioWorkletNode creation.");
             const processorOpts = { sampleRate: audioCtx.sampleRate, numberOfChannels: decodedBuffer.numberOfChannels, wasmBinary: wasmBinary.slice(0), loaderScriptText: loaderScriptText, trackId: trackIndex };
-            nodes.workletNode = new AudioWorkletNode(audioCtx, AudioApp.Constants.PROCESSOR_NAME, { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [decodedBuffer.numberOfChannels], processorOptions: processorOpts });
+            nodes.workletNode = new AudioWorkletNode(audioCtx, APP_CONSTANTS.PROCESSOR_NAME, { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [decodedBuffer.numberOfChannels], processorOptions: processorOpts });
             nodes.workletNode.connect(nodes.pannerNode); nodes.pannerNode.connect(nodes.volumeGainNode); nodes.volumeGainNode.connect(nodes.muteGainNode); nodes.muteGainNode.connect(masterGainNode);
             console.log(`AudioEngine: Audio graph created and connected for track #${trackIndex}.`);
             trackNodesMap.set(trackIndex, nodes);
@@ -253,7 +267,7 @@ AudioApp.audioEngine = (function () {
             postWorkletMessage(nodes.workletNode, { type: 'load-audio', channelData: channelData }, transferListAudio);
             console.log(`AudioEngine: Setup complete for track #${trackIndex}. Waiting for processor-ready...`);
 
-        } catch (error) { /* ... (Error handling unchanged) ... */
+        } catch (error) {
              console.error(`AudioEngine: Error creating/connecting nodes for track #${trackIndex}:`, error); await cleanupTrack(trackIndex); dispatchEngineEvent('audioapp:engineError', { type: 'nodeSetup', error: error, trackId: trackIndex }); throw error;
         }
     }
@@ -367,6 +381,10 @@ AudioApp.audioEngine = (function () {
      */
     async function resampleTo16kMono(audioBuffer) {
         console.log("AudioEngine: Resampling audio to 16kHz mono...");
+        if (!APP_CONSTANTS) {
+            console.error("AudioEngine: APP_CONSTANTS not set. Call setAppConstants before resampleTo16kMono.");
+            throw new Error("APP_CONSTANTS not set before resampleTo16kMono.");
+        }
         try {
             const pcm16k = await convertAudioBufferTo16kHzMonoFloat32(audioBuffer);
             console.log(`AudioEngine: Resampled to ${pcm16k.length} samples @ 16kHz`);
@@ -387,10 +405,10 @@ AudioApp.audioEngine = (function () {
      * @private
      */
     function convertAudioBufferTo16kHzMonoFloat32(audioBuffer) {
-        if (!AudioApp.Constants) {
-            return Promise.reject(new Error("AudioApp.Constants not found for resampling."));
+        if (!APP_CONSTANTS) { // Should have been checked by public wrapper
+            return Promise.reject(new Error("APP_CONSTANTS not set for resampling."));
         }
-        const targetSampleRate = AudioApp.Constants.VAD_SAMPLE_RATE;
+        const targetSampleRate = APP_CONSTANTS.VAD_SAMPLE_RATE;
         const targetLength = Math.ceil(audioBuffer.duration * targetSampleRate);
 
         if (!targetLength || targetLength <= 0) {
@@ -670,9 +688,46 @@ AudioApp.audioEngine = (function () {
         if (typeof detail.trackId === 'string') { console.warn(`AudioEngine: Attempted to dispatch event ${eventName} with string trackId '${detail.trackId}'. Converting/Ignoring.`); detail.trackId = parseInt(detail.trackId, 10); if(isNaN(detail.trackId)) detail.trackId = -1; } document.dispatchEvent(new CustomEvent(eventName, {detail: detail}));
     }
 
+    /**
+     * Sets the application constants for the audio engine.
+     * This should be called once before init or other operations.
+     * @param {object} constants - The constants object, typically AudioApp.Constants.
+     * @public
+     */
+    function setAppConstants(constants) {
+        if (!constants) {
+            console.error("AudioEngine: setAppConstants received null or undefined constants.");
+            APP_CONSTANTS = {}; // Fallback to empty object to prevent null errors, though functions might fail
+            return;
+        }
+        APP_CONSTANTS = constants;
+        console.log("AudioEngine: APP_CONSTANTS have been set.");
+        // Initialize promise here, now that APP_CONSTANTS can be checked by preFetch or other early access.
+        // This ensures that if setAppConstants is called, the promise setup runs.
+        if (!resourceReadyPromise) {
+            initializeResourcePromise();
+        }
+    }
+
+    // Ensure initializeResourcePromise is called at least once when the module loads,
+    // so resourceReadyPromise is not null. Functions like preFetchWorkletResources also call it.
+    if (!resourceReadyPromise) {
+        initializeResourcePromise();
+    }
+
     // --- Public Interface ---
-    // (Interface remains the same, but methods now expect numeric indices)
-    return { init, setupTrack, cleanupTrack, resampleTo16kMono, togglePlayPause, seekAllTracks, setGain, playTrack, pauseTrack, seekTrack, setTrackSpeed, setTrackPitch, setTrackFormant, setPan, setVolume, setMute, getAudioContext, cleanup };
+    return {
+        setAppConstants, // Expose the new setter
+        init, setupTrack, cleanupTrack, resampleTo16kMono, togglePlayPause, seekAllTracks,
+        setGain, playTrack, pauseTrack, seekTrack, setTrackSpeed, setTrackPitch,
+        setTrackFormant, setPan, setVolume, setMute, getAudioContext,
+        resumeContextIfNeeded, cleanup
+    };
 
 })();
+
+// Export for Node.js/CommonJS environments (like Jest)
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = AudioApp.audioEngine;
+}
 // --- /vibe-player/js/player/audioEngine.js ---
