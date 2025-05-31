@@ -1,0 +1,23 @@
+{
+  "name": "app",
+  "version": "1.0.0",
+  "description": "Live Demo: [Vibe Player](https://averykhoo.github.io/vibe-player/)",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/averykhoo/vibe-player.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/averykhoo/vibe-player/issues"
+  },
+  "homepage": "https://github.com/averykhoo/vibe-player#readme",
+  "devDependencies": {
+    "jest": "^29.7.0"
+  }
+}

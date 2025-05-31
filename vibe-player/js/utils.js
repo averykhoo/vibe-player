@@ -116,4 +116,9 @@ AudioApp.Utils = (function() {
     };
 
 })(); // End of AudioApp.Utils IIFE
+
+// Export for Node.js/CommonJS environments (like Jest)
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = AudioApp.Utils;
+}
 // --- /vibe-player/js/utils.js ---

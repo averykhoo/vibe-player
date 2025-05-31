@@ -178,12 +178,15 @@ AudioApp.stateManager = (function() {
      */
     function areAllActiveTracksReady() {
         const leftTrack = getTrackByIndex(leftChannelTrackIndex);
-        if (!leftTrack?.isReady) return false;
+        if (leftChannelTrackIndex !== -1) { // Check if left is assigned
+            if (!leftTrack?.isReady) return false;
+        }
+        // Only proceed to check right channel if it's assigned
         if (rightChannelTrackIndex !== -1) {
             const rightTrack = getTrackByIndex(rightChannelTrackIndex);
             if (!rightTrack?.isReady) return false;
         }
-        return true;
+        return true; // If all assigned tracks are ready, or no tracks are assigned
     }
 
     /**
@@ -448,4 +451,9 @@ AudioApp.stateManager = (function() {
     };
 
 })();
+
+// Export for Node.js/CommonJS environments (like Jest)
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = AudioApp.stateManager;
+}
 // --- /vibe-player/js/stateManager.js --- END MODIFIED FILE ---
