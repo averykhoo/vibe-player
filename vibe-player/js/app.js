@@ -47,6 +47,7 @@ AudioApp = (function() { // Assuming this module will be AudioApp
 
         debouncedSyncEngine = AudioApp.Utils.debounce(syncEngineToEstimatedTime, SYNC_DEBOUNCE_WAIT_MS);
         AudioApp.uiManager.init();
+        AudioApp.audioEngine.setAppConstants(AudioApp.Constants);
         AudioApp.audioEngine.init();
 
         // Create Left Visualizers
