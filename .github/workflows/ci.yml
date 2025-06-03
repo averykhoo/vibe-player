@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - master
+      - multi-track-attempt-2
   pull_request:
     branches:
       - main
       - master
+      - multi-track-attempt-2
 
 jobs:
   test:
