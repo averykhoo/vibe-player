@@ -449,7 +449,7 @@ class RubberbandProcessor extends AudioWorkletProcessor {
             for (let i = 0; i < this.numberOfChannels; ++i) { if (outputBuffer[i]) { const copyLength = Math.min(totalRetrieved, outputBlockSize); if (copyLength > 0) outputBuffer[i].set(tempOutputBuffers[i].subarray(0, copyLength)); if (copyLength < outputBlockSize) { outputBuffer[i].fill(0.0, copyLength); } } else { console.warn(`[Worklet #${this.trackId}] Output buffer for channel ${i} is missing!`); } }
 
             // --- Check for Actual Stream End --- (Unchanged)
-            console.log(`[Worklet #${this.trackId}] DEBUG EOS Check: finalBlockSent=${this.finalBlockSent}, available=${available}, totalRetrieved=${totalRetrieved}, outputBlockSize=${outputBlockSize}, streamEnded=${this.streamEnded}`);
+            // console.log(`[Worklet #${this.trackId}] DEBUG EOS Check: finalBlockSent=${this.finalBlockSent}, available=${available}, totalRetrieved=${totalRetrieved}, outputBlockSize=${outputBlockSize}, streamEnded=${this.streamEnded}`);
             if (this.finalBlockSent && available <= 0 && totalRetrieved < outputBlockSize) { if (!this.streamEnded) { console.log(`[Worklet #${this.trackId}] Playback stream processing officially ended.`); this.streamEnded = true; this.isPlaying = false; this.postStatus('Playback ended'); this.port?.postMessage({ type: 'playback-state', isPlaying: false, trackId: this.trackId }); } }
 
         } catch (error) { // Error handling unchanged
