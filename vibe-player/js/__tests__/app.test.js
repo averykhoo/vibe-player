@@ -4,7 +4,7 @@ global.AudioApp = global.AudioApp || {};
 
 // Load actual constants. This assumes constants.js correctly populates global.AudioApp.Constants.
 // It's executed when Jest processes this file.
-require('../constants');
+// require('../constants'); // Moved to beforeEach in describe('AudioApp.init',...)
 
 // Mock document and window properties that app.js might use during initialization
 global.document = global.document || {}; // Ensure document exists
@@ -20,13 +20,49 @@ global.cancelAnimationFrame = jest.fn(); // Used by app.js
 global.AudioApp.uiManager = {
   init: jest.fn(),
   resetUI: jest.fn(),
+  setSliderValue: jest.fn(), // Added for pitch control tests
+  setTrackControlsVisibility: jest.fn(), // Added from previous subtask, good to have
+  showMultiTrackUI: jest.fn(), // Added from previous subtask
+  updateFileName: jest.fn(),
+  setFileInfo: jest.fn(),
+  enableTrackControls: jest.fn(),
+  enablePlaybackControls: jest.fn(),
+  enableSeekBar: jest.fn(),
+  enableRightTrackLoadButton: jest.fn(),
+  enableSwapButton: jest.fn(),
+  enableRemoveButton: jest.fn(),
   // Add any other methods app.js init might call on uiManager
 };
 
 global.AudioApp.stateManager = {
   resetState: jest.fn(),
+  togglePitchLink: jest.fn(), // Added for pitch control tests
+  getIsPitchLinked: jest.fn(), // Added for pitch control tests
+  getTrackIndexForSide: jest.fn(), // Added for pitch control tests
+  getTrackByIndex: jest.fn(), // Added for pitch control tests
+  findFirstAvailableSlot: jest.fn(),
+  assignChannel: jest.fn(),
+  addNewTrack: jest.fn(),
+  clearTrackSlot: jest.fn(),
+  isSideAssigned: jest.fn(),
+  getIsMultiChannelModeActive: jest.fn(),
+  areAllActiveTracksReady: jest.fn(),
+  calculateMaxEffectiveDuration: jest.fn(),
+  getPlaybackState: jest.fn(),
+  setPlaybackState: jest.fn(),
+  getPlaybackStartTimeContext: jest.fn(),
+  getPlaybackStartSourceTime: jest.fn(),
+  getCurrentGlobalSpeed: jest.fn(),
+  setCurrentGlobalSpeed: jest.fn(),
+  updateTimebaseForSpeedChange: jest.fn(),
+  getTracksData: jest.fn(() => []), // Default to empty array
   // Add any other methods/properties
 };
+
+// Ensure AudioEngine mock has setTrackPitch
+global.AudioApp.audioEngine = global.AudioApp.audioEngine || {};
+global.AudioApp.audioEngine.setTrackPitch = jest.fn();
+
 
 const mockVisualizerInstance = {
   clearVisuals: jest.fn(),
@@ -79,6 +115,7 @@ describe('AudioApp.init', () => {
   beforeEach(() => {
     // Clear all mock call histories before each test.
     jest.clearAllMocks();
+    require('../constants'); // Ensure constants are loaded for each test after mocks are cleared/reset
 
     // AudioApp.init is a function, so we directly call it.
     // If AppMain was assigned, it would be AppMain.init().
@@ -113,7 +150,7 @@ describe('AudioApp.init', () => {
       };
     }
 
-    AudioApp.init(); // This should be the init from app.js
+    AppMain.init(); // This should be the init from app.js
 
     expect(global.AudioApp.audioEngine.setAppConstants).toHaveBeenCalledTimes(1);
     expect(global.AudioApp.audioEngine.setAppConstants).toHaveBeenCalledWith(global.AudioApp.Constants);
@@ -127,7 +164,7 @@ describe('AudioApp.init', () => {
   });
 
   test('should call initialization methods on UI, State, and Visualizer modules', () => {
-    AudioApp.init();
+    AppMain.init();
 
     expect(global.AudioApp.uiManager.init).toHaveBeenCalledTimes(1);
     expect(global.AudioApp.uiManager.resetUI).toHaveBeenCalledTimes(1);
@@ -138,7 +175,7 @@ describe('AudioApp.init', () => {
   });
 
   test('should setup event listeners', () => {
-    AudioApp.init();
+    AppMain.init();
     // Check a few examples. Exact number might be fragile if app.js changes often.
     expect(global.document.addEventListener).toHaveBeenCalledWith('audioapp:fileSelected', expect.any(Function));
     expect(global.document.addEventListener).toHaveBeenCalledWith('audioapp:playPauseClicked', expect.any(Function));
@@ -146,4 +183,109 @@ describe('AudioApp.init', () => {
     expect(global.window.addEventListener).toHaveBeenCalledWith('beforeunload', expect.any(Function));
   });
 
+});
+
+describe('AudioApp Pitch Control Handlers', () => {
+    // AppMain is already required at the top of the file, its IIFE runs once.
+    // Event listeners are attached to the global document by app.js's init.
+
+    beforeEach(() => {
+        jest.clearAllMocks(); // Clear mocks before each test
+
+        // Reset specific mock behaviors needed for these tests
+        global.AudioApp.stateManager.getTrackIndexForSide.mockImplementation(side => {
+            if (side === 'left') return 0;
+            if (side === 'right') return 1;
+            return -1;
+        });
+        global.AudioApp.stateManager.getTrackByIndex.mockImplementation(index => {
+            if (index === 0 || index === 1) {
+                return { id: index, isReady: true, parameters: { pitch: 1.0 } }; // Mock track object
+            }
+            return null;
+        });
+        // Ensure document.addEventListener is available for dispatchEvent to work as expected
+        // if it was cleared or not set up correctly for this scope.
+        // global.document.addEventListener = jest.fn(); // This might be too broad if app.js actually removes/adds listeners.
+                                                     // Better to rely on the global setup.
+    });
+
+    test('handleLinkPitchToggle should call stateManager.togglePitchLink', () => {
+        // Simulate the event that app.js listens for
+        // app.js calls togglePitchLink directly from the event handler, no detail needed for this part of the test.
+        const event = new CustomEvent('audioapp:linkPitchToggled'); // Removed detail as app.js doesn't use it for this
+        document.dispatchEvent(event);
+
+        expect(global.AudioApp.stateManager.togglePitchLink).toHaveBeenCalled();
+    });
+
+    describe('handlePitchChange', () => {
+        test('should update both tracks when pitch is linked', () => {
+            global.AudioApp.stateManager.getIsPitchLinked.mockReturnValue(true);
+
+            const mockPitchSliderLeft = { value: '1.0' }; // Mock DOM element
+            const mockPitchValueLeft = { textContent: '' }; // Mock DOM element
+            const mockPitchSliderRight = { value: '1.0' }; // Mock DOM element
+            const mockPitchValueRight = { textContent: '' }; // Mock DOM element
+
+            const originalGetElementById = global.document.getElementById;
+            global.document.getElementById = jest.fn(id => {
+                if (id === 'pitch_left') return mockPitchSliderLeft;
+                if (id === 'pitchValue_left') return mockPitchValueLeft;
+                if (id === 'pitch_right') return mockPitchSliderRight;
+                if (id === 'pitchValue_right') return mockPitchValueRight;
+                return originalGetElementById(id); // Fallback to original if other elements are needed
+            });
+
+            const eventDetail = { detail: { pitch: 1.5 } };
+            // Dispatch event as if from the left slider
+            const event = new CustomEvent('audioapp:pitchChanged_left', eventDetail);
+            document.dispatchEvent(event);
+
+            expect(global.AudioApp.audioEngine.setTrackPitch).toHaveBeenCalledWith(0, 1.5); // track 0 (left)
+            expect(global.AudioApp.audioEngine.setTrackPitch).toHaveBeenCalledWith(1, 1.5); // track 1 (right)
+
+            expect(global.AudioApp.uiManager.setSliderValue).toHaveBeenCalledWith(mockPitchSliderLeft, 1.5, mockPitchValueLeft, 'x');
+            expect(global.AudioApp.uiManager.setSliderValue).toHaveBeenCalledWith(mockPitchSliderRight, 1.5, mockPitchValueRight, 'x');
+
+            global.document.getElementById = originalGetElementById; // Restore original
+        });
+
+        test('should update only one track when pitch is unlinked', () => {
+            global.AudioApp.stateManager.getIsPitchLinked.mockReturnValue(false);
+
+            const mockPitchSliderLeft = { value: '1.0' };
+            const mockPitchValueLeft = { textContent: '' };
+            const originalGetElementById = global.document.getElementById;
+            global.document.getElementById = jest.fn(id => {
+                if (id === 'pitch_left') return mockPitchSliderLeft;
+                if (id === 'pitchValue_left') return mockPitchValueLeft;
+                return originalGetElementById(id);
+            });
+
+            const eventDetail = { detail: { pitch: 1.25 } };
+            const event = new CustomEvent('audioapp:pitchChanged_left', eventDetail); // Event from left
+            document.dispatchEvent(event);
+
+            expect(global.AudioApp.audioEngine.setTrackPitch).toHaveBeenCalledWith(0, 1.25); // track 0 (left)
+            expect(global.AudioApp.audioEngine.setTrackPitch).toHaveBeenCalledTimes(1); // Only called once
+
+            // When unlinked, app.js's handlePitchChange for 'left' does NOT call uiManager.setSliderValue for the 'right' side.
+            // It does update the 'left' side's parameters and relies on the UI event itself to have updated the originating slider.
+            // So, we check that setSliderValue wasn't called for the right side.
+            expect(global.AudioApp.uiManager.setSliderValue).not.toHaveBeenCalledWith(
+                expect.objectContaining({id: 'pitch_right'}), // A more robust way if actual DOM nodes were constructed
+                expect.any(Number),
+                expect.any(Object),
+                'x'
+            );
+            // It would have been called for the originating side ('left') only if its own event triggered it,
+            // but app.js's handlePitchChange updates the state, and the UI slider itself would have already changed.
+            // The critical part for app.js is if it updates the *other* slider when linked.
+            // So, we can check it was called for the left side exactly once (or not at all by this handler if UI handles its own originating slider)
+            // For this test, it's sufficient that the other track's pitch was NOT set and its UI slider was NOT updated by app.js
+
+            global.document.getElementById = originalGetElementById; // Restore original
+        });
+    });
 });

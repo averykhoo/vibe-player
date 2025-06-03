@@ -20,7 +20,7 @@ AudioApp.uiManager = (function () {
     // Global Buttons & Seek
     let playPauseButton, jumpBackButton, jumpForwardButton, jumpTimeInput, timeDisplay, seekBar, driftValueMsSpan;
     // Track Controls Section (Container)
-    let trackControlsSection;
+    let trackControlsSection, trackControlsLeft, trackControlsRight, trackControlsLinking; // Added Left, Right, Linking columns
     // Track Left Controls (No Solo)
     let muteButton_left, /* soloButton_left REMOVED */ volumeSlider_left, volumeValue_left, delayInput_left, pitchSlider_left, pitchValue_left, pitchMarkers_left;
     // Track Right Controls (No Solo)
@@ -59,8 +59,11 @@ AudioApp.uiManager = (function () {
         multiTrackOptionsDiv = document.getElementById('multi-track-options'); chooseFileButton_right = document.getElementById('chooseFileButton_right'); hiddenAudioFile_right = document.getElementById('hiddenAudioFile_right'); fileNameDisplay_right = document.getElementById('fileNameDisplay_right'); fileInfo_right = document.getElementById('fileInfo_right'); swapTracksButton = document.getElementById('swapTracksButton'); removeTrackButton_right = document.getElementById('removeTrackButton_right');
         // Global Playback
         playPauseButton = document.getElementById('playPause'); jumpBackButton = document.getElementById('jumpBack'); jumpForwardButton = document.getElementById('jumpForward'); jumpTimeInput = document.getElementById('jumpTime'); seekBar = document.getElementById('seekBar'); timeDisplay = document.getElementById('timeDisplay'); driftValueMsSpan = document.getElementById('driftValueMs');
-        // Track Controls Section Container
+        // Track Controls Section Container and Columns
         trackControlsSection = document.getElementById('track-controls');
+        trackControlsLeft = document.getElementById('track-controls-left');
+        trackControlsRight = document.getElementById('track-controls-right');
+        trackControlsLinking = document.getElementById('track-controls-linking');
         // Track Left Controls (No Solo)
         muteButton_left = document.getElementById('mute_left');
         // soloButton_left = document.getElementById('solo_left'); // REMOVED
@@ -193,7 +196,8 @@ AudioApp.uiManager = (function () {
     /** Resets UI to initial single-track state. */
     function resetUI() {
         console.log("UIManager: Resetting UI to single-track state");
-        showMultiTrackUI(false);
+        if (trackControlsSection) trackControlsSection.style.display = 'none'; // Hide main controls section
+        showMultiTrackUI(false); // This will hide right column and linking, and ensure left is visible if section is
         setPlayButtonState(false); updateTimeDisplay(0, 0); updateSeekBar(0); updateDriftDisplay(0);
         setSliderValue(gainControl, 1.0, gainValueDisplay, 'x');
         setSliderValue(globalSpeedControl, 1.0, globalSpeedValue, 'x');
@@ -252,7 +256,49 @@ AudioApp.uiManager = (function () {
 
     // --- Visibility Control ---
     /** Shows/hides UI elements specific to multi-track mode. */
-    function showMultiTrackUI(show) { console.log(`UIManager: Setting multi-track UI visibility to ${show}`); const displayStyle = show ? '' : 'none'; if (trackControlsSection) trackControlsSection.style.display = displayStyle; if (visualizationRightSection) visualizationRightSection.style.display = displayStyle; if (visualizationRightSpecSection) visualizationRightSpecSection.style.display = displayStyle; if (swapTracksButton) swapTracksButton.style.display = show ? '' : 'none'; if (removeTrackButton_right) removeTrackButton_right.style.display = show ? '' : 'none'; if (show) { setTimeout(() => { console.log("UIManager: Positioning markers for right track sliders."); positionMarkersForSlider(pitchSlider_right, pitchMarkers_right); }, 0); } isMultiTrackUIVisible = show; }
+    function showMultiTrackUI(show) {
+        console.log(`UIManager: Setting multi-track UI visibility to ${show}`);
+        const multiTrackDisplayStyle = show ? '' : 'none';
+
+        // if (trackControlsSection) trackControlsSection.style.display = displayStyle; // REMOVED - Controlled by setTrackControlsVisibility
+        if (trackControlsRight) trackControlsRight.style.display = multiTrackDisplayStyle;
+        if (trackControlsLinking) trackControlsLinking.style.display = multiTrackDisplayStyle;
+
+        if (visualizationRightSection) visualizationRightSection.style.display = multiTrackDisplayStyle;
+        if (visualizationRightSpecSection) visualizationRightSpecSection.style.display = multiTrackDisplayStyle;
+        if (swapTracksButton) swapTracksButton.style.display = show ? '' : 'none'; // Keep existing logic
+        if (removeTrackButton_right) removeTrackButton_right.style.display = show ? '' : 'none'; // Keep existing logic
+
+        // Ensure left controls column is visible if the main controls section is visible
+        // (This assumes setTrackControlsVisibility handles the main section's visibility)
+        if (trackControlsSection && trackControlsSection.style.display !== 'none') {
+            if (trackControlsLeft) trackControlsLeft.style.display = '';
+        }
+
+
+        if (show) {
+            setTimeout(() => {
+                console.log("UIManager: Positioning markers for right track sliders.");
+                positionMarkersForSlider(pitchSlider_right, pitchMarkers_right);
+            }, 0);
+        }
+        isMultiTrackUIVisible = show;
+    }
+
+    /**
+     * Controls the visibility of the main track controls section.
+     * @param {boolean} show - True to show, false to hide.
+     */
+    function setTrackControlsVisibility(show) {
+        if (trackControlsSection) {
+            trackControlsSection.style.display = show ? '' : 'none';
+            if (show && trackControlsLeft) { // Ensure left column is visible when section is
+                 trackControlsLeft.style.display = '';
+            }
+            // If hiding the section, showMultiTrackUI(false) should have already hidden right/linking.
+            // If showing, showMultiTrackUI(isMultiTrackVisible) will determine right/linking.
+        }
+    }
 
     // --- Getters / Parsers ---
     /** Gets jump time value. */
@@ -304,7 +350,9 @@ AudioApp.uiManager = (function () {
         // setSoloButtonState // REMOVED
         setDelayValue: setDelayValue, parseDelayInput: parseDelayInput, formatDelaySeconds: formatDelaySeconds, setSliderValue: setSliderValue,
         // VAD Controls/Display
-        setSpeechRegionsText: setSpeechRegionsText, updateVadDisplay: updateVadDisplay, enableVadControls: enableVadControls, updateVadProgress: updateVadProgress, showVadProgress: showVadProgress
+        setSpeechRegionsText: setSpeechRegionsText, updateVadDisplay: updateVadDisplay, enableVadControls: enableVadControls, updateVadProgress: updateVadProgress, showVadProgress: showVadProgress,
+        // New visibility control
+        setTrackControlsVisibility: setTrackControlsVisibility
     };
 })();
 // --- /vibe-player/js/uiManager.js ---

@@ -34,8 +34,28 @@ class RubberbandProcessor extends AudioWorkletProcessor {
         console.log(`[Worklet #${this.trackId}] RubberbandProcessor created.`); // Updated log format
 
         // Audio properties (passed in options)
-        this.sampleRate = this.processorOpts.sampleRate || sampleRate; // sampleRate is global in AudioWorkletGlobalScope
-        this.numberOfChannels = this.processorOpts.numberOfChannels || 0;
+        // this.sampleRate = this.processorOpts.sampleRate || sampleRate; // sampleRate is global in AudioWorkletGlobalScope
+        // this.numberOfChannels = this.processorOpts.numberOfChannels || 0;
+
+        // Directly use processorOpts for validation, then assign with fallback.
+        const optSampleRate = this.processorOpts.sampleRate;
+        const optNumChannels = this.processorOpts.numberOfChannels;
+
+        if (typeof optSampleRate !== 'number' || optSampleRate <= 0) {
+            this.postErrorAndStop(`Invalid SampleRate from options: ${optSampleRate}`);
+            this.sampleRate = global.sampleRate; // Fallback to global AudioWorkletGlobalScope sampleRate
+        } else {
+            this.sampleRate = optSampleRate;
+        }
+
+        if (typeof optNumChannels !== 'number' || optNumChannels <= 0) {
+            this.postErrorAndStop(`Invalid NumberOfChannels from options: ${optNumChannels}`);
+            // Fallback to 0 or a sensible default, or rely on later checks if global.sampleRate also implies a channel count
+            this.numberOfChannels = 0; // Defaulting to 0, subsequent checks should catch if this remains invalid
+        } else {
+            this.numberOfChannels = optNumChannels;
+        }
+
         // WASM resources (passed via options)
         this.wasmBinary = this.processorOpts.wasmBinary;
         this.loaderScriptText = this.processorOpts.loaderScriptText;
@@ -78,8 +98,10 @@ class RubberbandProcessor extends AudioWorkletProcessor {
         // --- Initial Validation ---
         if (!this.wasmBinary) this.postErrorAndStop("WASM binary missing.");
         if (!this.loaderScriptText) this.postErrorAndStop("Loader script text missing.");
-        if (!this.sampleRate || this.sampleRate <= 0) this.postErrorAndStop(`Invalid SampleRate: ${this.sampleRate}`);
-        if (!this.numberOfChannels || this.numberOfChannels <= 0) this.postErrorAndStop(`Invalid NumberOfChannels: ${this.numberOfChannels}`);
+        // Validations for sampleRate and numberOfChannels are now done above when assigning them.
+        // However, we might still want to check the final values if fallbacks could also be invalid.
+        if (!this.sampleRate || this.sampleRate <= 0) this.postErrorAndStop(`Final SampleRate is invalid: ${this.sampleRate} (after potential fallback)`);
+        if (!this.numberOfChannels || this.numberOfChannels <= 0) this.postErrorAndStop(`Final NumberOfChannels is invalid: ${this.numberOfChannels} (after potential fallback)`);
         if (this.trackId === -1) this.postErrorAndStop(`Invalid trackId: ${this.trackId}`); // Check for valid numeric ID
 
         console.log(`[Worklet #${this.trackId}] Initialized with SR=${this.sampleRate}, Chans=${this.numberOfChannels}. Waiting for audio data.`); // Updated log format
@@ -106,8 +128,15 @@ class RubberbandProcessor extends AudioWorkletProcessor {
             const instantiateWasm = (imports, successCallback) => {
                 console.log(`[Worklet #${this.trackId}] instantiateWasm hook called by loader.`);
                 WebAssembly.instantiate(this.wasmBinary, imports)
-                    .then(output => { console.log(`[Worklet #${this.trackId}] WASM instantiate successful.`); successCallback(output.instance, output.module); })
-                    .catch(error => { console.error(`[Worklet #${this.trackId}] WASM instantiate hook failed:`, error); this.postError(`WASM Hook Error: ${error.message}`); });
+                    .then(output => {
+                        console.log(`[Worklet #${this.trackId}] WASM instantiate successful.`);
+                        successCallback(output.instance, output.module);
+                    })
+                    .catch(error => {
+                        console.error(`[Worklet #${this.trackId}] WASM instantiate hook failed:`, error);
+                        this.postError(`WASM Hook Error: ${error.message}`);
+                        successCallback(null, null); // Signal failure to the loader
+                    });
                 return {};
             };
 
@@ -420,6 +449,7 @@ class RubberbandProcessor extends AudioWorkletProcessor {
             for (let i = 0; i < this.numberOfChannels; ++i) { if (outputBuffer[i]) { const copyLength = Math.min(totalRetrieved, outputBlockSize); if (copyLength > 0) outputBuffer[i].set(tempOutputBuffers[i].subarray(0, copyLength)); if (copyLength < outputBlockSize) { outputBuffer[i].fill(0.0, copyLength); } } else { console.warn(`[Worklet #${this.trackId}] Output buffer for channel ${i} is missing!`); } }
 
             // --- Check for Actual Stream End --- (Unchanged)
+            console.log(`[Worklet #${this.trackId}] DEBUG EOS Check: finalBlockSent=${this.finalBlockSent}, available=${available}, totalRetrieved=${totalRetrieved}, outputBlockSize=${outputBlockSize}, streamEnded=${this.streamEnded}`);
             if (this.finalBlockSent && available <= 0 && totalRetrieved < outputBlockSize) { if (!this.streamEnded) { console.log(`[Worklet #${this.trackId}] Playback stream processing officially ended.`); this.streamEnded = true; this.isPlaying = false; this.postStatus('Playback ended'); this.port?.postMessage({ type: 'playback-state', isPlaying: false, trackId: this.trackId }); } }
 
         } catch (error) { // Error handling unchanged

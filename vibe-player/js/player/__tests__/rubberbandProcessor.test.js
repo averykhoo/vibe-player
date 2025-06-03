@@ -349,9 +349,13 @@ describe('RubberbandProcessor', () => {
         mockWasmInstance.exports._rubberband_available.mockReturnValue(0); // No more samples from Rubberband
         const outputs = [[new Float32Array(128), new Float32Array(128)]];
 
-        processor.process([], outputs, {});
+        processor.process([], outputs, {}); // First call
 
-        expect(outputs[0][0].every(sample => sample === 0)).toBe(true);
+        // Second call to potentially trigger end-of-stream status, after the first call might have set finalBlockSent
+        // and consumed any remaining available samples.
+        processor.process([], outputs, {}); // Second call
+
+        expect(outputs[0][0].every(sample => sample === 0)).toBe(true); // Ensure silence is output after stream ends
         expect(processor.port.postMessage).toHaveBeenCalledWith({ type: 'status', message: 'Playback ended', trackId: processor.trackId });
         expect(processor.port.postMessage).toHaveBeenCalledWith({ type: 'playback-state', isPlaying: false, trackId: processor.trackId });
         expect(processor.isPlaying).toBe(false);
@@ -369,8 +373,9 @@ describe('RubberbandProcessor', () => {
     });
 
     test('should call _rubberband_delete and _free, reset state, and post status', () => {
+      const stretcherValueBeforeCleanup = processor.rubberbandStretcher; // Store before cleanup
       processor.cleanup();
-      expect(mockWasmInstance.exports._rubberband_delete).toHaveBeenCalledWith(processor.rubberbandStretcher);
+      expect(mockWasmInstance.exports._rubberband_delete).toHaveBeenCalledWith(stretcherValueBeforeCleanup); // Use stored value
       // Check if _free was called for allocated buffers (inputPtrs, outputPtrs, and each channel buffer)
       expect(mockWasmInstance.exports._free).toHaveBeenCalledTimes(1 + 1 + (mockProcessorOptions.numberOfChannels * 2));
 

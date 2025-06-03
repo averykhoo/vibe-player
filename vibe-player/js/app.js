@@ -182,9 +182,10 @@ AudioApp = (function() { // Assuming this module will be AudioApp
             console.log("App: Loading Left channel - resetting application state."); isReplacingLeft = true;
             const oldLeftIndex = sm.getLeftTrackIndex();
             if (oldLeftIndex !== -1) await AudioApp.audioEngine.cleanupTrack(oldLeftIndex);
-            sm.resetState(); AudioApp.uiManager.resetUI();
+            sm.resetState(); AudioApp.uiManager.resetUI(); // resetUI hides trackControlsSection
             targetTrackIndex = sm.findFirstAvailableSlot();
             sm.assignChannel('left', targetTrackIndex);
+            AudioApp.uiManager.setTrackControlsVisibility(true); // Make the section visible for the left track
         } else { // Loading Right
             if (!sm.isSideAssigned('left')) { console.warn("App: Cannot load Right channel before Left channel."); AudioApp.uiManager.updateFileName('right', 'Load Left First!'); return; }
             if (sm.isSideAssigned('right')) {
@@ -194,7 +195,9 @@ AudioApp = (function() { // Assuming this module will be AudioApp
             }
             targetTrackIndex = sm.findFirstAvailableSlot();
             sm.assignChannel('right', targetTrackIndex);
-            AudioApp.uiManager.showMultiTrackUI(true); AudioApp.uiManager.enableSwapButton(false); AudioApp.uiManager.enableRemoveButton(false);
+            AudioApp.uiManager.setTrackControlsVisibility(true); // Ensure section is visible
+            AudioApp.uiManager.showMultiTrackUI(true); // This shows right-side specific controls
+            AudioApp.uiManager.enableSwapButton(false); AudioApp.uiManager.enableRemoveButton(false);
         }
 
         // Add track state using stateManager (this creates the object AND puts it in the internal array)
@@ -339,6 +342,7 @@ AudioApp = (function() { // Assuming this module will be AudioApp
 
         // Update UI for the specific side
         if (uiSide) {
+             AudioApp.uiManager.setTrackControlsVisibility(true); // Ensure main section is visible
              AudioApp.uiManager.enableTrackControls(uiSide, true);
              console.log(`App: Checking conditions for UI side ${uiSide}. Is Left Channel Index? ${trackIndex === sm.getLeftTrackIndex()}`);
              if (trackIndex === sm.getLeftTrackIndex()) { // Track assigned to Left UI

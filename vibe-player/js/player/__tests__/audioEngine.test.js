@@ -464,4 +464,3 @@ describe('AudioApp.audioEngine', () => {
     });
   });
 });
-[end of vibe-player/js/player/__tests__/audioEngine.test.js]
