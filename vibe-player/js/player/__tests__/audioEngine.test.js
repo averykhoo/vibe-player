@@ -207,7 +207,7 @@ describe('AudioApp.audioEngine', () => {
 
         mockAudioContextInstance.decodeAudioData.mockResolvedValue({
             duration: 1, sampleRate: 44100, numberOfChannels: 1,
-            getChannelData: jest.fn().mockReturnValue(new Float32Array(44100).buffer)
+            getChannelData: jest.fn().mockReturnValue(new Float32Array(44100))
         });
         const mockFile = new File(["content"], "track.mp3", { type: "audio/mpeg" });
 
@@ -226,7 +226,7 @@ describe('AudioApp.audioEngine', () => {
         });
         mockAudioContextInstance.decodeAudioData.mockResolvedValue({
             duration: 1, sampleRate: 44100, numberOfChannels: 1,
-            getChannelData: jest.fn().mockReturnValue(new Float32Array(44100).buffer)
+            getChannelData: jest.fn().mockReturnValue(new Float32Array(44100))
         });
 
         await audioEngine.setupTrack(0, mockFile);
@@ -249,7 +249,7 @@ describe('AudioApp.audioEngine', () => {
     const mockFile = new File(["content"], "track.mp3", { type: "audio/mpeg" });
     const mockDecodedBuffer = {
         duration: 1.0, sampleRate: 44100, numberOfChannels: 1,
-        getChannelData: jest.fn(() => new Float32Array(44100).buffer)
+        getChannelData: jest.fn(() => new Float32Array(44100))
     };
 
     beforeEach(async () => {
@@ -361,7 +361,7 @@ describe('AudioApp.audioEngine', () => {
       await new Promise(resolve => setTimeout(resolve, 0));
       mockAudioContextInstance.decodeAudioData.mockResolvedValue({
           duration: 1, sampleRate: 44100, numberOfChannels: 1,
-          getChannelData: jest.fn(() => new Float32Array(44100).buffer)
+          getChannelData: jest.fn(() => new Float32Array(44100))
       });
       await audioEngine.setupTrack(trackIndex, new File(["content"], "track.mp3"));
       handler = mockWorkletNodeInstance.port.onmessage;
@@ -384,7 +384,7 @@ describe('AudioApp.audioEngine', () => {
 
   describe('Playback Control Methods', () => {
     const trackIndex = 0;
-    beforeEach(async () => { await audioEngine.init(); await new Promise(resolve => setTimeout(resolve, 0)); mockAudioContextInstance.decodeAudioData.mockResolvedValue({ duration: 1, sampleRate: 44100, numberOfChannels: 1, getChannelData: jest.fn(() => new Float32Array(44100).buffer) }); await audioEngine.setupTrack(trackIndex, new File(["content"], "track.mp3")); });
+    beforeEach(async () => { await audioEngine.init(); await new Promise(resolve => setTimeout(resolve, 0)); mockAudioContextInstance.decodeAudioData.mockResolvedValue({ duration: 1, sampleRate: 44100, numberOfChannels: 1, getChannelData: jest.fn(() => new Float32Array(44100)) }); await audioEngine.setupTrack(trackIndex, new File(["content"], "track.mp3")); });
     test('playTrack', () => { audioEngine.playTrack(trackIndex); expect(mockWorkletNodeInstance.port.postMessage).toHaveBeenCalledWith({ type: 'play' }); });
     test('pauseTrack', () => { audioEngine.pauseTrack(trackIndex); expect(mockWorkletNodeInstance.port.postMessage).toHaveBeenCalledWith({ type: 'pause' }); });
     test('seekTrack', () => { audioEngine.seekTrack(trackIndex, 5.5); expect(mockWorkletNodeInstance.port.postMessage).toHaveBeenCalledWith({ type: 'seek', positionSeconds: 5.5 }); audioEngine.seekTrack(trackIndex, -1); expect(mockWorkletNodeInstance.port.postMessage).toHaveBeenCalledWith({ type: 'seek', positionSeconds: 0 }); });
@@ -423,7 +423,7 @@ describe('AudioApp.audioEngine', () => {
     let track0Worklet, track1Worklet;
     beforeEach(async () => {
       await audioEngine.init(); await new Promise(resolve => setTimeout(resolve, 0));
-      mockAudioContextInstance.decodeAudioData.mockResolvedValue({ duration: 1, sampleRate: 44100, numberOfChannels: 1, getChannelData: jest.fn(() => new Float32Array(44100).buffer) });
+      mockAudioContextInstance.decodeAudioData.mockResolvedValue({ duration: 1, sampleRate: 44100, numberOfChannels: 1, getChannelData: jest.fn(() => new Float32Array(44100)) });
 
       // Mock createGain to provide distinct gain nodes for two tracks
       // init() already consumed one for masterGain.
