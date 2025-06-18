@@ -8,32 +8,82 @@
 	 */
 	import { RangeSlider } from '@skeletonlabs/skeleton';
 	import audioEngine from '$lib/services/audioEngine.service';
-	import analysisService from '$lib/services/analysis.service';
 	import { playerStore } from '$lib/stores/player.store';
 	import { analysisStore } from '$lib/stores/analysis.store';
 	import { get } from 'svelte/store';
+	import { debounce } from '$lib/utils/async'; // Import the debounce utility
 
-	// Component-local state bound to the sliders
+	// --- Debounced Service Callers ---
+	const debouncedSetSpeed = debounce((newSpeed: number) => {
+		console.log(`[Controls.svelte] Debounced function EXECUTED for setSpeed. Value: ${newSpeed}`);
+		audioEngine.setSpeed(newSpeed);
+	}, 250);
+
+	const debouncedSetPitch = debounce((newPitch: number) => {
+		console.log(`[Controls.svelte] Debounced function EXECUTED for setPitch. Value: ${newPitch}`);
+		audioEngine.setPitch(newPitch);
+	}, 250);
+
+	const debouncedSetGain = debounce((newGain: number) => {
+		console.log(`[Controls.svelte] Debounced function EXECUTED for setGain. Value: ${newGain}`);
+		audioEngine.setGain(newGain);
+	}, 250);
+
+	const debouncedSetVadThresholds = debounce((positive: number, negative: number) => {
+		console.log(
+			`[Controls.svelte] Debounced function EXECUTED for setVadThresholds. Values: P=${positive}, N=${negative}`
+		);
+		analysisStore.update((s) => ({
+			...s,
+			vadPositiveThreshold: positive,
+			vadNegativeThreshold: negative
+		}));
+	}, 250);
+
+	// --- Local State for UI Binding ---
 	let speed = $playerStore?.speed || 1.0;
 	let pitch = $playerStore?.pitch || 0.0;
 	let gain = $playerStore?.gain || 1.0;
 	let vadPositive = $analysisStore?.vadPositiveThreshold || 0.5;
 	let vadNegative = $analysisStore?.vadNegativeThreshold || 0.35;
 
-	// Subscriptions to keep local state in sync with the global store
+	// --- Reactive Statements (The Core Logic) ---
+	$: if (speed !== undefined) {
+		console.log(`[Controls.svelte] Reactive statement TRIGGERED for speed. Calling debounced function. Value: ${speed}`);
+		debouncedSetSpeed(speed);
+	}
+
+	$: if (pitch !== undefined) {
+		console.log(`[Controls.svelte] Reactive statement TRIGGERED for pitch. Calling debounced function. Value: ${pitch}`);
+		debouncedSetPitch(pitch);
+	}
+
+	$: if (gain !== undefined) {
+		console.log(`[Controls.svelte] Reactive statement TRIGGERED for gain. Calling debounced function. Value: ${gain}`);
+		debouncedSetGain(gain);
+	}
+
+	$: if (vadPositive !== undefined && vadNegative !== undefined) {
+		console.log(
+			`[Controls.svelte] Reactive statement TRIGGERED for VAD. Calling debounced function. Values: P=${vadPositive}, N=${vadNegative}`
+		);
+		debouncedSetVadThresholds(vadPositive, vadNegative);
+	}
+
+	// --- Subscriptions to Sync UI from External Store Changes ---
 	playerStore.subscribe((val) => {
-		if (val.speed !== undefined) speed = val.speed;
-		if (val.pitch !== undefined) pitch = val.pitch;
-		if (val.gain !== undefined) gain = val.gain;
+		if (val.speed !== undefined && speed !== val.speed) speed = val.speed;
+		if (val.pitch !== undefined && pitch !== val.pitch) pitch = val.pitch;
+		if (val.gain !== undefined && gain !== val.gain) gain = val.gain;
 	});
 	analysisStore.subscribe((val) => {
-		if (val.vadPositiveThreshold !== undefined) vadPositive = val.vadPositiveThreshold;
-		if (val.vadNegativeThreshold !== undefined) vadNegative = val.vadNegativeThreshold;
+		if (val.vadPositiveThreshold !== undefined && vadPositive !== val.vadPositiveThreshold)
+			vadPositive = val.vadPositiveThreshold;
+		if (val.vadNegativeThreshold !== undefined && vadNegative !== val.vadNegativeThreshold)
+			vadNegative = val.vadNegativeThreshold;
 	});
 
-	/**
-	 * Toggles the playback state by calling the audioEngine service.
-	 */
+	// --- Button Handlers ---
 	function handlePlayPause() {
 		if (get(playerStore).isPlaying) {
 			audioEngine.pause();
@@ -42,49 +92,8 @@
 		}
 	}
 
-	/**
-	 * Stops playback and resets the position by calling the audioEngine service.
-	 */
 	function handleStop() {
 		audioEngine.stop();
-	}
-
-	/**
-	 * [FIXED] Applies the final speed change after the user releases the slider.
-	 */
-	function applySpeedChange() {
-		console.log(`[Controls.svelte] applySpeedChange() called. Final speed is: ${speed}`);
-		audioEngine.setSpeed(speed);
-	}
-
-	/**
-	 * [FIXED] Applies the final pitch change after the user releases the slider.
-	 */
-	function applyPitchChange() {
-		console.log(`[Controls.svelte] applyPitchChange() called. Final pitch is: ${pitch}`);
-		audioEngine.setPitch(pitch);
-	}
-
-	/**
-	 * [FIXED] Applies the final gain change after the user releases the slider.
-	 */
-	function applyGainChange() {
-		console.log(`[Controls.svelte] applyGainChange() called. Final gain is: ${gain}`);
-		audioEngine.setGain(gain);
-	}
-
-	/**
-	 * [FIXED] Applies the final VAD threshold changes after the user releases the slider.
-	 */
-	function applyVadThresholds() {
-		console.log(
-			`[Controls.svelte] applyVadThresholds() called. Positive: ${vadPositive}, Negative: ${vadNegative}`
-		);
-		analysisStore.update((s) => ({
-			...s,
-			vadPositiveThreshold: vadPositive,
-			vadNegativeThreshold: vadNegative
-		}));
 	}
 </script>
 
@@ -119,8 +128,6 @@
 			min={0.5}
 			max={2.0}
 			step={0.01}
-			on:mouseup={applySpeedChange}
-			on:touchend={applySpeedChange}
 		/>
 	</div>
 	<div>
@@ -134,8 +141,6 @@
 			min={-12}
 			max={12}
 			step={0.1}
-			on:mouseup={applyPitchChange}
-			on:touchend={applyPitchChange}
 		/>
 	</div>
 	<div>
@@ -147,8 +152,6 @@
 			min={0}
 			max={2.0}
 			step={0.01}
-			on:mouseup={applyGainChange}
-			on:touchend={applyGainChange}
 		/>
 	</div>
 	<div>
@@ -162,8 +165,6 @@
 			min={0.05}
 			max={0.95}
 			step={0.01}
-			on:mouseup={applyVadThresholds}
-			on:touchend={applyVadThresholds}
 		/>
 	</div>
 	<div>
@@ -177,8 +178,6 @@
 			min={0.05}
 			max={0.95}
 			step={0.01}
-			on:mouseup={applyVadThresholds}
-			on:touchend={applyVadThresholds}
 		/>
 	</div>
 </div>
