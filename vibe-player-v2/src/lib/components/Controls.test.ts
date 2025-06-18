@@ -44,6 +44,9 @@ let mockAnalysisStoreWritable: Writable<any>;
 
 describe("Controls.svelte", () => {
   beforeEach(async () => {
+    // --- FIX: Enable fake timers for this test suite ---
+    vi.useFakeTimers();
+
     mockPlayerStoreWritable = writable({ ...initialMockPlayerStoreValues });
     mockAnalysisStoreWritable = writable({ ...initialMockAnalysisStoreValues });
 
@@ -77,6 +80,11 @@ describe("Controls.svelte", () => {
     vi.mocked(analysisStoreMocks.analysisStore.update).mockImplementation(
       mockAnalysisStoreWritable.update,
     );
+  });
+
+  // --- ADDED afterEach to restore timers ---
+  afterEach(() => {
+	  vi.useRealTimers();
   });
 
   it("renders all control buttons and sliders", () => {
@@ -134,11 +142,15 @@ describe("Controls.svelte", () => {
     expect(audioEngineService.stop).toHaveBeenCalledTimes(1);
   });
 
-  // Slider tests remain the same but use async queries for safety
+  // --- FIX: Modified slider tests to use fake timers ---
   it("calls audioEngine.setSpeed() when speed slider changes", async () => {
     render(Controls);
     const speedSlider = screen.getByLabelText<HTMLInputElement>(/Speed/i);
     await fireEvent.input(speedSlider, { target: { value: "1.5" } });
+    
+    // Manually advance time past the debounce delay
+    await vi.runAllTimersAsync();
+
     expect(audioEngineService.setSpeed).toHaveBeenCalledWith(1.5);
     expect(await screen.findByLabelText(/Speed: 1.50x/i)).toBeInTheDocument();
   });
@@ -147,6 +159,10 @@ describe("Controls.svelte", () => {
     render(Controls);
     const pitchSlider = screen.getByLabelText<HTMLInputElement>(/Pitch/i);
     await fireEvent.input(pitchSlider, { target: { value: "-5.0" } });
+    
+    // Manually advance time past the debounce delay
+    await vi.runAllTimersAsync();
+
     expect(audioEngineService.setPitch).toHaveBeenCalledWith(-5.0);
     expect(
       await screen.findByLabelText(/Pitch: -5.0 semitones/i),
@@ -157,6 +173,10 @@ describe("Controls.svelte", () => {
     render(Controls);
     const gainSlider = screen.getByLabelText<HTMLInputElement>(/Gain/i);
     await fireEvent.input(gainSlider, { target: { value: "0.7" } });
+    
+    // Manually advance time past the debounce delay
+    await vi.runAllTimersAsync();
+
     expect(audioEngineService.setGain).toHaveBeenCalledWith(0.7);
     expect(await screen.findByLabelText(/Gain: 0.70/i)).toBeInTheDocument();
   });
