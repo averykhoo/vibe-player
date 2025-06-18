@@ -105,6 +105,10 @@ class AudioEngineService {
         error: errorMsg,
         isPlayable: false,
       }));
+      console.log(
+        "[AudioEngineService] playerStore updated by loadFile (invalid buffer). New state:",
+        get(playerStore),
+      );
       throw new Error(errorMsg);
     }
 
@@ -118,6 +122,10 @@ class AudioEngineService {
       error: null,
       isPlayable: false,
     }));
+    console.log(
+      "[AudioEngineService] playerStore updated by loadFile (before decoding). New state:",
+      get(playerStore),
+    );
 
     try {
       console.log(
@@ -143,6 +151,10 @@ class AudioEngineService {
         error: error.message,
         isPlayable: false,
       }));
+      console.log(
+        "[AudioEngineService] playerStore updated by loadFile (decode error). New state:",
+        get(playerStore),
+      );
       throw error; // Re-throw for the orchestrator
     }
   };
@@ -169,6 +181,10 @@ class AudioEngineService {
           error: "Worker encountered an unhandled error",
           isPlayable: false,
         }));
+        console.log(
+          "[AudioEngineService] playerStore updated by _initializeWorker (worker.onerror). New state:",
+          get(playerStore),
+        );
       };
     } else {
       console.log("[AudioEngineService] Resetting existing worker.");
@@ -192,6 +208,10 @@ class AudioEngineService {
           error: errorMsg,
           isPlayable: false,
         }));
+        console.log(
+          "[AudioEngineService] playerStore updated by _initializeWorker (dependency fetch error). New state:",
+          get(playerStore),
+        );
         throw new Error(errorMsg);
       }
       const wasmBinary = await wasmResponse.arrayBuffer();
@@ -230,6 +250,10 @@ class AudioEngineService {
         error: error.message,
         isPlayable: false,
       }));
+      console.log(
+        "[AudioEngineService] playerStore updated by _initializeWorker (init error). New state:",
+        get(playerStore),
+      );
       throw error; // Re-throw for the orchestrator or loadFile to catch
     }
   };
@@ -262,6 +286,10 @@ class AudioEngineService {
       isPlaying: true,
       status: `Playing: ${s.fileName}`,
     }));
+    console.log(
+      "[AudioEngineService] playerStore updated by play. New state:",
+      get(playerStore),
+    );
 
     if (this.nextChunkTime === 0 || this.nextChunkTime < audioCtx.currentTime) {
       this.nextChunkTime = audioCtx.currentTime;
@@ -292,6 +320,10 @@ class AudioEngineService {
       isPlaying: false,
       status: `Paused: ${s.fileName || ""}`,
     }));
+    console.log(
+      "[AudioEngineService] playerStore updated by pause. New state:",
+      get(playerStore),
+    );
   };
 
   /**
@@ -318,6 +350,10 @@ class AudioEngineService {
       isPlaying: false,
       status: `Stopped: ${s.fileName || ""}`,
     }));
+    console.log(
+      "[AudioEngineService] playerStore updated by stop. New state:",
+      get(playerStore),
+    );
     this.isStopping = false;
   };
 
@@ -352,6 +388,10 @@ class AudioEngineService {
     this.sourcePlaybackOffset = time;
     this.nextChunkTime = this.audioContext ? this.audioContext.currentTime : 0;
     playerStore.update((s) => ({ ...s, currentTime: time }));
+    console.log(
+      "[AudioEngineService] playerStore updated by seek. New state:",
+      get(playerStore),
+    );
   };
 
   /**
@@ -366,6 +406,10 @@ class AudioEngineService {
       });
     }
     playerStore.update((s) => ({ ...s, speed }));
+    console.log(
+      "[AudioEngineService] playerStore updated by setSpeed. New state:",
+      get(playerStore),
+    );
   };
 
   /**
@@ -380,6 +424,10 @@ class AudioEngineService {
       });
     }
     playerStore.update((s) => ({ ...s, pitch }));
+    console.log(
+      "[AudioEngineService] playerStore updated by setPitch. New state:",
+      get(playerStore),
+    );
   };
 
   /**
@@ -391,6 +439,10 @@ class AudioEngineService {
       const newGain = Math.max(0, Math.min(2, level));
       this.gainNode.gain.setValueAtTime(newGain, this.audioContext.currentTime);
       playerStore.update((s) => ({ ...s, gain: newGain }));
+      console.log(
+        "[AudioEngineService] playerStore updated by setGain. New state:",
+        get(playerStore),
+      );
     }
   };
 
@@ -442,6 +494,10 @@ class AudioEngineService {
       ...s,
       currentTime: this.sourcePlaybackOffset,
     }));
+    console.log(
+      "[AudioEngineService] playerStore updated by _recursiveProcessAndPlayLoop. New state:",
+      get(playerStore),
+    );
     this._performSingleProcessAndPlayIteration();
 
     if (this.isPlaying) {
@@ -493,6 +549,10 @@ class AudioEngineService {
             ...s,
             currentTime: this.originalBuffer!.duration,
           }));
+          console.log(
+            "[AudioEngineService] playerStore updated by _performSingleProcessAndPlayIteration (chunk duration zero). New state:",
+            get(playerStore),
+          );
           return;
         }
 
@@ -537,6 +597,10 @@ class AudioEngineService {
           currentTime: this.originalBuffer!.duration,
           status: `Finished: ${s.fileName}`,
         }));
+        console.log(
+          "[AudioEngineService] playerStore updated by _performSingleProcessAndPlayIteration (finished playing). New state:",
+          get(playerStore),
+        );
       }
     }
   };
@@ -627,6 +691,10 @@ class AudioEngineService {
           // Keep status as is, Orchestrator handles "Ready"
           // status: `Ready: ${s.fileName}`,
         }));
+        console.log(
+          "[AudioEngineService] playerStore updated by handleWorkerMessage (INIT_SUCCESS). New state:",
+          get(playerStore),
+        );
         break;
 
       case RB_WORKER_MSG_TYPE.ERROR:
@@ -642,6 +710,10 @@ class AudioEngineService {
           isPlayable: false,
           status: "Error",
         }));
+        console.log(
+          "[AudioEngineService] playerStore updated by handleWorkerMessage (ERROR). New state:",
+          get(playerStore),
+        );
         this.isWorkerInitialized = false;
         if (this.isPlaying) this.pause();
         break;
