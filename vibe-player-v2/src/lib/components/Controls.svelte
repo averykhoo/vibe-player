@@ -50,39 +50,35 @@
 	}
 
 	/**
-	 * [LOGGING ADDED] Called on slider input to update the playback speed.
+	 * [FIXED] Applies the final speed change after the user releases the slider.
 	 */
-	function updateSpeed() {
-		// LOG: See what the value of `speed` is when this function is called.
-		console.log(`[Controls.svelte] updateSpeed() called. Current 'speed' variable is: ${speed}`);
+	function applySpeedChange() {
+		console.log(`[Controls.svelte] applySpeedChange() called. Final speed is: ${speed}`);
 		audioEngine.setSpeed(speed);
 	}
 
 	/**
-	 * [LOGGING ADDED] Called on slider input to update the playback pitch.
+	 * [FIXED] Applies the final pitch change after the user releases the slider.
 	 */
-	function updatePitch() {
-		// LOG: See what the value of `pitch` is when this function is called.
-		console.log(`[Controls.svelte] updatePitch() called. Current 'pitch' variable is: ${pitch}`);
+	function applyPitchChange() {
+		console.log(`[Controls.svelte] applyPitchChange() called. Final pitch is: ${pitch}`);
 		audioEngine.setPitch(pitch);
 	}
 
 	/**
-	 * [LOGGING ADDED] Called on slider input to update the playback gain.
+	 * [FIXED] Applies the final gain change after the user releases the slider.
 	 */
-	function updateGain() {
-		// LOG: See what the value of `gain` is when this function is called.
-		console.log(`[Controls.svelte] updateGain() called. Current 'gain' variable is: ${gain}`);
+	function applyGainChange() {
+		console.log(`[Controls.svelte] applyGainChange() called. Final gain is: ${gain}`);
 		audioEngine.setGain(gain);
 	}
 
 	/**
-	 * [LOGGING ADDED] Called on slider input to update VAD thresholds in the store.
+	 * [FIXED] Applies the final VAD threshold changes after the user releases the slider.
 	 */
-	function updateVadThresholds() {
-		// LOG: See what the VAD values are when this function is called.
+	function applyVadThresholds() {
 		console.log(
-			`[Controls.svelte] updateVadThresholds() called. Positive: ${vadPositive}, Negative: ${vadNegative}`
+			`[Controls.svelte] applyVadThresholds() called. Positive: ${vadPositive}, Negative: ${vadNegative}`
 		);
 		analysisStore.update((s) => ({
 			...s,
@@ -123,7 +119,8 @@
 			min={0.5}
 			max={2.0}
 			step={0.01}
-			on:input={updateSpeed}
+			on:mouseup={applySpeedChange}
+			on:touchend={applySpeedChange}
 		/>
 	</div>
 	<div>
@@ -137,7 +134,8 @@
 			min={-12}
 			max={12}
 			step={0.1}
-			on:input={updatePitch}
+			on:mouseup={applyPitchChange}
+			on:touchend={applyPitchChange}
 		/>
 	</div>
 	<div>
@@ -149,7 +147,8 @@
 			min={0}
 			max={2.0}
 			step={0.01}
-			on:input={updateGain}
+			on:mouseup={applyGainChange}
+			on:touchend={applyGainChange}
 		/>
 	</div>
 	<div>
@@ -163,7 +162,8 @@
 			min={0.05}
 			max={0.95}
 			step={0.01}
-			on:input={updateVadThresholds}
+			on:mouseup={applyVadThresholds}
+			on:touchend={applyVadThresholds}
 		/>
 	</div>
 	<div>
@@ -177,7 +177,8 @@
 			min={0.05}
 			max={0.95}
 			step={0.01}
-			on:input={updateVadThresholds}
+			on:mouseup={applyVadThresholds}
+			on:touchend={applyVadThresholds}
 		/>
 	</div>
 </div>
