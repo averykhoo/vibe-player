@@ -110,20 +110,40 @@ test.describe("Vibe Player V2 E2E", () => {
       String(currentMax / 2),
     );
 
-    await page.waitForTimeout(500);
+    // 5. Assert that the time has updated correctly by polling the UI until the
+    //    condition is met or the timeout is reached.
+    await page.waitForFunction(
+      (expectedTime) => {
+        const timeDisplay = document.querySelector(
+          '[data-testid="time-display"]',
+        );
+        if (!timeDisplay?.textContent) return false;
 
-    const timeAfterSeekText = await playerPage.timeDisplay.textContent();
-    const currentTimeAfterSeek = parseTimeToSeconds(
-      timeAfterSeekText.split(" / ")[0],
-    );
-    const durationAfterSeek = parseTimeToSeconds(
-      timeAfterSeekText.split(" / ")[1],
-    );
+        const currentTimeStr = timeDisplay.textContent.split(" / ")[0];
+        const parts = currentTimeStr.split(":");
+        if (parts.length < 2) return false;
 
-    expect(currentTimeAfterSeek).toBeGreaterThanOrEqual(
-      durationAfterSeek * 0.4,
-    );
-    expect(currentTimeAfterSeek).toBeLessThanOrEqual(durationAfterSeek * 0.6);
+        const currentTime =
+          parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10);
+
+        // Check if the current time is within a reasonable range (e.g., 90-110%) of the expected time.
+        // expectedTime in this context is durationSeconds * seekTargetFraction.
+        // The original issue description implies seekTargetFraction is 0.5 for the middle.
+        // So, we are expecting currentTime to be around 0.5 * duration.
+        // The check `currentTime >= expectedTime * 0.9 && currentTime <= expectedTime * 1.1`
+        // means currentTime should be between 0.45 * duration and 0.55 * duration.
+        return (
+          currentTime >= expectedTime * 0.9 && currentTime <= expectedTime * 1.1
+        );
+      },
+      durationSeconds * 0.5,
+      { timeout: 5000 },
+    ); // Pass the expected time (middle of duration) and a timeout
+
+    // Now that we've waited for the state to settle, a final, simpler assertion is safe.
+    const finalTimeText = await playerPage.timeDisplay.textContent();
+    const finalCurrentTime = parseTimeToSeconds(finalTimeText.split(" / ")[0]);
+    expect(finalCurrentTime).toBeGreaterThan(durationSeconds * 0.4);
     expect(await playerPage.getPlayButtonText()).toMatch(/Pause/i);
   });
 

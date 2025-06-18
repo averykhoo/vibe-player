@@ -68,12 +68,17 @@ class AudioOrchestrator {
 
       // Step 3: Initialize other services that depend on the audioBuffer's properties
       // Assuming spectrogramService.initialize takes an object with sampleRate
-      spectrogramService.initialize({ sampleRate: audioBuffer.sampleRate });
       dtmfService.initialize(16000); // Target sample rate for DTMF
+      // Correctly wait for the async initialization to complete.
+      await spectrogramService.initialize({
+        sampleRate: audioBuffer.sampleRate,
+      });
 
       // Step 4: Kick off all analyses in parallel. We DON'T await these,
       // allowing the UI to remain responsive. They update their own stores upon completion.
-      console.log("[Orchestrator] Starting parallel analyses...");
+      console.log(
+        "[Orchestrator] Starting parallel analyses now that services are ready...",
+      );
       Promise.allSettled([
         dtmfService.process(audioBuffer),
         // Assuming spectrogramService.process takes the channel data
