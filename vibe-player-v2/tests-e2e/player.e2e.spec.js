@@ -15,7 +15,11 @@ const DTMF_TEST_AUDIO_FILE = "test-audio/dtmf-123A456B789C(star)0(hex)D.mp3";
 test.describe("Vibe Player V2 E2E", () => {
   let playerPage;
 
-  test.beforeEach(async ({ page }) => {
+  // --- MODIFIED: Added testInfo and console logs to beforeEach ---
+  test.beforeEach(async ({ page }, testInfo) => {
+    // Log a clear header for the start of each test.
+    console.log(`\n\n=== STARTING TEST: ${testInfo.title} ===\n`);
+
     page.on("console", (msg) => {
       const text = msg.text();
       // Only log non-URL serialization messages to reduce noise
@@ -39,6 +43,13 @@ test.describe("Vibe Player V2 E2E", () => {
     playerPage = new PlayerPage(page);
     await playerPage.goto();
   });
+
+  // --- ADDED: afterEach hook for logging ---
+  test.afterEach(async ({ page }, testInfo) => {
+    // Log a clear footer for the end of each test, including its status.
+    console.log(`\n=== FINISHED TEST: ${testInfo.title} | Status: ${testInfo.status} ===\n`);
+  });
+
 
   test("should load an audio file and enable playback controls", async ({
     page,
