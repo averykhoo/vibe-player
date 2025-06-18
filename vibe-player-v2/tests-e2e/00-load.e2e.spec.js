@@ -11,7 +11,11 @@ import { PlayerPage } from "./PlayerPage.mjs";
 test.describe("Application Startup Smoke Test", () => {
   let playerPage;
 
-  test.beforeEach(async ({ page }) => {
+  // --- MODIFIED: Added testInfo and console logs to beforeEach ---
+  test.beforeEach(async ({ page }, testInfo) => {
+    // Log a clear header for the start of each test.
+    console.log(`\n\n=== STARTING TEST: ${testInfo.title} ===\n`);
+
     // Set up a console listener to catch any critical errors during page load.
     page.on("console", (msg) => {
       if (msg.type() === "error") {
@@ -19,6 +23,12 @@ test.describe("Application Startup Smoke Test", () => {
       }
     });
     playerPage = new PlayerPage(page);
+  });
+
+  // --- ADDED: afterEach hook for logging ---
+  test.afterEach(async ({ page }, testInfo) => {
+    // Log a clear footer for the end of each test, including its status.
+    console.log(`\n=== FINISHED TEST: ${testInfo.title} | Status: ${testInfo.status} ===\n`);
   });
 
   test("should load the main page and display initial UI components", async () => {
