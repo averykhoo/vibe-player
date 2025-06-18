@@ -123,20 +123,6 @@
         const unsubAnalysis = analysisStore.subscribe(debouncedUrlUpdate);
         // --- End URL State Serialization Logic ---
 
-        const unsubSpec = playerStore.subscribe((state) => {
-            if (state.audioBuffer && state.status && state.status.startsWith('Initializing processor')) {
-                console.log('New audio buffer detected, triggering DTMF analysis service...');
-                dtmfService.process(state.audioBuffer);
-            }
-
-            // Initialize spectrogram service if conditions are met.
-            // This is independent of the DTMF logic above.
-            if (state.sampleRate && !get(analysisStore).spectrogramInitialized) {
-                console.log(`Initializing spectrogram service with sample rate: ${state.sampleRate}`);
-                spectrogramService.initialize({sampleRate: state.sampleRate});
-            }
-        });
-
         // Original keydown handler can remain if needed for global shortcuts
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.code === 'Space') {
@@ -157,7 +143,6 @@
             analysisService.dispose();
             dtmfService.dispose();
             spectrogramService.dispose();
-            unsubSpec();
             unsubPlayer();
             unsubAnalysis();
         };

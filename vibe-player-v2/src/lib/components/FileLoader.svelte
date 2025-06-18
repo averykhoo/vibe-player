@@ -1,32 +1,25 @@
 <!-- vibe-player-v2/src/lib/components/FileLoader.svelte -->
 
 <script lang="ts">
-    import audioEngine from '$lib/services/audioEngine.service';
     import { playerStore } from '$lib/stores/player.store'; // To show status or file name
+    import AudioOrchestrator from '$lib/services/AudioOrchestrator.service';
 
     let currentFile: File | null = null;
     let isLoading = false;
 
     async function handleFileSelect(event: Event) {
         const input = event.target as HTMLInputElement;
-        if (input.files && input.files.length > 0) {
+        if (input.files?.[0]) {
             currentFile = input.files[0];
             console.log(`[FileLoader] File selected: ${currentFile.name}`);
-            playerStore.update(s => ({ ...s, fileName: currentFile?.name, error: null, status: 'File selected', isPlayable: false }));
+            // playerStore.update(s => ({ ...s, fileName: currentFile?.name, error: null, status: 'File selected', isPlayable: false }));
             isLoading = true;
 
             try {
-                await audioEngine.unlockAudio(); // Ensure AudioContext is ready
-
-                const arrayBuffer = await currentFile.arrayBuffer();
-                console.log(`[FileLoader] File read into ArrayBuffer. Calling audioEngine.loadFile.`);
-                await audioEngine.loadFile(arrayBuffer, currentFile.name);
-                console.log(`[FileLoader] audioEngine.loadFile has returned.`);
-                // Status updates will now come from audioEngine via playerStore
-
+                await AudioOrchestrator.loadFileAndAnalyze(currentFile);
             } catch (e: any) {
-                console.error('Error processing file:', e);
-                playerStore.update(s => ({ ...s, error: `Error processing file: ${e.message}`, isPlayable: false }));
+                console.error('[FileLoader] Error during loadFileAndAnalyze:', e);
+                playerStore.update(s => ({ ...s, error: `Failed to load file: ${e.message || 'Unknown error'}`, status: 'Error', isPlayable: false }));
             } finally {
                 isLoading = false;
                 // Clear the file input so the same file can be re-selected if needed after an error

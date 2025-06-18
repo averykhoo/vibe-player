@@ -2,7 +2,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, type Mocked, vi } from "vitest";
 import FileLoader from "./FileLoader.svelte"; // Adjust path
-import audioEngineService from "$lib/services/audioEngine.service";
+import AudioOrchestrator from "$lib/services/AudioOrchestrator.service";
 import { writable, type Writable } from "svelte/store";
 
 // Hoisted Mocks for store structure
@@ -15,12 +15,10 @@ vi.mock("$lib/stores/player.store", () => ({
 }));
 
 // Mock services
-vi.mock("$lib/services/audioEngine.service", () => ({
+vi.mock("$lib/services/AudioOrchestrator.service", () => ({
   default: {
-    unlockAudio: vi.fn(() => Promise.resolve()),
-    loadFile: vi.fn(() => Promise.resolve()),
-    initialize: vi.fn(),
-    dispose: vi.fn(),
+    loadFileAndAnalyze: vi.fn(() => Promise.resolve()),
+    // Add other methods if they are called directly by FileLoader, though likely not.
   },
 }));
 
@@ -92,7 +90,7 @@ describe("FileLoader.svelte", () => {
     expect(fileInput).toBeInTheDocument();
   });
 
-  it("calls audioEngine.unlockAudio and loadFile on file selection", async () => {
+  it("calls AudioOrchestrator.loadFileAndAnalyze on file selection", async () => {
     const { container } = render(FileLoader);
     const fileInput = container.querySelector("#fileInput");
     if (!fileInput) throw new Error("File input with ID 'fileInput' not found");
@@ -100,19 +98,16 @@ describe("FileLoader.svelte", () => {
     const mockFile = new File(["dummy content"], "test.mp3", {
       type: "audio/mpeg",
     });
-    const mockArrayBuffer = new ArrayBuffer(10);
-    // Spy on the potentially polyfilled/mocked arrayBuffer
-    vi.spyOn(File.prototype, "arrayBuffer").mockResolvedValue(mockArrayBuffer);
+    // No need to mock arrayBuffer for the orchestrator call directly with File
+    // const mockArrayBuffer = new ArrayBuffer(10);
+    // vi.spyOn(File.prototype, "arrayBuffer").mockResolvedValue(mockArrayBuffer);
 
     await fireEvent.change(fileInput, { target: { files: [mockFile] } });
 
-    expect(audioEngineService.unlockAudio).toHaveBeenCalledTimes(1);
+    // expect(audioEngineService.unlockAudio).toHaveBeenCalledTimes(1); // unlockAudio is orchestrator's concern
     // Wait for promises in handleFileSelect to resolve
     await act(() => Promise.resolve());
-    expect(audioEngineService.loadFile).toHaveBeenCalledWith(
-      mockArrayBuffer,
-      mockFile.name,
-    );
+    expect(AudioOrchestrator.loadFileAndAnalyze).toHaveBeenCalledWith(mockFile);
   });
 
   it("displays selected file name and size", async () => {
@@ -135,7 +130,9 @@ describe("FileLoader.svelte", () => {
   });
 
   it("shows loading indicator text while isLoading is true (component internal state)", async () => {
-    (audioEngineService.loadFile as Mocked<any>).mockImplementationOnce(
+    (
+      AudioOrchestrator.loadFileAndAnalyze as Mocked<any>
+    ).mockImplementationOnce(
       () => new Promise((resolve) => setTimeout(resolve, 100)), // Simulate delay
     );
     const { container } = render(FileLoader);
@@ -161,7 +158,9 @@ describe("FileLoader.svelte", () => {
   });
 
   it("disables file input when isLoading (component internal state) is true", async () => {
-    (audioEngineService.loadFile as Mocked<any>).mockImplementationOnce(
+    (
+      AudioOrchestrator.loadFileAndAnalyze as Mocked<any>
+    ).mockImplementationOnce(
       () => new Promise((resolve) => setTimeout(resolve, 100)),
     );
     const { container } = render(FileLoader);
