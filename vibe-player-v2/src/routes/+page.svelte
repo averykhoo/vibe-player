@@ -8,6 +8,7 @@
      * state (like playback speed and VAD thresholds) to the URL for sharing.
      */
 	import { onMount, onDestroy } from 'svelte';
+	import type { PageData } from './$types';
     import {get} from 'svelte/store';
     import {Toaster} from 'svelte-sonner';
     import {RangeSlider} from '@skeletonlabs/skeleton'; // <-- ADD THIS IMPORT
@@ -27,7 +28,9 @@
     import {playerStore} from '$lib/stores/player.store';
     import {analysisStore} from '$lib/stores/analysis.store';
     import {formatTime} from '$lib/utils/formatters';
-    import {debounce, updateUrlWithParams} from '$lib/utils';
+    import { debounce, updateUrlWithParams } from '$lib/utils';
+
+    export let data: PageData;
 
     // --- START: FIX FOR SEEK SLIDER ---
     let seekTime = $playerStore.currentTime; // Bound to the slider's visual position.
@@ -72,6 +75,25 @@
     }
 
     onMount(() => {
+	function initializeStoresFromData() {
+		console.log('[+page.svelte onMount] Initializing stores from pre-loaded data:', data);
+		const { player: playerData } = data;
+
+		// Update playerStore if any initial data exists
+		if (Object.values(playerData).some((v) => v !== undefined)) {
+			playerStore.update((s) => ({
+				...s,
+				speed: playerData.speed ?? s.speed,
+				pitch: playerData.pitch ?? s.pitch,
+				gain: playerData.gain ?? s.gain
+			}));
+			console.log('[+page.svelte onMount] playerStore updated with:', playerData);
+		}
+
+		// A similar block would be needed for analysisStore if VAD params were handled
+	}
+
+	initializeStoresFromData();
         // Initialize all services eagerly when the application component mounts.
         // This is the most robust approach to ensure everything is ready.
         console.log('Initializing all services onMount...');

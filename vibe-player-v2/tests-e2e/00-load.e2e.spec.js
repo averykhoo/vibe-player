@@ -28,7 +28,9 @@ test.describe("Application Startup Smoke Test", () => {
   // --- ADDED: afterEach hook for logging ---
   test.afterEach(async ({ page }, testInfo) => {
     // Log a clear footer for the end of each test, including its status.
-    console.log(`\n=== FINISHED TEST: ${testInfo.title} | Status: ${testInfo.status} ===\n`);
+    console.log(
+      `\n=== FINISHED TEST: ${testInfo.title} | Status: ${testInfo.status} ===\n`,
+    );
   });
 
   test("should load the main page and display initial UI components", async () => {

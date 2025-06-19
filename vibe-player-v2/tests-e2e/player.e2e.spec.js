@@ -47,9 +47,10 @@ test.describe("Vibe Player V2 E2E", () => {
   // --- ADDED: afterEach hook for logging ---
   test.afterEach(async ({ page }, testInfo) => {
     // Log a clear footer for the end of each test, including its status.
-    console.log(`\n=== FINISHED TEST: ${testInfo.title} | Status: ${testInfo.status} ===\n`);
+    console.log(
+      `\n=== FINISHED TEST: ${testInfo.title} | Status: ${testInfo.status} ===\n`,
+    );
   });
-
 
   test("should load an audio file and enable playback controls", async ({
     page,

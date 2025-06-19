@@ -84,7 +84,7 @@ describe("Controls.svelte", () => {
 
   // --- ADDED afterEach to restore timers ---
   afterEach(() => {
-	  vi.useRealTimers();
+    vi.useRealTimers();
   });
 
   it("renders all control buttons and sliders", () => {
@@ -147,7 +147,7 @@ describe("Controls.svelte", () => {
     render(Controls);
     const speedSlider = screen.getByLabelText<HTMLInputElement>(/Speed/i);
     await fireEvent.input(speedSlider, { target: { value: "1.5" } });
-    
+
     // Manually advance time past the debounce delay
     await vi.runAllTimersAsync();
 
@@ -159,7 +159,7 @@ describe("Controls.svelte", () => {
     render(Controls);
     const pitchSlider = screen.getByLabelText<HTMLInputElement>(/Pitch/i);
     await fireEvent.input(pitchSlider, { target: { value: "-5.0" } });
-    
+
     // Manually advance time past the debounce delay
     await vi.runAllTimersAsync();
 
@@ -173,7 +173,7 @@ describe("Controls.svelte", () => {
     render(Controls);
     const gainSlider = screen.getByLabelText<HTMLInputElement>(/Gain/i);
     await fireEvent.input(gainSlider, { target: { value: "0.7" } });
-    
+
     // Manually advance time past the debounce delay
     await vi.runAllTimersAsync();
 
