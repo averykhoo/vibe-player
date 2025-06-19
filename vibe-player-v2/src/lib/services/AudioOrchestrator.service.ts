@@ -28,24 +28,22 @@ class AudioOrchestrator {
     console.log("[Orchestrator] Starting file load...");
 
     // Reset stores to a clean loading state
-    playerStore.set({
-      status: "loading",
-      fileName: file.name,
-      duration: 0,
-      currentTime: 0,
-      isPlaying: false,
-      isPlayable: false,
-      speed: 1.0,
-      pitch: 0.0,
-      gain: 1.0,
-      waveformData: undefined,
-      error: null,
-      audioBuffer: undefined,
-      audioContextResumed: false,
-      channels: undefined,
-      sampleRate: undefined,
-      lastProcessedChunk: undefined,
-    });
+     playerStore.update((currentState) => ({
+  ...currentState, // <-- Preserve existing state (speed, pitch, etc.)
+  // Now, only overwrite the properties that need to be reset for a new file load.
+  status: 'loading',
+  fileName: file.name,
+  duration: 0,
+  currentTime: 0,
+  isPlaying: false,
+  isPlayable: false,
+  waveformData: undefined,
+  error: null,
+  audioBuffer: undefined,
+  channels: undefined,
+  sampleRate: undefined,
+  lastProcessedChunk: undefined
+}));
     dtmfStore.set({ status: "idle", dtmf: [], cpt: [], error: null });
 
     try {
