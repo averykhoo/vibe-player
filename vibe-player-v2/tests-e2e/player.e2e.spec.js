@@ -71,30 +71,29 @@ test.describe("Vibe Player V2 E2E", () => {
     await playerPage.loadAudioFile(TEST_AUDIO_FILE);
     await playerPage.expectControlsToBeReadyForPlayback();
 
-    await expect(await playerPage.getPlayButtonText()).toMatch(/Play/i);
+    // 1. Assert initial "Play" state
+    await expect(playerPage.playButton).toHaveText(/Play/i);
 
+    // 2. Click to play and assert the text changes to "Pause".
+    // Playwright's `expect` with `toHaveText` will automatically wait for the DOM
+    // to update after the async play() method completes. This is the fix.
     await playerPage.playButton.click();
-    await expect(await playerPage.getPlayButtonText()).toMatch(/Pause/i, {
-      timeout: 2000,
-    });
+    await expect(playerPage.playButton).toHaveText(/Pause/i, { timeout: 5000 });
 
-    // --- START: IMPROVED TWO-STAGE ASSERTION ---
-    // Stage 1: Wait for the element to be visible (should be instant, but good practice).
-    await expect(playerPage.timeDisplay).toBeVisible();
-
-    // Stage 2: Wait for its content to change.
+    // 3. Assert that time has advanced from zero.
     await expect(
       playerPage.timeDisplay,
-      "Playback did not start and time did not advance",
-    ).not.toHaveText(/^0:00 \//, { timeout: 10000 });
-    // --- END: IMPROVED TWO-STAGE ASSERTION ---
+      "Playback did not start, time is still 0:00",
+    ).not.toHaveText(/^0:00 \//, { timeout: 5000 });
 
+    // 4. Click to pause and verify the text returns to "Play".
     await playerPage.playButton.click();
-    await expect(await playerPage.getPlayButtonText()).toMatch(/Play/i);
+    await expect(playerPage.playButton).toHaveText(/Play/i);
+
+    // 5. Verify time stops advancing after a pause.
     const timeAfterPause = await playerPage.timeDisplay.textContent();
-    await page.waitForTimeout(500);
-    const timeAfterPauseAndDelay = await playerPage.timeDisplay.textContent();
-    expect(timeAfterPauseAndDelay).toBe(timeAfterPause);
+    await page.waitForTimeout(500); // Wait a moment to see if time changes
+    await expect(playerPage.timeDisplay).toHaveText(timeAfterPause);
   });
 
   test("should seek audio using the seek bar", async ({ page }) => {

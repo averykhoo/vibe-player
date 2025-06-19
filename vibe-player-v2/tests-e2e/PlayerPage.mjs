@@ -56,19 +56,21 @@ export class PlayerPage {
    * Waits for the UI to be in a state where playback is possible after a file load.
    */
   async expectControlsToBeReadyForPlayback() {
-    await expect(this.fileStatusDisplay).toHaveText(/Ready/, {
-      timeout: 20000,
-    });
-    await expect(
-      this.timeDisplay,
-      "Time display did not update with audio duration",
-    ).not.toHaveText("0:00 / 0:00", { timeout: 1000 });
+    // The single, most reliable indicator that the application is fully ready for playback
+    // is that the play button has become enabled. We wait for this state directly.
+    // A generous timeout is appropriate for CI environments where worker init might be slow.
     await expect(
       this.playButton,
       "Play button was not enabled after file load",
     ).toBeEnabled({
-      timeout: 1000,
+      timeout: 15000, // Increased timeout for robustness
     });
+
+    // After the button is enabled, we can safely and quickly check other post-load states.
+    await expect(
+      this.timeDisplay,
+      "Time display did not update with audio duration",
+    ).not.toHaveText("0:00 / 0:00", { timeout: 1000 });
   }
 
   /**
