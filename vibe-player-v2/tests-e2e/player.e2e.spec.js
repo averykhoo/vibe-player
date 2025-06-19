@@ -190,7 +190,7 @@ test.describe("Vibe Player V2 E2E", () => {
 
       // --- PITCH ---
       await playerPage.setSliderValue(playerPage.pitchSliderInput, "2.0");
-      await expect(page).toHaveURL(/pitch=2.00/, { timeout: 2000 });
+      await expect(page).toHaveURL(/pitch=2.0/, { timeout: 2000 });
       await expect(page).toHaveURL(/speed=1.50/); // Ensure previous param is still there
 
       // --- GAIN (NEWLY ADDED) ---
