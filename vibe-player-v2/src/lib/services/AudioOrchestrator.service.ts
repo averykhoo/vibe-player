@@ -28,22 +28,22 @@ class AudioOrchestrator {
     console.log("[Orchestrator] Starting file load...");
 
     // Reset stores to a clean loading state
-     playerStore.update((currentState) => ({
-  ...currentState, // <-- Preserve existing state (speed, pitch, etc.)
-  // Now, only overwrite the properties that need to be reset for a new file load.
-  status: 'loading',
-  fileName: file.name,
-  duration: 0,
-  currentTime: 0,
-  isPlaying: false,
-  isPlayable: false,
-  waveformData: undefined,
-  error: null,
-  audioBuffer: undefined,
-  channels: undefined,
-  sampleRate: undefined,
-  lastProcessedChunk: undefined
-}));
+    playerStore.update((currentState) => ({
+      ...currentState, // <-- Preserve existing state (speed, pitch, etc.)
+      // Now, only overwrite the properties that need to be reset for a new file load.
+      status: "loading",
+      fileName: file.name,
+      duration: 0,
+      currentTime: 0,
+      isPlaying: false,
+      isPlayable: false,
+      waveformData: undefined,
+      error: null,
+      audioBuffer: undefined,
+      channels: undefined,
+      sampleRate: undefined,
+      lastProcessedChunk: undefined,
+    }));
     dtmfStore.set({ status: "idle", dtmf: [], cpt: [], error: null });
 
     try {
@@ -53,11 +53,11 @@ class AudioOrchestrator {
       const audioBuffer = await audioEngine.loadFile(file);
       console.log("[Orchestrator] Audio decoded.");
 
-      // Step 2: Update the store to make the player usable
+      // Step 2: Update the store with the decoded audio info
       playerStore.update((s) => ({
         ...s,
         status: "Ready",
-        isPlayable: true,
+        // isPlayable is now managed by the AudioEngineService
         duration: audioBuffer.duration,
         audioBuffer: audioBuffer,
         sampleRate: audioBuffer.sampleRate,

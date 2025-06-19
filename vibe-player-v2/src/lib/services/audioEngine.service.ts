@@ -689,7 +689,6 @@ class AudioEngineService {
           ...s,
           isPlayable: true,
           // Keep status as is, Orchestrator handles "Ready"
-          // status: `Ready: ${s.fileName}`,
         }));
         console.log(
           "[AudioEngineService] playerStore updated by handleWorkerMessage (INIT_SUCCESS). New state:",
