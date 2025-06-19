@@ -349,4 +349,117 @@ describe("AudioEngineService", () => {
       expect(get(playerStoreInstance).isPlaying).toBe(false);
     });
   });
+
+  describe("Pre-Worker Gain Application", () => {
+    let originalChannelData: Float32Array;
+
+    beforeEach(async () => {
+      // Use a small, distinct array for easier verification
+      originalChannelData = new Float32Array([0.1, 0.2, -0.1, -0.2, 0.5]);
+      mockAudioBuffer = {
+        duration: originalChannelData.length / 44100, // Short duration
+        numberOfChannels: 1,
+        sampleRate: 44100,
+        getChannelData: vi.fn(() => new Float32Array(originalChannelData)), // Return a copy
+        length: originalChannelData.length,
+      } as unknown as AudioBuffer;
+      mockDecodeAudioData.mockResolvedValue(mockAudioBuffer);
+
+      // Re-initialize playerStore with the new (mocked) gain from constants if needed,
+      // though we will override it in tests.
+      // The global mock setup already uses 1.0 as initial gain.
+      playerStoreInstance = __test__getPlayerStoreInstance();
+      playerStoreInstance.set({
+        ...__test__getInitialPlayerState(),
+        // Ensure gain is initially 1.0 or some known default before test overrides
+        gain: 1.0, // Explicitly set for clarity before test-specific override
+      });
+
+      await audioEngineService.loadFile(mockFile);
+      makeWorkerReady();
+    });
+
+    it("should apply gain to audio samples before sending them to the worker", () => {
+      const testGain = 0.5;
+      playerStoreInstance.update((s) => ({ ...s, gain: testGain }));
+
+      // Clear any previous calls to postMessage (like INIT)
+      vi.mocked(mockWorkerInstance.postMessage).mockClear();
+
+      // Call play, which should trigger _recursiveProcessAndPlayLoop via rAF
+      audioEngineService.play(); // isPlaying is now true
+
+      // Get the callback passed to requestAnimationFrame and execute it once
+      // This simulates the browser calling our loop function
+      const processLoopCallback = rafSpy.mock.calls[0][0];
+      processLoopCallback(0); // timestamp argument is not used in the current loop logic
+
+      expect(mockWorkerInstance.postMessage).toHaveBeenCalledTimes(1);
+      const messagePayload = mockWorkerInstance.postMessage.mock.calls[0][0];
+
+      expect(messagePayload.type).toBe(RB_WORKER_MSG_TYPE.PROCESS);
+      const sentBuffer = messagePayload.payload.inputBuffer[0] as Float32Array;
+
+      // Verify that the gain was applied to each sample
+      // The actual chunking logic might send a part of the originalChannelData,
+      // so we need to find out what segment was actually processed.
+      // The _performSingleProcessAndPlayIteration uses TARGET_CHUNK_DURATION_S.
+      // Let's assume AUDIO_ENGINE_CONSTANTS.TARGET_CHUNK_DURATION_S = 0.1s (default from constants.ts)
+      // Sample rate is 44100. Chunk size = 0.1 * 44100 = 4410 samples.
+      // Our originalChannelData is very short (5 samples). So, it should process all of it.
+
+      expect(sentBuffer.length).toBe(originalChannelData.length);
+      for (let i = 0; i < sentBuffer.length; i++) {
+        expect(sentBuffer[i]).toBeCloseTo(originalChannelData[i] * testGain);
+      }
+    });
+
+    it("should handle multichannel audio by applying gain to all channels", async () => {
+      const channel1Data = new Float32Array([0.1, 0.2, 0.3]);
+      const channel2Data = new Float32Array([0.4, 0.5, 0.6]);
+      mockAudioBuffer = {
+        duration: channel1Data.length / 44100,
+        numberOfChannels: 2,
+        sampleRate: 44100,
+        getChannelData: vi.fn((channelIndex) => {
+          if (channelIndex === 0) return new Float32Array(channel1Data);
+          if (channelIndex === 1) return new Float32Array(channel2Data);
+          return new Float32Array(0);
+        }),
+        length: channel1Data.length,
+      } as unknown as AudioBuffer;
+      mockDecodeAudioData.mockResolvedValue(mockAudioBuffer);
+
+      // Reload file with new multi-channel buffer
+      await audioEngineService.loadFile(mockFile);
+      makeWorkerReady(); // Re-initialize worker for the new buffer props
+
+      const testGain = 0.7;
+      playerStoreInstance.update((s) => ({ ...s, gain: testGain }));
+      vi.mocked(mockWorkerInstance.postMessage).mockClear();
+
+      audioEngineService.play();
+      const processLoopCallback = rafSpy.mock.calls[0][0];
+      processLoopCallback(0);
+
+      expect(mockWorkerInstance.postMessage).toHaveBeenCalledTimes(1);
+      const messagePayload = mockWorkerInstance.postMessage.mock.calls[0][0];
+      expect(messagePayload.type).toBe(RB_WORKER_MSG_TYPE.PROCESS);
+
+      const sentBufferChannel1 = messagePayload.payload
+        .inputBuffer[0] as Float32Array;
+      const sentBufferChannel2 = messagePayload.payload
+        .inputBuffer[1] as Float32Array;
+
+      expect(sentBufferChannel1.length).toBe(channel1Data.length);
+      for (let i = 0; i < sentBufferChannel1.length; i++) {
+        expect(sentBufferChannel1[i]).toBeCloseTo(channel1Data[i] * testGain);
+      }
+
+      expect(sentBufferChannel2.length).toBe(channel2Data.length);
+      for (let i = 0; i < sentBufferChannel2.length; i++) {
+        expect(sentBufferChannel2[i]).toBeCloseTo(channel2Data[i] * testGain);
+      }
+    });
+  });
 });

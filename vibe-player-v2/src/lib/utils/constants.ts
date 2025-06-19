@@ -9,6 +9,7 @@ export interface AudioEngineConstants {
   TARGET_CHUNK_DURATION_S: number;
   MIN_CHUNK_DURATION_S: number;
   SCHEDULE_AHEAD_TIME_S: number;
+  DEFAULT_GAIN: number; // Added default gain
 }
 
 export const AUDIO_ENGINE_CONSTANTS: AudioEngineConstants = {
@@ -21,6 +22,7 @@ export const AUDIO_ENGINE_CONSTANTS: AudioEngineConstants = {
   TARGET_CHUNK_DURATION_S: 0.1, // seconds
   MIN_CHUNK_DURATION_S: 0.001, // seconds
   SCHEDULE_AHEAD_TIME_S: 0.05, // seconds
+  DEFAULT_GAIN: 1.0, // Default gain is 1.0 (no change)
 };
 
 export interface VadConstants {

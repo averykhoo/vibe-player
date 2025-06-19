@@ -272,10 +272,8 @@ class AudioEngineService {
       return;
     }
 
-    if (this.animationFrameId) {
-      cancelAnimationFrame(this.animationFrameId);
-      this.animationFrameId = null;
-    }
+    // Redundant animationFrameId check removed as it should be null here.
+    // pause(), stop(), dispose(), and the loop itself ensure animationFrameId is cleared.
 
     const audioCtx = this._getAudioContext();
     if (audioCtx.state === "suspended") await audioCtx.resume();
@@ -435,16 +433,16 @@ class AudioEngineService {
    */
   public setGain = (level: number): void => {
     console.log(`[AudioEngineService] setGain called with: ${level}`);
-    if (this.gainNode && this.audioContext) {
-      const newGain = Math.max(0, Math.min(2, level));
-      this.gainNode.gain.setValueAtTime(newGain, this.audioContext.currentTime);
-      playerStore.update((s) => ({ ...s, gain: newGain }));
-      console.log(
-        "[AudioEngineService] playerStore updated by setGain. New state:",
-        get(playerStore),
-      );
-    }
-  };
+    // The gain is now applied pre-worker.
+    // The actual gain application happens in _performSingleProcessAndPlayIteration.
+    // We still store it in the playerStore for UI and state management.
+    const newGain = Math.max(0, Math.min(2, level)); // Assuming gain is clamped 0-2
+    playerStore.update((s) => ({ ...s, gain: newGain }));
+    console.log(
+      "[AudioEngineService] playerStore updated by setGain. New state:",
+      get(playerStore),
+    );
+  }; // Ensures this is the end of setGain
 
   /**
    * Cleans up all resources.
@@ -474,6 +472,8 @@ class AudioEngineService {
     if (!this.audioContext || this.audioContext.state === "closed") {
       this.audioContext = new AudioContext();
       this.gainNode = this.audioContext.createGain();
+      // Set post-worker gain node to 1.0 (neutral) as gain is now applied pre-worker.
+      this.gainNode.gain.setValueAtTime(1.0, this.audioContext.currentTime);
       this.gainNode.connect(this.audioContext.destination);
     }
     return this.audioContext;
@@ -571,23 +571,38 @@ class AudioEngineService {
           return;
         }
 
-        const channelData = this.originalBuffer.getChannelData(0);
-        const segment = channelData.slice(startSample, endSample);
+        const currentGain = get(playerStore).gain;
+        const numberOfChannels = this.originalBuffer.numberOfChannels;
+        const inputSamples: Float32Array[] = [];
+        const transferableObjects: Transferable[] = [];
+
+        for (let i = 0; i < numberOfChannels; i++) {
+          const channelData = this.originalBuffer.getChannelData(i);
+          const segment = channelData.slice(startSample, endSample);
+
+          // Apply pre-worker gain
+          for (let j = 0; j < segment.length; j++) {
+            segment[j] *= currentGain;
+          }
+          inputSamples.push(segment);
+          transferableObjects.push(segment.buffer);
+        }
+
         const isFinalChunk =
           this.sourcePlaybackOffset + actualChunkDuration >=
           this.originalBuffer.duration;
 
         console.log(
-          `[AudioEngineService] Processing chunk. Offset: ${this.sourcePlaybackOffset.toFixed(2)}s, Duration: ${actualChunkDuration.toFixed(3)}s, Final: ${isFinalChunk}`,
+          `[AudioEngineService] Processing chunk. Offset: ${this.sourcePlaybackOffset.toFixed(2)}s, Duration: ${actualChunkDuration.toFixed(3)}s, Final: ${isFinalChunk}, Gain: ${currentGain.toFixed(2)}`,
         );
 
         const processPayload: RubberbandProcessPayload = {
-          inputBuffer: [segment],
+          inputBuffer: inputSamples,
           isFinalChunk,
         };
         this.worker!.postMessage(
           { type: RB_WORKER_MSG_TYPE.PROCESS, payload: processPayload },
-          [segment.buffer],
+          transferableObjects,
         );
         this.sourcePlaybackOffset += actualChunkDuration;
       } else {
