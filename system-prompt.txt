@@ -165,7 +165,8 @@ Your goal is to develop a robust mental model of this repository based *only* on
     │   │       └── spectrogram.worker.ts
     │   ├── routes
     │   │   ├── +layout.svelte
-    │   │   └── +page.svelte
+    │   │   ├── +page.svelte
+    │   │   └── +page.ts
     │   └── setupTests.ts
     ├── static
     │   ├── favicon.png
@@ -1547,7 +1548,7 @@ describe("Controls.svelte", () => {
 
   // --- ADDED afterEach to restore timers ---
   afterEach(() => {
-	  vi.useRealTimers();
+    vi.useRealTimers();
   });
 
   it("renders all control buttons and sliders", () => {
@@ -1610,7 +1611,7 @@ describe("Controls.svelte", () => {
     render(Controls);
     const speedSlider = screen.getByLabelText<HTMLInputElement>(/Speed/i);
     await fireEvent.input(speedSlider, { target: { value: "1.5" } });
-    
+
     // Manually advance time past the debounce delay
     await vi.runAllTimersAsync();
 
@@ -1622,7 +1623,7 @@ describe("Controls.svelte", () => {
     render(Controls);
     const pitchSlider = screen.getByLabelText<HTMLInputElement>(/Pitch/i);
     await fireEvent.input(pitchSlider, { target: { value: "-5.0" } });
-    
+
     // Manually advance time past the debounce delay
     await vi.runAllTimersAsync();
 
@@ -1636,7 +1637,7 @@ describe("Controls.svelte", () => {
     render(Controls);
     const gainSlider = screen.getByLabelText<HTMLInputElement>(/Gain/i);
     await fireEvent.input(gainSlider, { target: { value: "0.7" } });
-    
+
     // Manually advance time past the debounce delay
     await vi.runAllTimersAsync();
 
@@ -1660,6 +1661,7 @@ describe("Controls.svelte", () => {
     ).toBe("1.8");
   });
 });
+
 ````
 --- End of File: vibe-player-v2/src/lib/components/Controls.test.ts ---
 --- File: vibe-player-v2/src/lib/components/FileLoader.svelte ---
@@ -6870,6 +6872,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
      * state (like playback speed and VAD thresholds) to the URL for sharing.
      */
 	import { onMount, onDestroy } from 'svelte';
+	import type { PageData } from './$types';
     import {get} from 'svelte/store';
     import {Toaster} from 'svelte-sonner';
     import {RangeSlider} from '@skeletonlabs/skeleton'; // <-- ADD THIS IMPORT
@@ -6889,7 +6892,9 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
     import {playerStore} from '$lib/stores/player.store';
     import {analysisStore} from '$lib/stores/analysis.store';
     import {formatTime} from '$lib/utils/formatters';
-    import {debounce, updateUrlWithParams} from '$lib/utils';
+    import { debounce, updateUrlWithParams } from '$lib/utils';
+
+    export let data: PageData;
 
     // --- START: FIX FOR SEEK SLIDER ---
     let seekTime = $playerStore.currentTime; // Bound to the slider's visual position.
@@ -6934,6 +6939,25 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
     }
 
     onMount(() => {
+	function initializeStoresFromData() {
+		console.log('[+page.svelte onMount] Initializing stores from pre-loaded data:', data);
+		const { player: playerData } = data;
+
+		// Update playerStore if any initial data exists
+		if (Object.values(playerData).some((v) => v !== undefined)) {
+			playerStore.update((s) => ({
+				...s,
+				speed: playerData.speed ?? s.speed,
+				pitch: playerData.pitch ?? s.pitch,
+				gain: playerData.gain ?? s.gain
+			}));
+			console.log('[+page.svelte onMount] playerStore updated with:', playerData);
+		}
+
+		// A similar block would be needed for analysisStore if VAD params were handled
+	}
+
+	initializeStoresFromData();
         // Initialize all services eagerly when the application component mounts.
         // This is the most robust approach to ensure everything is ready.
         console.log('Initializing all services onMount...');
@@ -7069,6 +7093,41 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
 </div>
 ````
 --- End of File: vibe-player-v2/src/routes/+page.svelte ---
+--- File: vibe-player-v2/src/routes/+page.ts ---
+````typescript
+// src/routes/+page.ts
+import { URL_HASH_KEYS } from "$lib/utils/constants";
+import type { PageLoad } from "./$types";
+
+/**
+ * SvelteKit load function. This runs before the page component is rendered.
+ * It's used here to deserialize state from URL parameters, ensuring the values
+ * are available to the component on initial load and preventing race conditions.
+ */
+export const load: PageLoad = ({ url }) => {
+  console.log("[+page.ts load] Deserializing state from URL:", url.href);
+
+  const speedStr = url.searchParams.get(URL_HASH_KEYS.SPEED);
+  const pitchStr = url.searchParams.get(URL_HASH_KEYS.PITCH);
+  const gainStr = url.searchParams.get(URL_HASH_KEYS.GAIN);
+  // TODO: Add VAD and other params as needed
+
+  const initialPlayerData = {
+    speed: speedStr ? parseFloat(speedStr) : undefined,
+    pitch: pitchStr ? parseFloat(pitchStr) : undefined,
+    gain: gainStr ? parseFloat(gainStr) : undefined,
+  };
+
+  console.log("[+page.ts load] Parsed initial player data:", initialPlayerData);
+
+  return {
+    player: initialPlayerData,
+    // analysis: initialAnalysisData // for VAD etc.
+  };
+};
+
+````
+--- End of File: vibe-player-v2/src/routes/+page.ts ---
 --- File: vibe-player-v2/src/setupTests.ts ---
 ````typescript
 // vibe-player-v2/src/setupTests.ts
@@ -8208,7 +8267,9 @@ test.describe("Application Startup Smoke Test", () => {
   // --- ADDED: afterEach hook for logging ---
   test.afterEach(async ({ page }, testInfo) => {
     // Log a clear footer for the end of each test, including its status.
-    console.log(`\n=== FINISHED TEST: ${testInfo.title} | Status: ${testInfo.status} ===\n`);
+    console.log(
+      `\n=== FINISHED TEST: ${testInfo.title} | Status: ${testInfo.status} ===\n`,
+    );
   });
 
   test("should load the main page and display initial UI components", async () => {
@@ -8231,6 +8292,7 @@ test.describe("Application Startup Smoke Test", () => {
     await expect(playerPage.playButton).toBeDisabled();
   });
 });
+
 ````
 --- End of File: vibe-player-v2/tests-e2e/00-load.e2e.spec.js ---
 --- File: vibe-player-v2/tests-e2e/player.e2e.spec.js ---
@@ -8284,9 +8346,10 @@ test.describe("Vibe Player V2 E2E", () => {
   // --- ADDED: afterEach hook for logging ---
   test.afterEach(async ({ page }, testInfo) => {
     // Log a clear footer for the end of each test, including its status.
-    console.log(`\n=== FINISHED TEST: ${testInfo.title} | Status: ${testInfo.status} ===\n`);
+    console.log(
+      `\n=== FINISHED TEST: ${testInfo.title} | Status: ${testInfo.status} ===\n`,
+    );
   });
-
 
   test("should load an audio file and enable playback controls", async ({
     page,
@@ -8427,14 +8490,14 @@ test.describe("Vibe Player V2 E2E", () => {
 
       // --- PITCH ---
       await playerPage.setSliderValue(playerPage.pitchSliderInput, "2.0");
-      await expect(page).toHaveURL(/pitch=2.00/, { timeout: 2000 });
+      await expect(page).toHaveURL(/pitch=2.0/, { timeout: 2000 });
       await expect(page).toHaveURL(/speed=1.50/); // Ensure previous param is still there
 
       // --- GAIN (NEWLY ADDED) ---
       await playerPage.setSliderValue(playerPage.gainSliderInput, "1.75");
       await expect(page).toHaveURL(/gain=1.75/, { timeout: 2000 });
       await expect(page).toHaveURL(/speed=1.50/); // Ensure other params remain
-      await expect(page).toHaveURL(/pitch=2.00/);
+      await expect(page).toHaveURL(/pitch=2.0/);
     });
 
     test("should load settings from URL parameters on page load", async ({
@@ -8465,6 +8528,7 @@ test.describe("Vibe Player V2 E2E", () => {
     });
   });
 });
+
 ````
 --- End of File: vibe-player-v2/tests-e2e/player.e2e.spec.js ---
 --- File: vibe-player-v2/tests-e2e/PlayerPage.mjs ---
