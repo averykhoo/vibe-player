@@ -48,7 +48,7 @@ class AudioOrchestrator {
 
     try {
       // Step 1: Decode the audio. We must wait for this to complete.
-      await audioEngine.unlockAudio();
+      //await audioEngine.unlockAudio();// breaks on firefox
       // audioEngine.loadFile will be modified to accept a File and return AudioBuffer
       const audioBuffer = await audioEngine.loadFile(file);
       console.log("[Orchestrator] Audio decoded.");
