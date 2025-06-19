@@ -47,8 +47,11 @@ class AudioOrchestrator {
     dtmfStore.set({ status: "idle", dtmf: [], cpt: [], error: null });
 
     try {
-      // Step 1: Decode the audio. We must wait for this to complete.
-      //await audioEngine.unlockAudio();// breaks on firefox
+      // Step 1: Unlock the AudioContext. This is the crucial fix.
+      // It must happen as part of the user gesture chain (file selection).
+      await audioEngine.unlockAudio(); // <--- UNCOMMENT THIS LINE
+
+      // Step 2: Decode the audio. We must wait for this to complete.
       // audioEngine.loadFile will be modified to accept a File and return AudioBuffer
       const audioBuffer = await audioEngine.loadFile(file);
       console.log("[Orchestrator] Audio decoded.");

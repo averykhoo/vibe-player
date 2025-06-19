@@ -116,7 +116,7 @@ export class PlayerPage {
     }, valueStr);
 
     // A small delay for debounced functions or other async updates in Svelte to fire.
-    await this.page.waitForTimeout(350);
+    await this.page.waitForTimeout(600); // Changed from 350ms to 600ms
   }
 
   /**

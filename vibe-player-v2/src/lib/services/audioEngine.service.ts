@@ -265,6 +265,11 @@ class AudioEngineService {
     console.log(
       `[AudioEngineService] PLAY called. State: isPlaying=${this.isPlaying}, isWorkerInitialized=${this.isWorkerInitialized}`,
     );
+    // ADD THIS LOG:
+    console.log(
+      `[AudioEngineService] AudioContext state is: ${this._getAudioContext().state}`,
+    );
+
     if (this.isPlaying || !this.originalBuffer || !this.isWorkerInitialized) {
       console.warn(
         "AudioEngine: Play command ignored. Not ready or already playing.",

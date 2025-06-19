@@ -13,7 +13,8 @@ export interface AnalysisState {
   // Spectrogram related properties
   spectrogramStatus?: string; // e.g., "Spectrogram worker initializing..."
   spectrogramError?: string | null;
-  spectrogramData?: number[][] | null; // Assuming magnitudes from SpectrogramResultPayload are number[][]
+  // CHANGE THIS LINE:
+  spectrogramData?: Float32Array[] | null; // Changed from number[][]
   spectrogramInitialized?: boolean; // To track Spectrogram worker initialization
 
   // General analysis properties
