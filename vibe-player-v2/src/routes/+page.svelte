@@ -24,11 +24,12 @@
     import analysisService from '$lib/services/analysis.service';
     import dtmfService from '$lib/services/dtmf.service';
     import spectrogramService from '$lib/services/spectrogram.service';
-	import { VAD_CONSTANTS, URL_HASH_KEYS, UI_CONSTANTS } from '$lib/utils/constants';
+	import { VAD_CONSTANTS, UI_CONSTANTS } from '$lib/utils/constants';
     import {playerStore} from '$lib/stores/player.store';
     import {analysisStore} from '$lib/stores/analysis.store';
     import {formatTime} from '$lib/utils/formatters';
-    import { debounce, updateUrlWithParams } from '$lib/utils';
+    import { updateUrlWithParams } from '$lib/utils';
+    import { urlParamsStore } from '$lib/stores/url.store';
 
     export let data: PageData;
 
@@ -102,48 +103,7 @@
         analysisService.initialize();
 
         // Initialize the DTMF service and its worker.
-        dtmfService.initialize(VAD_CONSTANTS.SAMPLE_RATE);
-
-        // --- URL State Serialization Logic ---
-        /**
-         * [LOGGING ADDED] Collects relevant state from stores, compares against defaults,
-         * and calls the URL update utility.
-         */
-        const serializeStateToUrl = () => {
-            const pStore = get(playerStore);
-            const aStore = get(analysisStore);
-
-            // LOG: Log the state objects being used for serialization.
-            console.log('[+page.svelte] serializeStateToUrl: Checking player state:', pStore);
-            console.log('[+page.svelte] serializeStateToUrl: Checking analysis state:', aStore);
-
-            const params: Record<string, string> = {
-                [URL_HASH_KEYS.SPEED]: pStore.speed !== 1.0 ? pStore.speed.toFixed(2) : '',
-                [URL_HASH_KEYS.PITCH]: pStore.pitch !== 0.0 ? pStore.pitch.toFixed(1) : '',
-                [URL_HASH_KEYS.GAIN]: pStore.gain !== 1.0 ? pStore.gain.toFixed(2) : '',
-                [URL_HASH_KEYS.VAD_POSITIVE]:
-                    aStore.vadPositiveThreshold !== VAD_CONSTANTS.DEFAULT_POSITIVE_THRESHOLD
-                        ? aStore.vadPositiveThreshold.toFixed(2)
-                        : '',
-                [URL_HASH_KEYS.VAD_NEGATIVE]:
-                    aStore.vadNegativeThreshold !== VAD_CONSTANTS.DEFAULT_NEGATIVE_THRESHOLD
-                        ? aStore.vadNegativeThreshold.toFixed(2)
-                        : ''
-            };
-
-            console.log('[+page.svelte] serializeStateToUrl: Generated params for URL:', params);
-            updateUrlWithParams(params);
-        };
-
-        const debouncedUrlUpdate = debounce(
-            serializeStateToUrl,
-            UI_CONSTANTS.DEBOUNCE_HASH_UPDATE_MS
-        );
-
-        // Subscribe to stores to trigger URL updates
-        const unsubPlayer = playerStore.subscribe(debouncedUrlUpdate);
-        const unsubAnalysis = analysisStore.subscribe(debouncedUrlUpdate);
-        // --- End URL State Serialization Logic ---
+        dtmfService.initialize(16000);
 
         // Original keydown handler can remain if needed for global shortcuts
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -165,10 +125,20 @@
             analysisService.dispose();
             dtmfService.dispose();
             spectrogramService.dispose();
-            unsubPlayer();
-            unsubAnalysis();
         };
     });
+
+    // Reactive block to update URL when urlParamsStore changes
+    $: {
+        const debouncedUpdate = setTimeout(() => {
+            if (typeof window !== 'undefined') {
+                console.log('[+page.svelte] Derived store changed. Updating URL with params:', $urlParamsStore);
+                updateUrlWithParams($urlParamsStore);
+            }
+        }, 300);
+
+        onDestroy(() => clearTimeout(debouncedUpdate));
+    }
 </script>
 
 <Toaster/>
