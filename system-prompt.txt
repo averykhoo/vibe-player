@@ -1,219 +1,357 @@
-Scanning repository: /app
-Using full-ignore files: ['.gitignore', '.aiignore']
-Using content-only-ignore files: ['.llmignore']
-Including extensions for CONTENT: S, asm, asp, bash, bat, c, cjs, cl, clj, cmake, cmd, coffee, cpp, cs, css, csv, cxx, dart, dockerfile, erl, ex, exs, f, f90, f95, for, go, gql, graphql, groovy, h, hpp, hrl, hs, htm, html, hxx, ini, java, jl, js, json, jsonl, jsp, jsx, kt, kts, less, lisp, log, lua, m, makefile, markdown, md, mjs, mk, ml, mli, mm, pas, php, pl, pm, pro, proto, ps1, py, pyw, r, rb, rs, sass, scala, scm, scss, sh, sql, ss, sv, svelte, swift, tcl, tex, text, tf, toml, ts, tsv, tsx, txt, v, vb, vbs, vhdl, xml, yaml, yml, zsh
-Excluding extensions for CONTENT: srt, sub
-Max estimated 'tokens' per file for CONTENT: 99999
-Walking directory, filtering files for tree and content...
-Finished scanning.
- - Found 274 files for the tree (after full ignore).
- - Included content of 190 files after all filters.
- - Skipped 113 items due to full-ignore rules or not being files.
- - Skipped content of 44 files due to content-ignore rules.
- - Skipped content of 40 files due to other filters (name, type, size).
-Building repository tree string...
-Processing file contents for prompt...
-Calculating total estimated prompt 'tokens' (regex chunks)...
 
-✅ System prompt saved successfully to: system-prompt.txt
+System Prompt:
 
---- Prompt Generation Summary ---
-Total files with content included: 190
-Total estimated 'tokens' (regex chunks): ~140053
+You will be provided with a snapshot of a repository, including its directory structure and the content of its key text files.
 
-Included Files (path, estimated 'tokens'):
-  - vibe-player-v2-react/src/services/audioEngine.service.ts (5242 est. tokens)
-  - vibe-player-v2/src/lib/services/audioEngine.service.ts (5224 est. tokens)
-  - vibe-player-v2-react-old/src/services/audioEngine.service.ts (5190 est. tokens)
-  - vibe-player-v2-react-old/src/services/audioEngine.service.test.ts (4388 est. tokens)
-  - vibe-player-v2-react-old/public/vendor/rubberband/rubberband-loader.js (3378 est. tokens)
-  - vibe-player-v2-react/public/vendor/rubberband/rubberband-loader.js (3360 est. tokens)
-  - vibe-player-v2/static/vendor/rubberband/rubberband-loader.js (3358 est. tokens)
-  - vibe-player-v2-react-old/public/vendor/fft.js (2930 est. tokens)
-  - vibe-player-v2-react/public/vendor/fft.js (2916 est. tokens)
-  - vibe-player-v2/static/vendor/fft.js (2914 est. tokens)
-  - REFACTOR_PLAN.txt (2611 est. tokens)
-  - vibe-player-v2-react-old/src/services/spectrogram.service.test.ts (2295 est. tokens)
-  - vibe-player-v2-react-old/tests-e2e/player.e2e.spec.js (1760 est. tokens)
-  - vibe-player-v2/tests-e2e/player.e2e.spec.js (1612 est. tokens)
-  - vibe-player-v2-react-old/src/services/AudioOrchestrator.service.test.ts (1587 est. tokens)
-  - vibe-player-v2-react-old/src/services/dtmf.service.test.ts (1542 est. tokens)
-  - vibe-player-v2-react-old/src/workers/rubberband.worker.test.ts (1538 est. tokens)
-  - vibe-player-v2-react/src/workers/dtmf.worker.ts (1404 est. tokens)
-  - vibe-player-v2-react-old/src/workers/dtmf.worker.ts (1404 est. tokens)
-  - vibe-player-v2/src/lib/workers/dtmf.worker.ts (1386 est. tokens)
-  - vibe-player-v2-react/src/workers/rubberband.worker.ts (1354 est. tokens)
-  - vibe-player-v2-react-old/src/workers/rubberband.worker.ts (1354 est. tokens)
-  - vibe-player-v2-react-old/tests-e2e/PlayerPage.mjs (1349 est. tokens)
-  - vibe-player-v2/src/lib/workers/rubberband.worker.ts (1336 est. tokens)
-  - vibe-player-v2-react-old/src/workers/sileroVad.worker.test.ts (1330 est. tokens)
-  - vibe-player-v2-react/src/services/analysis.service.ts (1296 est. tokens)
-  - vibe-player-v2/src/lib/services/analysis.service.ts (1278 est. tokens)
-  - vibe-player-v2-react-old/src/workers/spectrogram.worker.test.ts (1248 est. tokens)
-  - vibe-player-v2-react-old/src/services/analysis.service.ts (1214 est. tokens)
-  - vibe-player-v2-react/src/services/spectrogram.service.ts (1191 est. tokens)
-  - vibe-player-v2/tests-e2e/PlayerPage.mjs (1180 est. tokens)
-  - vibe-player-v2/src/lib/services/spectrogram.service.ts (1173 est. tokens)
-  - vibe-player-v2/src/lib/components/Controls.svelte (1133 est. tokens)
-  - vibe-player-v2-react-old/src/components/PlayerControls.tsx (1119 est. tokens)
-  - vibe-player-v2-react-old/src/services/spectrogram.service.ts (1104 est. tokens)
-  - vibe-player-v2-react-old/src/services/analysis.service.test.ts (1070 est. tokens)
-  - vibe-player-v2/src/routes/+page.svelte (1043 est. tokens)
-  - vibe-player-v2-react-old/src/components/PlayerControls.test.tsx (1026 est. tokens)
-  - vibe-player-v2-react-old/src/utils/dsp.test.ts (1018 est. tokens)
-  - vibe-player-v2-react/src/workers/sileroVad.worker.ts (987 est. tokens)
-  - vibe-player-v2-react-old/src/workers/sileroVad.worker.ts (972 est. tokens)
-  - vibe-player-v2-react/src/services/AudioOrchestrator.service.ts (959 est. tokens)
-  - vibe-player-v2-react-old/src/App.tsx (958 est. tokens)
-  - vibe-player-v2/src/lib/workers/sileroVad.worker.ts (954 est. tokens)
-  - vibe-player-v2-react-old/src/utils/urlState.test.ts (944 est. tokens)
-  - vibe-player-v2-react-old/src/services/AudioOrchestrator.service.ts (942 est. tokens)
-  - vibe-player-v2/src/lib/services/AudioOrchestrator.service.ts (941 est. tokens)
-  - vibe-player-v2-react/src/workers/spectrogram.worker.ts (913 est. tokens)
-  - vibe-player-v2-react-old/src/workers/spectrogram.worker.ts (913 est. tokens)
-  - vibe-player-v2-react-old/src/components/FileLoader.tsx (907 est. tokens)
-  - vibe-player-v2/src/lib/workers/spectrogram.worker.ts (895 est. tokens)
-  - vibe-player-v2-react-old/src/workers/dtmf.worker.test.ts (894 est. tokens)
-  - vibe-player-v2/src/lib/components/visualizers/Spectrogram.svelte (893 est. tokens)
-  - vibe-player-v2/src/lib/components/FileLoader.svelte (805 est. tokens)
-  - .gitignore (785 est. tokens)
-  - vibe-player-v2/src/setupTests.ts (737 est. tokens)
-  - vibe-player-v2-react/src/utils/constants.ts (732 est. tokens)
-  - vibe-player-v2-react-old/src/utils/constants.ts (732 est. tokens)
-  - vibe-player-v2/src/lib/components/visualizers/Waveform.svelte (719 est. tokens)
-  - vibe-player-v2/src/lib/utils/constants.ts (716 est. tokens)
-  - README.md (691 est. tokens)
-  - vibe-player-v2-react-old/src/components/FileLoader.test.tsx (691 est. tokens)
-  - vibe-player-v2-react-old/src/utils/async.test.ts (682 est. tokens)
-  - vibe-player-v2-react/src/services/dtmf.service.ts (661 est. tokens)
-  - vibe-player-v2/src/lib/actions/sparkles.action.ts (656 est. tokens)
-  - vibe-player-v2/src/lib/services/dtmf.service.ts (643 est. tokens)
-  - vibe-player-v2-react-old/src/components/visualizers/WaveformVisualizer.tsx (633 est. tokens)
-  - vibe-player-v2-react-old/src/components/visualizers/WaveformVisualizer.test.tsx (628 est. tokens)
-  - vibe-player-v2-react-old/src/components/StatusMessages.test.tsx (620 est. tokens)
-  - vibe-player-v2-react-old/src/components/visualizers/SpectrogramVisualizer.tsx (611 est. tokens)
-  - vibe-player-v2-react-old/src/services/dtmf.service.ts (604 est. tokens)
-  - vibe-player-v2-react-old/src/components/visualizers/SpectrogramVisualizer.test.tsx (596 est. tokens)
-  - vibe-player-v2-react/src/utils/dsp.ts (535 est. tokens)
-  - vibe-player-v2-react-old/src/utils/dsp.ts (535 est. tokens)
-  - vibe-player-v2-react/@/components/ui/button.tsx (533 est. tokens)
-  - vibe-player-v2/src/lib/utils/dsp.ts (519 est. tokens)
-  - vibe-player-v2-react/src/index.css (512 est. tokens)
-  - vibe-player-v2-react-old/src/components/StatusMessages.tsx (470 est. tokens)
-  - vibe-player-v2-react-old/src/components/ToneDisplay.tsx (468 est. tokens)
-  - vibe-player-v2-react-old/src/components/ToneDisplay.test.tsx (462 est. tokens)
-  - .github/workflows/ci.yml (458 est. tokens)
-  - vibe-player-v2-react/@/components/ui/card.tsx (448 est. tokens)
-  - vibe-player-v2-react/README.md (441 est. tokens)
-  - vibe-player-v2-react-old/README.md (441 est. tokens)
-  - vibe-player-v2-react/@/components/ui/slider.tsx (435 est. tokens)
-  - vibe-player-v2-react/tailwind.config.js (435 est. tokens)
-  - vibe-player-v2-react-old/src/components/ui/button.tsx (435 est. tokens)
-  - vibe-player-v2-react/src/stores/player.store.ts (432 est. tokens)
-  - vibe-player-v2-react/src/types/worker.types.ts (430 est. tokens)
-  - vibe-player-v2-react-old/src/types/worker.types.ts (430 est. tokens)
-  - vibe-player-v2/src/lib/types/worker.types.ts (412 est. tokens)
-  - .github/workflows/release.yml (411 est. tokens)
-  - vibe-player-v2-react/src/utils/urlState.ts (407 est. tokens)
-  - vibe-player-v2-react/src/stores/ui.store.ts (395 est. tokens)
-  - vibe-player-v2-react-old/src/components/ui/card.tsx (393 est. tokens)
-  - vibe-player-v2-react-old/tests-e2e/00-load.e2e.spec.js (385 est. tokens)
-  - vibe-player-v2-react-old/src/utils/constants.test.ts (381 est. tokens)
-  - vibe-player-v2/src/lib/utils/urlState.ts (380 est. tokens)
-  - vibe-player-v2/tests-e2e/00-load.e2e.spec.js (380 est. tokens)
-  - vibe-player-v2-react-old/src/utils/urlState.ts (379 est. tokens)
-  - vibe-player-v2-react-old/src/utils/formatters.test.ts (357 est. tokens)
-  - vibe-player-v2/eslint.config.js (354 est. tokens)
-  - vibe-player-v2-react-old/src/stores/derived.store.ts (332 est. tokens)
-  - .github/workflows/deploy.yml (315 est. tokens)
-  - vibe-player-v2/playwright.config.ts (307 est. tokens)
-  - vibe-player-v2/tsconfig.json (301 est. tokens)
-  - vibe-player-v2-react-old/src/stores/player.store.ts (276 est. tokens)
-  - vibe-player-v2-react/src/stores/transcript.store.ts (274 est. tokens)
-  - add_headers.sh (246 est. tokens)
-  - vibe-player-v2/src/lib/components/__mocks__/RangeSlider.svelte (243 est. tokens)
-  - vibe-player-v2-react/vite.config.ts (235 est. tokens)
-  - vibe-player-v2-react-old/src/components/ui/slider.tsx (232 est. tokens)
-  - vibe-player-v2/src/lib/components/ToneDisplay.svelte (218 est. tokens)
-  - vibe-player-v2-react/src/utils/assert.ts (218 est. tokens)
-  - vibe-player-v2-react-old/src/utils/assert.ts (218 est. tokens)
-  - vibe-player-v2-react/src/App.tsx (215 est. tokens)
-  - vibe-player-v2/README.md (209 est. tokens)
-  - vibe-player-v2/src/lib/stores/player.store.ts (207 est. tokens)
-  - vibe-player-v2-react/src/types/analysis.types.ts (203 est. tokens)
-  - vibe-player-v2/src/lib/utils/assert.ts (202 est. tokens)
-  - vibe-player-v2-react-old/src/types/analysis.types.ts (196 est. tokens)
-  - vibe-player-v2-react-old/src/stores/dtmf.store.ts (189 est. tokens)
-  - vibe-player-v2-react/src/utils/async.ts (187 est. tokens)
-  - vibe-player-v2-react-old/src/utils/async.ts (187 est. tokens)
-  - vibe-player-v2/src/lib/types/analysis.types.ts (178 est. tokens)
-  - vibe-player-v2/src/hooks.server.ts (177 est. tokens)
-  - vibe-player-v2-react/src/App.css (172 est. tokens)
-  - vibe-player-v2/src/lib/utils/async.ts (171 est. tokens)
-  - vibe-player-v2-react-old/vite.config.ts (171 est. tokens)
-  - vibe-player-v2/src/routes/+layout.svelte (168 est. tokens)
-  - vibe-player-v2-react/tsconfig.app.json (165 est. tokens)
-  - vibe-player-v2-react-old/src/components/ui/label.tsx (159 est. tokens)
-  - vibe-player-v2-react-old/tsconfig.app.json (154 est. tokens)
-  - vibe-player-v2-react/eslint.config.js (151 est. tokens)
-  - vibe-player-v2-react-old/eslint.config.js (151 est. tokens)
-  - vibe-player-v2/vite.config.ts (148 est. tokens)
-  - vibe-player-v2-react/@/components/ui/label.tsx (143 est. tokens)
-  - vibe-player-v2/svelte.config.js (129 est. tokens)
-  - vibe-player-v2-react-old/src/stores/analysis.store.ts (123 est. tokens)
-  - vibe-player-v2/src/lib/stores/analysis.store.ts (122 est. tokens)
-  - vibe-player-v2-react/src/types/status.types.ts (119 est. tokens)
-  - vibe-player-v2-react/src/types/transcript.types.ts (119 est. tokens)
-  - vibe-player-v2-react-old/src/types/status.types.ts (119 est. tokens)
-  - vibe-player-v2-react/tsconfig.node.json (117 est. tokens)
-  - vibe-player-v2-react-old/tsconfig.node.json (117 est. tokens)
-  - vibe-player-v2-react/src/types/player.types.ts (116 est. tokens)
-  - vibe-player-v2-react-old/src/types/player.types.ts (116 est. tokens)
-  - vibe-player-v2/src/app.html (113 est. tokens)
-  - vibe-player-v2-react/index.html (113 est. tokens)
-  - vibe-player-v2-react-old/index.html (113 est. tokens)
-  - vibe-player-v2/src/lib/components/__mocks__/ProgressBar.svelte (103 est. tokens)
-  - vibe-player-v2/src/lib/stores/dtmf.store.ts (101 est. tokens)
-  - vibe-player-v2/src/lib/types/status.types.ts (101 est. tokens)
-  - vibe-player-v2/src/lib/types/player.types.ts (98 est. tokens)
-  - vibe-player-v2-react/src/utils/formatters.ts (96 est. tokens)
-  - vibe-player-v2-react-old/src/utils/formatters.ts (96 est. tokens)
-  - vibe-player-v2-react-old/components.json (90 est. tokens)
-  - vibe-player-v2-react/components.json (88 est. tokens)
-  - vibe-player-v2-react-old/src/stores/status.store.ts (87 est. tokens)
-  - vibe-player-v2-react/src/types/ui.types.ts (86 est. tokens)
-  - vibe-player-v2/src/lib/stores/status.store.ts (80 est. tokens)
-  - vibe-player-v2/src/lib/utils/formatters.ts (80 est. tokens)
-  - vibe-player-v2/src/lib/components/__mocks__/Button.svelte (77 est. tokens)
-  - vibe-player-v2-react/.gitignore (72 est. tokens)
-  - vibe-player-v2-react-old/.gitignore (72 est. tokens)
-  - vibe-player-v2/src/app.d.ts (69 est. tokens)
-  - vibe-player-v2-react/src/utils/index.ts (68 est. tokens)
-  - vibe-player-v2-react-old/src/utils/index.ts (68 est. tokens)
-  - vibe-player-v2/src/lib/components/__mocks__/Generic.svelte (67 est. tokens)
-  - vibe-player-v2/.gitignore (65 est. tokens)
-  - vibe-player-v2/src/lib/stores/derived.store.ts (56 est. tokens)
-  - vibe-player-v2-react/src/main.tsx (54 est. tokens)
-  - vibe-player-v2-react-old/src/main.tsx (54 est. tokens)
-  - vibe-player-v2-react-old/tsconfig.json (53 est. tokens)
-  - vibe-player-v2/src/lib/utils/index.ts (52 est. tokens)
-  - vibe-player-v2/tailwind.config.ts (51 est. tokens)
-  - vibe-player-v2-react-old/tailwind.config.js (43 est. tokens)
-  - vibe-player-v2-react/src/lib/utils.ts (38 est. tokens)
-  - vibe-player-v2-react/tsconfig.json (35 est. tokens)
-  - vibe-player-v2/src/app.css (34 est. tokens)
-  - vibe-player-v2/src/lib/index.ts (31 est. tokens)
-  - vibe-player-v2/postcss.config.js (26 est. tokens)
-  - vibe-player-v2-react/postcss.config.js (14 est. tokens)
-  - vibe-player-v2-react-old/postcss.config.js (14 est. tokens)
-  - vibe-player-v2-react-old/src/index.css (14 est. tokens)
-  - vibe-player-v2/.npmrc (13 est. tokens)
-  - .llmignore (12 est. tokens)
-  - vibe-player-v2/.prettierrc (12 est. tokens)
-  - vibe-player-v2-react/src/vite-env.d.ts (10 est. tokens)
-  - vibe-player-v2-react-old/src/vite-env.d.ts (10 est. tokens)
---- End of Summary ---
-pp.json
+**Your primary task is to carefully read, analyze, and thoroughly understand the *entirety* of this provided information.** Do not just skim the contents. Process the directory structure, the relationships between files (e.g., how they might link, import, or relate thematically), and the substance within each file.
+
+**Synthesize this information to build a comprehensive internal understanding of the repository's:**
+*   **Overall purpose:** What is this repository *for*? (e.g., a software project, documentation, recipe collection, project plan, notes)
+*   **Structure and Organization:** How are the files and directories laid out? How do they logically group together?
+*   **Key Components and Content:** What are the most important files, concepts, topics, data points, or pieces of information contained within?
+
+Your goal is to develop a robust mental model of this repository based *only* on the provided snapshot. This understanding is crucial for you to accurately and effectively answer subsequent user questions about any aspect of the repository.
+
+
+**Repository Structure:**
+````
+.
+├── .github
+│   └── workflows
+│       ├── ci.yml
+│       ├── deploy.yml
+│       └── release.yml
+├── .gitignore
+├── .llmignore
+├── README.md
+├── REFACTOR_PLAN.txt
+├── add_headers.sh
+├── build_system_prompt.py
+├── system-prompt.txt
+├── test-audio
+│   ├── CGI_Animated_Short_Film：_＂Watermelon_A_Cautionary_Tale＂_by_Kefei.m4a
+│   ├── Dial DTMF sound _Busy Tone_ (480Hz+620Hz) [OnlineSound.net].mp3
+│   ├── Dial DTMF sound _Ringing Tone_ (400Hz+450Hz) [OnlineSound.net].mp3
+│   ├── IELTS13-Tests1-4CD1Track_01.mp3
+│   ├── LearningEnglishConversations-20250325-TheEnglishWeSpeakTwistSomeonesArm.mp3
+│   ├── Michael Jackson - Bad.mp3
+│   ├── Rename me to just Music.mp3
+│   ├── Tracing the thoughts of a large language model [Bj9BD2D3DzA].m4a
+│   ├── call going to voicemail - sound effect [SozAG1STa08].m4a
+│   ├── dtmf-123A456B789C(star)0(hex)D.mp3
+│   ├── file_example_MP3_5MG.mp3
+│   ├── off-hook-tone-43891.mp3
+│   ├── overlordVol14Prologue.mp3
+│   ├── warning.mp3
+│   └── 【Sound_of_Japan】Outgoing_Phone_Call_Dial_Sound⧸_Answering_Machine.m4a
+├── vibe-player
+│   ├── CONTRIBUTING-LLM.md
+│   ├── README.md
+│   ├── TODO.md
+│   ├── architecture.md
+│   ├── css
+│   │   ├── 98.css
+│   │   └── styles.css
+│   ├── fonts
+│   │   ├── ms_sans_serif.woff
+│   │   ├── ms_sans_serif.woff2
+│   │   ├── ms_sans_serif_bold.woff
+│   │   └── ms_sans_serif_bold.woff2
+│   ├── index.html
+│   ├── js
+│   │   ├── app.js
+│   │   ├── goertzel.js
+│   │   ├── player
+│   │   │   ├── audioEngine.js
+│   │   │   └── rubberbandProcessor.js
+│   │   ├── sparkles.js
+│   │   ├── state
+│   │   │   ├── appState.js
+│   │   │   └── constants.js
+│   │   ├── uiManager.js
+│   │   ├── utils.js
+│   │   ├── vad
+│   │   │   ├── LocalWorkerStrategy.js
+│   │   │   ├── RemoteApiStrategy.js
+│   │   │   ├── sileroProcessor.js
+│   │   │   ├── sileroWrapper.js
+│   │   │   └── vadAnalyzer.js
+│   │   └── visualizers
+│   │       ├── spectrogram.worker.js
+│   │       ├── spectrogramVisualizer.js
+│   │       └── waveformVisualizer.js
+│   ├── lib
+│   │   ├── fft.js
+│   │   ├── ort-wasm-simd-threaded.jsep.mjs
+│   │   ├── ort-wasm-simd-threaded.jsep.wasm
+│   │   ├── ort-wasm-simd-threaded.mjs
+│   │   ├── ort-wasm-simd-threaded.wasm
+│   │   ├── ort.min.js
+│   │   ├── ort.min.js.map
+│   │   ├── rubberband-loader.js
+│   │   └── rubberband.wasm
+│   └── model
+│       └── silero_vad.onnx
+├── vibe-player-v2
+│   ├── .gitignore
+│   ├── .npmrc
+│   ├── .prettierrc
+│   ├── README.md
+│   ├── eslint.config.js
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── playwright.config.ts
+│   ├── postcss.config.js
+│   ├── src
+│   │   ├── app.css
+│   │   ├── app.d.ts
+│   │   ├── app.html
+│   │   ├── hooks.server.ts
+│   │   ├── lib
+│   │   │   ├── actions
+│   │   │   │   └── sparkles.action.ts
+│   │   │   ├── components
+│   │   │   │   ├── Controls.svelte
+│   │   │   │   ├── FileLoader.svelte
+│   │   │   │   ├── ToneDisplay.svelte
+│   │   │   │   ├── __mocks__
+│   │   │   │   │   ├── Button.svelte
+│   │   │   │   │   ├── Generic.svelte
+│   │   │   │   │   ├── ProgressBar.svelte
+│   │   │   │   │   └── RangeSlider.svelte
+│   │   │   │   └── visualizers
+│   │   │   │       ├── Spectrogram.svelte
+│   │   │   │       └── Waveform.svelte
+│   │   │   ├── index.ts
+│   │   │   ├── services
+│   │   │   │   ├── AudioOrchestrator.service.ts
+│   │   │   │   ├── analysis.service.ts
+│   │   │   │   ├── audioEngine.service.ts
+│   │   │   │   ├── dtmf.service.ts
+│   │   │   │   └── spectrogram.service.ts
+│   │   │   ├── stores
+│   │   │   │   ├── analysis.store.ts
+│   │   │   │   ├── derived.store.ts
+│   │   │   │   ├── dtmf.store.ts
+│   │   │   │   ├── player.store.ts
+│   │   │   │   └── status.store.ts
+│   │   │   ├── types
+│   │   │   │   ├── analysis.types.ts
+│   │   │   │   ├── player.types.ts
+│   │   │   │   ├── status.types.ts
+│   │   │   │   └── worker.types.ts
+│   │   │   ├── utils
+│   │   │   │   ├── assert.ts
+│   │   │   │   ├── async.ts
+│   │   │   │   ├── constants.ts
+│   │   │   │   ├── dsp.ts
+│   │   │   │   ├── formatters.ts
+│   │   │   │   ├── index.ts
+│   │   │   │   └── urlState.ts
+│   │   │   └── workers
+│   │   │       ├── dtmf.worker.ts
+│   │   │       ├── rubberband.worker.ts
+│   │   │       ├── sileroVad.worker.ts
+│   │   │       └── spectrogram.worker.ts
+│   │   ├── routes
+│   │   │   ├── +layout.svelte
+│   │   │   └── +page.svelte
+│   │   └── setupTests.ts
+│   ├── static
+│   │   ├── favicon.png
+│   │   ├── models
+│   │   │   └── silero_vad.onnx
+│   │   ├── test-audio
+│   │   │   ├── 449496_9289636-lq.mp3
+│   │   │   ├── C.Noisy_Voice.wav
+│   │   │   └── dtmf-123A456B789C(star)0(hex)D.mp3
+│   │   └── vendor
+│   │       ├── fft.js
+│   │       └── rubberband
+│   │           ├── rubberband-loader.js
+│   │           └── rubberband.wasm
+│   ├── svelte.config.js
+│   ├── tailwind.config.ts
+│   ├── tests-e2e
+│   │   ├── 00-load.e2e.spec.js
+│   │   ├── PlayerPage.mjs
+│   │   └── player.e2e.spec.js
+│   ├── tsconfig.json
+│   └── vite.config.ts
+├── vibe-player-v2-react
+│   ├── .gitignore
+│   ├── @
+│   │   └── components
+│   │       └── ui
+│   │           ├── button.tsx
+│   │           ├── card.tsx
+│   │           ├── label.tsx
+│   │           └── slider.tsx
+│   ├── README.md
+│   ├── components.json
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.js
+│   ├── public
+│   │   ├── favicon.png
+│   │   ├── models
+│   │   │   └── silero_vad.onnx
+│   │   ├── test-audio
+│   │   │   ├── 449496_9289636-lq.mp3
+│   │   │   ├── C.Noisy_Voice.wav
+│   │   │   └── dtmf-123A456B789C(star)0(hex)D.mp3
+│   │   ├── vendor
+│   │   │   ├── fft.js
+│   │   │   └── rubberband
+│   │   │       ├── rubberband-loader.js
+│   │   │       └── rubberband.wasm
+│   │   └── vite.svg
+│   ├── src
+│   │   ├── App.css
+│   │   ├── App.tsx
+│   │   ├── assets
+│   │   │   └── react.svg
+│   │   ├── index.css
+│   │   ├── lib
+│   │   │   └── utils.ts
+│   │   ├── main.tsx
+│   │   ├── services
+│   │   │   ├── AudioOrchestrator.service.ts
+│   │   │   ├── analysis.service.ts
+│   │   │   ├── audioEngine.service.ts
+│   │   │   ├── dtmf.service.ts
+│   │   │   └── spectrogram.service.ts
+│   │   ├── stores
+│   │   │   ├── player.store.ts
+│   │   │   ├── transcript.store.ts
+│   │   │   └── ui.store.ts
+│   │   ├── types
+│   │   │   ├── analysis.types.ts
+│   │   │   ├── player.types.ts
+│   │   │   ├── status.types.ts
+│   │   │   ├── transcript.types.ts
+│   │   │   ├── ui.types.ts
+│   │   │   └── worker.types.ts
+│   │   ├── utils
+│   │   │   ├── assert.ts
+│   │   │   ├── async.ts
+│   │   │   ├── constants.ts
+│   │   │   ├── dsp.ts
+│   │   │   ├── formatters.ts
+│   │   │   ├── index.ts
+│   │   │   └── urlState.ts
+│   │   ├── vite-env.d.ts
+│   │   └── workers
+│   │       ├── dtmf.worker.ts
+│   │       ├── rubberband.worker.ts
+│   │       ├── sileroVad.worker.ts
+│   │       └── spectrogram.worker.ts
+│   ├── tailwind.config.js
+│   ├── tsconfig.app.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   └── vite.config.ts
+└── vibe-player-v2-react-old
+    ├── .gitignore
+    ├── README.md
+    ├── components.json
+    ├── eslint.config.js
+    ├── index.html
+    ├── package-lock.json
+    ├── package.json
+    ├── postcss.config.js
+    ├── public
+    │   ├── favicon.png
+    │   ├── models
+    │   │   └── silero_vad.onnx
+    │   ├── test-audio
+    │   │   ├── 449496_9289636-lq.mp3
+    │   │   ├── C.Noisy_Voice.wav
+    │   │   └── dtmf-123A456B789C(star)0(hex)D.mp3
+    │   ├── vendor
+    │   │   ├── fft.js
+    │   │   └── rubberband
+    │   │       ├── rubberband-loader.js
+    │   │       └── rubberband.wasm
+    │   └── vite.svg
+    ├── src
+    │   ├── App.tsx
+    │   ├── assets
+    │   │   └── react.svg
+    │   ├── components
+    │   │   ├── FileLoader.test.tsx
+    │   │   ├── FileLoader.tsx
+    │   │   ├── PlayerControls.test.tsx
+    │   │   ├── PlayerControls.tsx
+    │   │   ├── StatusMessages.test.tsx
+    │   │   ├── StatusMessages.tsx
+    │   │   ├── ToneDisplay.test.tsx
+    │   │   ├── ToneDisplay.tsx
+    │   │   ├── ui
+    │   │   │   ├── button.tsx
+    │   │   │   ├── card.tsx
+    │   │   │   ├── label.tsx
+    │   │   │   └── slider.tsx
+    │   │   └── visualizers
+    │   │       ├── SpectrogramVisualizer.test.tsx
+    │   │       ├── SpectrogramVisualizer.tsx
+    │   │       ├── WaveformVisualizer.test.tsx
+    │   │       └── WaveformVisualizer.tsx
+    │   ├── index.css
+    │   ├── main.tsx
+    │   ├── services
+    │   │   ├── AudioOrchestrator.service.test.ts
+    │   │   ├── AudioOrchestrator.service.ts
+    │   │   ├── analysis.service.test.ts
+    │   │   ├── analysis.service.ts
+    │   │   ├── audioEngine.service.test.ts
+    │   │   ├── audioEngine.service.ts
+    │   │   ├── dtmf.service.test.ts
+    │   │   ├── dtmf.service.ts
+    │   │   ├── spectrogram.service.test.ts
+    │   │   └── spectrogram.service.ts
+    │   ├── stores
+    │   │   ├── analysis.store.ts
+    │   │   ├── derived.store.ts
+    │   │   ├── dtmf.store.ts
+    │   │   ├── player.store.ts
+    │   │   └── status.store.ts
+    │   ├── types
+    │   │   ├── analysis.types.ts
+    │   │   ├── player.types.ts
+    │   │   ├── status.types.ts
+    │   │   └── worker.types.ts
+    │   ├── utils
+    │   │   ├── assert.ts
+    │   │   ├── async.test.ts
+    │   │   ├── async.ts
+    │   │   ├── constants.test.ts
+    │   │   ├── constants.ts
+    │   │   ├── dsp.test.ts
+    │   │   ├── dsp.ts
+    │   │   ├── formatters.test.ts
+    │   │   ├── formatters.ts
+    │   │   ├── index.ts
+    │   │   ├── urlState.test.ts
+    │   │   └── urlState.ts
+    │   ├── vite-env.d.ts
+    │   └── workers
+    │       ├── dtmf.worker.test.ts
+    │       ├── dtmf.worker.ts
+    │       ├── rubberband.worker.test.ts
+    │       ├── rubberband.worker.ts
+    │       ├── sileroVad.worker.test.ts
+    │       ├── sileroVad.worker.ts
+    │       ├── spectrogram.worker.test.ts
+    │       └── spectrogram.worker.ts
+    ├── tailwind.config.js
+    ├── tests-e2e
+    │   ├── 00-load.e2e.spec.js
+    │   ├── PlayerPage.mjs
+    │   └── player.e2e.spec.js
+    ├── tsconfig.app.json
     ├── tsconfig.app.json.tmp
     ├── tsconfig.json
     ├── tsconfig.node.json
@@ -603,6 +741,51 @@ vibe-player/
 
 ````
 --- End of File: .llmignore ---
+--- File: add_headers.sh ---
+````bash
+#!/bin/bash
+
+# Define the base directory for the React project
+REACT_APP_DIR="vibe-player-v2-react"
+
+# Function to add header to a file
+add_header() {
+  FILE_PATH="$1"
+  # Remove ./ prefix if present for cleaner path
+  CLEAN_FILE_PATH="${FILE_PATH#./}"
+  HEADER="// ${CLEAN_FILE_PATH}"
+
+  # Check if header already exists (to avoid duplicate headers)
+  # Use grep -Fxq for fixed string, exact match, and quiet mode
+  if ! grep -Fxq "${HEADER}" "${FILE_PATH}"; then
+    # Create a temporary file
+    TMP_FILE=$(mktemp)
+    # Prepend header to the temporary file
+    echo "${HEADER}" > "${TMP_FILE}"
+    cat "${FILE_PATH}" >> "${TMP_FILE}"
+    # Replace original file with the temporary file
+    mv "${TMP_FILE}" "${FILE_PATH}"
+    echo "Added header to ${CLEAN_FILE_PATH}"
+  else
+    echo "Header already exists in ${CLEAN_FILE_PATH}"
+  fi
+}
+
+# Process only .test.ts files in src/utils
+TARGET_DIR="${REACT_APP_DIR}/src/utils"
+
+if [ -d "$TARGET_DIR" ]; then
+  find "$TARGET_DIR" -type f -name "*.test.ts" -print0 | while IFS= read -r -d $' ' file; do
+    add_header "$file"
+  done
+else
+  echo "Directory ${TARGET_DIR} does not exist. Skipping."
+fi
+
+echo "File header processing complete."
+
+````
+--- End of File: add_headers.sh ---
 --- File: README.md ---
 ````markdown
 # Vibe Player V2 - React Edition
@@ -857,51 +1040,6 @@ This will be performed on a dedicated `feature/svelte-refactor` branch.
 *   **Encapsulate Intensive Tasks in Workers.** Any long-running or CPU-intensive task (VAD, spectrograms, audio processing) must be offloaded to a Web Worker to keep the UI responsive.
 ````
 --- End of File: REFACTOR_PLAN.txt ---
---- File: add_headers.sh ---
-````bash
-#!/bin/bash
-
-# Define the base directory for the React project
-REACT_APP_DIR="vibe-player-v2-react"
-
-# Function to add header to a file
-add_header() {
-  FILE_PATH="$1"
-  # Remove ./ prefix if present for cleaner path
-  CLEAN_FILE_PATH="${FILE_PATH#./}"
-  HEADER="// ${CLEAN_FILE_PATH}"
-
-  # Check if header already exists (to avoid duplicate headers)
-  # Use grep -Fxq for fixed string, exact match, and quiet mode
-  if ! grep -Fxq "${HEADER}" "${FILE_PATH}"; then
-    # Create a temporary file
-    TMP_FILE=$(mktemp)
-    # Prepend header to the temporary file
-    echo "${HEADER}" > "${TMP_FILE}"
-    cat "${FILE_PATH}" >> "${TMP_FILE}"
-    # Replace original file with the temporary file
-    mv "${TMP_FILE}" "${FILE_PATH}"
-    echo "Added header to ${CLEAN_FILE_PATH}"
-  else
-    echo "Header already exists in ${CLEAN_FILE_PATH}"
-  fi
-}
-
-# Process only .test.ts files in src/utils
-TARGET_DIR="${REACT_APP_DIR}/src/utils"
-
-if [ -d "$TARGET_DIR" ]; then
-  find "$TARGET_DIR" -type f -name "*.test.ts" -print0 | while IFS= read -r -d $' ' file; do
-    add_header "$file"
-  done
-else
-  echo "Directory ${TARGET_DIR} does not exist. Skipping."
-fi
-
-echo "File header processing complete."
-
-````
---- End of File: add_headers.sh ---
 --- File: vibe-player-v2/.gitignore ---
 ````.gitignore
 # vibe-player-v2/.gitignore
@@ -947,53 +1085,6 @@ engine-strict=true
 
 ````
 --- End of File: vibe-player-v2/.prettierrc ---
---- File: vibe-player-v2/README.md ---
-````markdown
-<!-- vibe-player-v2/README.md -->
-
-# sv
-
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
-
-## Creating a project
-
-If you're seeing this, you've probably already done this step. Congrats!
-
-```bash
-# create a new project in the current directory
-npx sv create
-
-# create a new project in my-app
-npx sv create my-app
-```
-
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a
-development server:
-
-```bash
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
-```
-
-## Building
-
-To create a production version of your app:
-
-```bash
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target
-> environment.
-
-````
---- End of File: vibe-player-v2/README.md ---
 --- File: vibe-player-v2/eslint.config.js ---
 ````javascript
 // vibe-player-v2/eslint.config.js
@@ -1125,6 +1216,53 @@ export default {
 
 ````
 --- End of File: vibe-player-v2/postcss.config.js ---
+--- File: vibe-player-v2/README.md ---
+````markdown
+<!-- vibe-player-v2/README.md -->
+
+# sv
+
+Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+
+## Creating a project
+
+If you're seeing this, you've probably already done this step. Congrats!
+
+```bash
+# create a new project in the current directory
+npx sv create
+
+# create a new project in my-app
+npx sv create my-app
+```
+
+## Developing
+
+Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a
+development server:
+
+```bash
+npm run dev
+
+# or start the server and open the app in a new browser tab
+npm run dev -- --open
+```
+
+## Building
+
+To create a production version of your app:
+
+```bash
+npm run build
+```
+
+You can preview the production build with `npm run preview`.
+
+> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target
+> environment.
+
+````
+--- End of File: vibe-player-v2/README.md ---
 --- File: vibe-player-v2/src/app.css ---
 ````css
 /* vibe-player-v2/src/app.css */
@@ -1298,6 +1436,88 @@ export function sparkles(
 
 ````
 --- End of File: vibe-player-v2/src/lib/actions/sparkles.action.ts ---
+--- File: vibe-player-v2/src/lib/components/__mocks__/Button.svelte ---
+````svelte
+<!-- vibe-player-v2/src/lib/components/__mocks__/Button.svelte -->
+<script>
+  // Mock Button
+  export let color = 'primary'; // Example prop
+  // Add any other props your component might expect to avoid runtime warnings/errors
+</script>
+
+<button class="mock-button btn variant-filled-{color}" on:click>
+  <slot />
+</button>
+
+````
+--- End of File: vibe-player-v2/src/lib/components/__mocks__/Button.svelte ---
+--- File: vibe-player-v2/src/lib/components/__mocks__/Generic.svelte ---
+````svelte
+<!-- vibe-player-v2/src/lib/components/__mocks__/Generic.svelte -->
+<script lang="ts">
+  // Generic mock for any Skeleton component
+  // It can accept any props via $$props
+</script>
+
+<div data-testid="generic-skeleton-mock" {...$$props}>
+  <!-- Generic mock content -->
+</div>
+
+````
+--- End of File: vibe-player-v2/src/lib/components/__mocks__/Generic.svelte ---
+--- File: vibe-player-v2/src/lib/components/__mocks__/ProgressBar.svelte ---
+````svelte
+<!-- vibe-player-v2/src/lib/components/__mocks__/ProgressBar.svelte -->
+<script lang="ts">
+  // Minimal mock for ProgressBar.svelte
+  export let value: number | undefined = undefined;
+  export let max: number = 100;
+  // Add any other props that might be minimally required if type checking is strict
+</script>
+
+<div data-testid="mock-progress-bar" role="progressbar" aria-valuenow={value} aria-valuemax={max}>
+  <!-- Mock content -->
+</div>
+
+````
+--- End of File: vibe-player-v2/src/lib/components/__mocks__/ProgressBar.svelte ---
+--- File: vibe-player-v2/src/lib/components/__mocks__/RangeSlider.svelte ---
+````svelte
+<!-- vibe-player-v2/src/lib/components/__mocks__/RangeSlider.svelte -->
+<script lang="ts">
+  // Mock RangeSlider
+  export let value: number = 0;
+  export let name: string = ''; // This will be used as the ID for the label's 'for' attribute
+  export let min: number = 0;
+  export let max: number = 100;
+  export let step: number = 1;
+  export let disabled: boolean = false; // Explicitly declare the disabled prop
+
+  // Use the 'name' prop also as 'id' to match <label for="...">
+  const id = name;
+
+  // Capture any other props passed to the component, like data-testid
+  // We need to filter out the props we've explicitly declared to avoid conflicts if they are also in $$props
+  const { value: _v, name: _n, min: _min, max: _max, step: _s, disabled: _d, id: _id, ...restProps } = $$props;
+</script>
+
+<input
+  type="range"
+  class="mock-range-slider"
+  {id}
+  {name}
+  bind:value
+  {min}
+  {max}
+  {step}
+  {disabled}
+  on:input
+  on:change
+  {...restProps}
+/>
+
+````
+--- End of File: vibe-player-v2/src/lib/components/__mocks__/RangeSlider.svelte ---
 --- File: vibe-player-v2/src/lib/components/Controls.svelte ---
 ````svelte
 <!-- vibe-player-v2/src/lib/components/Controls.svelte -->
@@ -1597,88 +1817,6 @@ export function sparkles(
 
 ````
 --- End of File: vibe-player-v2/src/lib/components/ToneDisplay.svelte ---
---- File: vibe-player-v2/src/lib/components/__mocks__/Button.svelte ---
-````svelte
-<!-- vibe-player-v2/src/lib/components/__mocks__/Button.svelte -->
-<script>
-  // Mock Button
-  export let color = 'primary'; // Example prop
-  // Add any other props your component might expect to avoid runtime warnings/errors
-</script>
-
-<button class="mock-button btn variant-filled-{color}" on:click>
-  <slot />
-</button>
-
-````
---- End of File: vibe-player-v2/src/lib/components/__mocks__/Button.svelte ---
---- File: vibe-player-v2/src/lib/components/__mocks__/Generic.svelte ---
-````svelte
-<!-- vibe-player-v2/src/lib/components/__mocks__/Generic.svelte -->
-<script lang="ts">
-  // Generic mock for any Skeleton component
-  // It can accept any props via $$props
-</script>
-
-<div data-testid="generic-skeleton-mock" {...$$props}>
-  <!-- Generic mock content -->
-</div>
-
-````
---- End of File: vibe-player-v2/src/lib/components/__mocks__/Generic.svelte ---
---- File: vibe-player-v2/src/lib/components/__mocks__/ProgressBar.svelte ---
-````svelte
-<!-- vibe-player-v2/src/lib/components/__mocks__/ProgressBar.svelte -->
-<script lang="ts">
-  // Minimal mock for ProgressBar.svelte
-  export let value: number | undefined = undefined;
-  export let max: number = 100;
-  // Add any other props that might be minimally required if type checking is strict
-</script>
-
-<div data-testid="mock-progress-bar" role="progressbar" aria-valuenow={value} aria-valuemax={max}>
-  <!-- Mock content -->
-</div>
-
-````
---- End of File: vibe-player-v2/src/lib/components/__mocks__/ProgressBar.svelte ---
---- File: vibe-player-v2/src/lib/components/__mocks__/RangeSlider.svelte ---
-````svelte
-<!-- vibe-player-v2/src/lib/components/__mocks__/RangeSlider.svelte -->
-<script lang="ts">
-  // Mock RangeSlider
-  export let value: number = 0;
-  export let name: string = ''; // This will be used as the ID for the label's 'for' attribute
-  export let min: number = 0;
-  export let max: number = 100;
-  export let step: number = 1;
-  export let disabled: boolean = false; // Explicitly declare the disabled prop
-
-  // Use the 'name' prop also as 'id' to match <label for="...">
-  const id = name;
-
-  // Capture any other props passed to the component, like data-testid
-  // We need to filter out the props we've explicitly declared to avoid conflicts if they are also in $$props
-  const { value: _v, name: _n, min: _min, max: _max, step: _s, disabled: _d, id: _id, ...restProps } = $$props;
-</script>
-
-<input
-  type="range"
-  class="mock-range-slider"
-  {id}
-  {name}
-  bind:value
-  {min}
-  {max}
-  {step}
-  {disabled}
-  on:input
-  on:change
-  {...restProps}
-/>
-
-````
---- End of File: vibe-player-v2/src/lib/components/__mocks__/RangeSlider.svelte ---
 --- File: vibe-player-v2/src/lib/components/visualizers/Spectrogram.svelte ---
 ````svelte
 <!-- vibe-player-v2/src/lib/components/visualizers/Spectrogram.svelte -->
@@ -1916,162 +2054,6 @@ export function sparkles(
 
 ````
 --- End of File: vibe-player-v2/src/lib/index.ts ---
---- File: vibe-player-v2/src/lib/services/AudioOrchestrator.service.ts ---
-````typescript
-// vibe-player-v2/src/lib/services/AudioOrchestrator.service.ts
-import { get } from "svelte/store";
-import { playerStore } from "$lib/stores/player.store";
-import { statusStore } from "$lib/stores/status.store";
-import type { StatusState } from "$lib/types/status.types"; // Added this import
-import { analysisStore } from "$lib/stores/analysis.store";
-import audioEngine from "./audioEngine.service"; // Changed to default import
-import dtmfService from "./dtmf.service"; // Changed to default import
-import spectrogramService from "./spectrogram.service"; // Changed to default import
-import { debounce } from "$lib/utils/async";
-import { updateUrlWithParams } from "$lib/utils/urlState";
-import { UI_CONSTANTS, URL_HASH_KEYS } from "$lib/utils/constants";
-
-export class AudioOrchestrator {
-  private static instance: AudioOrchestrator;
-
-  private constructor() {
-    // Private constructor for singleton
-  }
-
-  public static getInstance(): AudioOrchestrator {
-    if (!AudioOrchestrator.instance) {
-      AudioOrchestrator.instance = new AudioOrchestrator();
-    }
-    return AudioOrchestrator.instance;
-  }
-
-  public async loadFileAndAnalyze(file: File): Promise<void> {
-    console.log(`[Orchestrator] === Starting New File Load: ${file.name} ===`);
-    statusStore.set({
-      message: `Loading ${file.name}...`,
-      type: "info",
-      isLoading: true,
-      details: null,
-      progress: null,
-    });
-    // Ensure other relevant stores are reset if that's current behavior (e.g., analysisStore, waveformStore)
-    playerStore.update((s) => ({
-      ...s,
-      error: null,
-      status: "Loading",
-      isPlayable: false,
-      fileName: file.name,
-      duration: 0,
-      currentTime: 0,
-    })); // Added fileName and reset duration/currentTime
-    analysisStore.update((store) => ({
-      ...store,
-      dtmfResults: [],
-      spectrogramData: null,
-    }));
-
-    try {
-      await audioEngine.unlockAudio();
-      const audioBuffer = await audioEngine.loadFile(file);
-      // audioEngine.decodeAudioData() is usually part of loadFile or handled by the browser's AudioContext directly
-
-      const duration = audioBuffer.duration;
-      const sampleRate = audioBuffer.sampleRate;
-      const channels = audioBuffer.numberOfChannels; // Assuming this property exists
-
-      playerStore.update((s) => ({
-        ...s,
-        duration,
-        sampleRate,
-        channels, // Added channels
-        isPlayable: true,
-        status: "Ready", // Updated status here
-      }));
-      statusStore.set({ message: "Ready", type: "success", isLoading: false });
-
-      spectrogramService.init(audioBuffer.sampleRate);
-      dtmfService.init(audioBuffer.sampleRate);
-
-      console.log("AudioOrchestrator: Starting background analysis tasks.");
-      const analysisPromises = [
-        dtmfService.process(audioBuffer),
-        spectrogramService.process(audioBuffer.getChannelData(0)),
-      ];
-
-      const results = await Promise.allSettled(analysisPromises);
-      console.log(
-        "AudioOrchestrator: All background analysis tasks settled.",
-        results,
-      );
-
-      results.forEach((result, index) => {
-        if (result.status === "rejected") {
-          console.error(
-            `AudioOrchestrator: Analysis task ${index} failed:`,
-            result.reason,
-          );
-          // Optionally, update a specific error state in analysisStore or playerStore
-        }
-      });
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(
-        `[Orchestrator] !!! CRITICAL ERROR during file load:`,
-        error,
-      );
-      statusStore.set({
-        message: "File processing failed.",
-        type: "error",
-        isLoading: false,
-        details: message,
-      });
-      // Update playerStore to reflect the error state specifically for the player
-      playerStore.update((s) => ({
-        ...s,
-        status: "Error",
-        error: message,
-        isPlayable: false,
-        duration: 0,
-        currentTime: 0,
-      }));
-    }
-  }
-
-  /**
-   * Sets up debounced URL serialization based on player and analysis store changes.
-   * @public
-   */
-  public setupUrlSerialization(): void {
-    console.log("[Orchestrator] Setting up URL serialization.");
-
-    const debouncedUpdater = debounce(() => {
-      const pStore = get(playerStore);
-      // const aStore = get(analysisStore); // Keep this commented out if analysisStore part is not for this step yet
-
-      const params: Record<string, string> = {
-        [URL_HASH_KEYS.SPEED]: pStore.speed.toFixed(2),
-        [URL_HASH_KEYS.PITCH]: pStore.pitch.toFixed(1), // Assuming pitch is semitones
-        [URL_HASH_KEYS.GAIN]: pStore.gain.toFixed(2),
-        // [URL_HASH_KEYS.VAD_THRESHOLD]: aStore.vadPositiveThreshold.toFixed(2), // Keep commented
-        // ... any other relevant params from playerStore that should be serialized
-      };
-
-      console.log(
-        `[Orchestrator/URL] Debounced update triggered. New params:`,
-        params,
-      );
-      updateUrlWithParams(params); // Make sure updateUrlWithParams is correctly imported/defined
-    }, UI_CONSTANTS.DEBOUNCE_TIME_MS_URL_UPDATE);
-
-    playerStore.subscribe(debouncedUpdater);
-    // analysisStore.subscribe(debouncedUpdater); // Only subscribe if aStore is used in params
-  }
-}
-
-export const audioOrchestrator = AudioOrchestrator.getInstance();
-
-````
---- End of File: vibe-player-v2/src/lib/services/AudioOrchestrator.service.ts ---
 --- File: vibe-player-v2/src/lib/services/analysis.service.ts ---
 ````typescript
 // vibe-player-v2/src/lib/services/analysis.service.ts
@@ -3190,6 +3172,162 @@ export default AudioEngineService.getInstance();
 
 ````
 --- End of File: vibe-player-v2/src/lib/services/audioEngine.service.ts ---
+--- File: vibe-player-v2/src/lib/services/AudioOrchestrator.service.ts ---
+````typescript
+// vibe-player-v2/src/lib/services/AudioOrchestrator.service.ts
+import { get } from "svelte/store";
+import { playerStore } from "$lib/stores/player.store";
+import { statusStore } from "$lib/stores/status.store";
+import type { StatusState } from "$lib/types/status.types"; // Added this import
+import { analysisStore } from "$lib/stores/analysis.store";
+import audioEngine from "./audioEngine.service"; // Changed to default import
+import dtmfService from "./dtmf.service"; // Changed to default import
+import spectrogramService from "./spectrogram.service"; // Changed to default import
+import { debounce } from "$lib/utils/async";
+import { updateUrlWithParams } from "$lib/utils/urlState";
+import { UI_CONSTANTS, URL_HASH_KEYS } from "$lib/utils/constants";
+
+export class AudioOrchestrator {
+  private static instance: AudioOrchestrator;
+
+  private constructor() {
+    // Private constructor for singleton
+  }
+
+  public static getInstance(): AudioOrchestrator {
+    if (!AudioOrchestrator.instance) {
+      AudioOrchestrator.instance = new AudioOrchestrator();
+    }
+    return AudioOrchestrator.instance;
+  }
+
+  public async loadFileAndAnalyze(file: File): Promise<void> {
+    console.log(`[Orchestrator] === Starting New File Load: ${file.name} ===`);
+    statusStore.set({
+      message: `Loading ${file.name}...`,
+      type: "info",
+      isLoading: true,
+      details: null,
+      progress: null,
+    });
+    // Ensure other relevant stores are reset if that's current behavior (e.g., analysisStore, waveformStore)
+    playerStore.update((s) => ({
+      ...s,
+      error: null,
+      status: "Loading",
+      isPlayable: false,
+      fileName: file.name,
+      duration: 0,
+      currentTime: 0,
+    })); // Added fileName and reset duration/currentTime
+    analysisStore.update((store) => ({
+      ...store,
+      dtmfResults: [],
+      spectrogramData: null,
+    }));
+
+    try {
+      await audioEngine.unlockAudio();
+      const audioBuffer = await audioEngine.loadFile(file);
+      // audioEngine.decodeAudioData() is usually part of loadFile or handled by the browser's AudioContext directly
+
+      const duration = audioBuffer.duration;
+      const sampleRate = audioBuffer.sampleRate;
+      const channels = audioBuffer.numberOfChannels; // Assuming this property exists
+
+      playerStore.update((s) => ({
+        ...s,
+        duration,
+        sampleRate,
+        channels, // Added channels
+        isPlayable: true,
+        status: "Ready", // Updated status here
+      }));
+      statusStore.set({ message: "Ready", type: "success", isLoading: false });
+
+      spectrogramService.init(audioBuffer.sampleRate);
+      dtmfService.init(audioBuffer.sampleRate);
+
+      console.log("AudioOrchestrator: Starting background analysis tasks.");
+      const analysisPromises = [
+        dtmfService.process(audioBuffer),
+        spectrogramService.process(audioBuffer.getChannelData(0)),
+      ];
+
+      const results = await Promise.allSettled(analysisPromises);
+      console.log(
+        "AudioOrchestrator: All background analysis tasks settled.",
+        results,
+      );
+
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          console.error(
+            `AudioOrchestrator: Analysis task ${index} failed:`,
+            result.reason,
+          );
+          // Optionally, update a specific error state in analysisStore or playerStore
+        }
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        `[Orchestrator] !!! CRITICAL ERROR during file load:`,
+        error,
+      );
+      statusStore.set({
+        message: "File processing failed.",
+        type: "error",
+        isLoading: false,
+        details: message,
+      });
+      // Update playerStore to reflect the error state specifically for the player
+      playerStore.update((s) => ({
+        ...s,
+        status: "Error",
+        error: message,
+        isPlayable: false,
+        duration: 0,
+        currentTime: 0,
+      }));
+    }
+  }
+
+  /**
+   * Sets up debounced URL serialization based on player and analysis store changes.
+   * @public
+   */
+  public setupUrlSerialization(): void {
+    console.log("[Orchestrator] Setting up URL serialization.");
+
+    const debouncedUpdater = debounce(() => {
+      const pStore = get(playerStore);
+      // const aStore = get(analysisStore); // Keep this commented out if analysisStore part is not for this step yet
+
+      const params: Record<string, string> = {
+        [URL_HASH_KEYS.SPEED]: pStore.speed.toFixed(2),
+        [URL_HASH_KEYS.PITCH]: pStore.pitch.toFixed(1), // Assuming pitch is semitones
+        [URL_HASH_KEYS.GAIN]: pStore.gain.toFixed(2),
+        // [URL_HASH_KEYS.VAD_THRESHOLD]: aStore.vadPositiveThreshold.toFixed(2), // Keep commented
+        // ... any other relevant params from playerStore that should be serialized
+      };
+
+      console.log(
+        `[Orchestrator/URL] Debounced update triggered. New params:`,
+        params,
+      );
+      updateUrlWithParams(params); // Make sure updateUrlWithParams is correctly imported/defined
+    }, UI_CONSTANTS.DEBOUNCE_TIME_MS_URL_UPDATE);
+
+    playerStore.subscribe(debouncedUpdater);
+    // analysisStore.subscribe(debouncedUpdater); // Only subscribe if aStore is used in params
+  }
+}
+
+export const audioOrchestrator = AudioOrchestrator.getInstance();
+
+````
+--- End of File: vibe-player-v2/src/lib/services/AudioOrchestrator.service.ts ---
 --- File: vibe-player-v2/src/lib/services/dtmf.service.ts ---
 ````typescript
 // vibe-player-v2/src/lib/services/dtmf.service.ts
@@ -6315,166 +6453,6 @@ test.describe("Application Startup Smoke Test", () => {
 
 ````
 --- End of File: vibe-player-v2/tests-e2e/00-load.e2e.spec.js ---
---- File: vibe-player-v2/tests-e2e/PlayerPage.mjs ---
-````mjs
-// vibe-player-v2/tests-e2e/PlayerPage.mjs
-import { expect } from "@playwright/test";
-
-export class PlayerPage {
-  /**
-   * A Page Object Model for the Vibe Player V2 application.
-   * Encapsulates locators and actions for interacting with the player UI.
-   * @param {import('@playwright/test').Page} page
-   */
-  constructor(page) {
-    this.page = page;
-    this.devServerUrl = "http://localhost:4173/";
-    this.appBarTitle = page.getByTestId("app-bar-title");
-    this.fileInput = page.locator('input[type="file"]');
-    this.fileNameDisplay = page.getByTestId("file-name-display");
-    this.fileStatusDisplay = page.getByTestId("file-status-display");
-    this.fileErrorDisplay = page.getByTestId("file-error-display");
-    this.playButton = page.getByTestId("play-button");
-    this.stopButton = page.getByTestId("stop-button");
-    this.timeDisplay = page.getByTestId("time-display");
-    this.seekSliderInput = page.getByTestId("seek-slider-input");
-    this.speedSliderInput = page.getByTestId("speed-slider-input");
-    this.speedValueDisplay = page.getByTestId("speed-value");
-    this.pitchSliderInput = page.getByTestId("pitch-slider-input");
-    this.pitchValueDisplay = page.getByTestId("pitch-value");
-    this.gainSliderInput = page.getByTestId("gain-slider-input");
-    this.gainValueDisplay = page.getByTestId("gain-value");
-    this.vadPositiveSliderInput = page.getByTestId("vad-positive-slider-input");
-    this.vadPositiveValueDisplay = page.getByTestId("vad-positive-value");
-    this.vadNegativeSliderInput = page.getByTestId("vad-negative-slider-input");
-    this.vadNegativeValueDisplay = page.getByTestId("vad-negative-value");
-    this.dtmfDisplay = page.getByTestId("dtmf-display");
-  }
-
-  /**
-   * Navigates to the application's base URL and verifies the page has loaded.
-   */
-  async goto() {
-    await this.page.goto(this.devServerUrl);
-    await expect(this.appBarTitle).toHaveText("Vibe Player V2", {
-      timeout: 15000,
-    });
-    await expect(this.fileInput).toBeVisible({ timeout: 10000 });
-  }
-
-  /**
-   * Loads an audio file using the file input.
-   * @param {string} fileName - The path to the file within the 'static' directory.
-   */
-  async loadAudioFile(fileName) {
-    const filePath = `static/${fileName}`;
-    await this.fileInput.setInputFiles(filePath);
-  }
-
-  /**
-   * Waits for the UI to be in a state where playback is possible after a file load.
-   */
-  async expectControlsToBeReadyForPlayback() {
-    await expect(this.fileStatusDisplay).toHaveText(/Ready/, {
-      timeout: 20000,
-    });
-    await expect(
-      this.timeDisplay,
-      "Time display did not update with audio duration",
-    ).not.toHaveText("0:00 / 0:00", { timeout: 1000 });
-    await expect(
-      this.playButton,
-      "Play button was not enabled after file load",
-    ).toBeEnabled({
-      timeout: 1000,
-    });
-  }
-
-  /**
-   * Gets the current text content of the play/pause button.
-   * @returns {Promise<string|null>}
-   */
-  async getPlayButtonText() {
-    return this.playButton.textContent();
-  }
-
-  /**
-   * Sets the value of a slider by calculating the click position based on the desired value.
-   * @param {import('@playwright/test').Locator} sliderInputLocator - The locator for the slider's <input type="range"> element.
-   * @param {string} valueStr - The target value as a string (e.g., "1.5").
-   */
-  async setSliderValue(sliderInputLocator, valueStr) {
-    const targetValue = parseFloat(valueStr);
-    const boundingBox = await sliderInputLocator.boundingBox();
-    if (!boundingBox) throw new Error(`Could not get bounding box for slider.`);
-
-    const { min, max } = await sliderInputLocator.evaluate((el) => ({
-      min: parseFloat(el.getAttribute("min") || "0"),
-      max: parseFloat(el.getAttribute("max") || "100"),
-    }));
-
-    const ratio = (targetValue - min) / (max - min);
-    let clickX = boundingBox.x + boundingBox.width * ratio;
-
-    // Ensure clickX is within the bounding box width
-    clickX = Math.max(
-      boundingBox.x,
-      Math.min(clickX, boundingBox.x + boundingBox.width),
-    );
-
-    const clickY = boundingBox.y + boundingBox.height / 2;
-
-    await this.page.mouse.click(clickX, clickY);
-    await this.page.waitForTimeout(350); // Allow for debounced updates
-  }
-
-  /**
-   * Gets the current value of a slider input.
-   * @param {import('@playwright/test').Locator} sliderInputLocator
-   * @returns {Promise<string>}
-   */
-  async getSliderInputValue(sliderInputLocator) {
-    return sliderInputLocator.inputValue();
-  }
-
-  /**
-   * Gets the current playback time from the time display element.
-   * Assumes the time display format is "currentTimeFormatted / durationFormatted".
-   * @returns {Promise<number>} The current time in seconds.
-   */
-  async getCurrentTime() {
-    const timeDisplayText = await this.timeDisplay.textContent();
-    if (!timeDisplayText)
-      throw new Error("Time display text content is empty or null.");
-
-    const timeParts = timeDisplayText.split(" / ");
-    if (timeParts.length < 1)
-      throw new Error(`Unexpected time display format: ${timeDisplayText}`);
-
-    const currentTimeStr = timeParts[0].trim(); // "M:SS" or "H:MM:SS"
-    const segments = currentTimeStr.split(":").map(Number);
-    let currentTimeInSeconds = 0;
-    if (segments.length === 3) {
-      // H:MM:SS
-      currentTimeInSeconds =
-        segments[0] * 3600 + segments[1] * 60 + segments[2];
-    } else if (segments.length === 2) {
-      // M:SS
-      currentTimeInSeconds = segments[0] * 60 + segments[1];
-    } else if (segments.length === 1) {
-      // SS (less likely for current time but robust)
-      currentTimeInSeconds = segments[0];
-    } else {
-      throw new Error(
-        `Unexpected current time segment format: ${currentTimeStr}`,
-      );
-    }
-    return currentTimeInSeconds;
-  }
-}
-
-````
---- End of File: vibe-player-v2/tests-e2e/PlayerPage.mjs ---
 --- File: vibe-player-v2/tests-e2e/player.e2e.spec.js ---
 ````javascript
 // vibe-player-v2/tests-e2e/player.e2e.spec.js
@@ -6703,6 +6681,166 @@ test.describe("Vibe Player V2 E2E", () => {
 
 ````
 --- End of File: vibe-player-v2/tests-e2e/player.e2e.spec.js ---
+--- File: vibe-player-v2/tests-e2e/PlayerPage.mjs ---
+````mjs
+// vibe-player-v2/tests-e2e/PlayerPage.mjs
+import { expect } from "@playwright/test";
+
+export class PlayerPage {
+  /**
+   * A Page Object Model for the Vibe Player V2 application.
+   * Encapsulates locators and actions for interacting with the player UI.
+   * @param {import('@playwright/test').Page} page
+   */
+  constructor(page) {
+    this.page = page;
+    this.devServerUrl = "http://localhost:4173/";
+    this.appBarTitle = page.getByTestId("app-bar-title");
+    this.fileInput = page.locator('input[type="file"]');
+    this.fileNameDisplay = page.getByTestId("file-name-display");
+    this.fileStatusDisplay = page.getByTestId("file-status-display");
+    this.fileErrorDisplay = page.getByTestId("file-error-display");
+    this.playButton = page.getByTestId("play-button");
+    this.stopButton = page.getByTestId("stop-button");
+    this.timeDisplay = page.getByTestId("time-display");
+    this.seekSliderInput = page.getByTestId("seek-slider-input");
+    this.speedSliderInput = page.getByTestId("speed-slider-input");
+    this.speedValueDisplay = page.getByTestId("speed-value");
+    this.pitchSliderInput = page.getByTestId("pitch-slider-input");
+    this.pitchValueDisplay = page.getByTestId("pitch-value");
+    this.gainSliderInput = page.getByTestId("gain-slider-input");
+    this.gainValueDisplay = page.getByTestId("gain-value");
+    this.vadPositiveSliderInput = page.getByTestId("vad-positive-slider-input");
+    this.vadPositiveValueDisplay = page.getByTestId("vad-positive-value");
+    this.vadNegativeSliderInput = page.getByTestId("vad-negative-slider-input");
+    this.vadNegativeValueDisplay = page.getByTestId("vad-negative-value");
+    this.dtmfDisplay = page.getByTestId("dtmf-display");
+  }
+
+  /**
+   * Navigates to the application's base URL and verifies the page has loaded.
+   */
+  async goto() {
+    await this.page.goto(this.devServerUrl);
+    await expect(this.appBarTitle).toHaveText("Vibe Player V2", {
+      timeout: 15000,
+    });
+    await expect(this.fileInput).toBeVisible({ timeout: 10000 });
+  }
+
+  /**
+   * Loads an audio file using the file input.
+   * @param {string} fileName - The path to the file within the 'static' directory.
+   */
+  async loadAudioFile(fileName) {
+    const filePath = `static/${fileName}`;
+    await this.fileInput.setInputFiles(filePath);
+  }
+
+  /**
+   * Waits for the UI to be in a state where playback is possible after a file load.
+   */
+  async expectControlsToBeReadyForPlayback() {
+    await expect(this.fileStatusDisplay).toHaveText(/Ready/, {
+      timeout: 20000,
+    });
+    await expect(
+      this.timeDisplay,
+      "Time display did not update with audio duration",
+    ).not.toHaveText("0:00 / 0:00", { timeout: 1000 });
+    await expect(
+      this.playButton,
+      "Play button was not enabled after file load",
+    ).toBeEnabled({
+      timeout: 1000,
+    });
+  }
+
+  /**
+   * Gets the current text content of the play/pause button.
+   * @returns {Promise<string|null>}
+   */
+  async getPlayButtonText() {
+    return this.playButton.textContent();
+  }
+
+  /**
+   * Sets the value of a slider by calculating the click position based on the desired value.
+   * @param {import('@playwright/test').Locator} sliderInputLocator - The locator for the slider's <input type="range"> element.
+   * @param {string} valueStr - The target value as a string (e.g., "1.5").
+   */
+  async setSliderValue(sliderInputLocator, valueStr) {
+    const targetValue = parseFloat(valueStr);
+    const boundingBox = await sliderInputLocator.boundingBox();
+    if (!boundingBox) throw new Error(`Could not get bounding box for slider.`);
+
+    const { min, max } = await sliderInputLocator.evaluate((el) => ({
+      min: parseFloat(el.getAttribute("min") || "0"),
+      max: parseFloat(el.getAttribute("max") || "100"),
+    }));
+
+    const ratio = (targetValue - min) / (max - min);
+    let clickX = boundingBox.x + boundingBox.width * ratio;
+
+    // Ensure clickX is within the bounding box width
+    clickX = Math.max(
+      boundingBox.x,
+      Math.min(clickX, boundingBox.x + boundingBox.width),
+    );
+
+    const clickY = boundingBox.y + boundingBox.height / 2;
+
+    await this.page.mouse.click(clickX, clickY);
+    await this.page.waitForTimeout(350); // Allow for debounced updates
+  }
+
+  /**
+   * Gets the current value of a slider input.
+   * @param {import('@playwright/test').Locator} sliderInputLocator
+   * @returns {Promise<string>}
+   */
+  async getSliderInputValue(sliderInputLocator) {
+    return sliderInputLocator.inputValue();
+  }
+
+  /**
+   * Gets the current playback time from the time display element.
+   * Assumes the time display format is "currentTimeFormatted / durationFormatted".
+   * @returns {Promise<number>} The current time in seconds.
+   */
+  async getCurrentTime() {
+    const timeDisplayText = await this.timeDisplay.textContent();
+    if (!timeDisplayText)
+      throw new Error("Time display text content is empty or null.");
+
+    const timeParts = timeDisplayText.split(" / ");
+    if (timeParts.length < 1)
+      throw new Error(`Unexpected time display format: ${timeDisplayText}`);
+
+    const currentTimeStr = timeParts[0].trim(); // "M:SS" or "H:MM:SS"
+    const segments = currentTimeStr.split(":").map(Number);
+    let currentTimeInSeconds = 0;
+    if (segments.length === 3) {
+      // H:MM:SS
+      currentTimeInSeconds =
+        segments[0] * 3600 + segments[1] * 60 + segments[2];
+    } else if (segments.length === 2) {
+      // M:SS
+      currentTimeInSeconds = segments[0] * 60 + segments[1];
+    } else if (segments.length === 1) {
+      // SS (less likely for current time but robust)
+      currentTimeInSeconds = segments[0];
+    } else {
+      throw new Error(
+        `Unexpected current time segment format: ${currentTimeStr}`,
+      );
+    }
+    return currentTimeInSeconds;
+  }
+}
+
+````
+--- End of File: vibe-player-v2/tests-e2e/PlayerPage.mjs ---
 --- File: vibe-player-v2/tsconfig.json ---
 ````json
 // vibe-player-v2/tsconfig.json
@@ -7066,65 +7204,6 @@ export { Slider }
 
 ````
 --- End of File: vibe-player-v2-react/@/components/ui/slider.tsx ---
---- File: vibe-player-v2-react/README.md ---
-````markdown
-# React + TypeScript + Vite
-
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
-
-````
---- End of File: vibe-player-v2-react/README.md ---
 --- File: vibe-player-v2-react/components.json ---
 ````json
 {
@@ -8152,6 +8231,65 @@ var Rubberband = (() => {
 
 ````
 --- End of File: vibe-player-v2-react/public/vendor/rubberband/rubberband-loader.js ---
+--- File: vibe-player-v2-react/README.md ---
+````markdown
+# React + TypeScript + Vite
+
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+
+Currently, two official plugins are available:
+
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+
+## Expanding the ESLint configuration
+
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+
+```js
+export default tseslint.config({
+  extends: [
+    // Remove ...tseslint.configs.recommended and replace with this
+    ...tseslint.configs.recommendedTypeChecked,
+    // Alternatively, use this for stricter rules
+    ...tseslint.configs.strictTypeChecked,
+    // Optionally, add this for stylistic rules
+    ...tseslint.configs.stylisticTypeChecked,
+  ],
+  languageOptions: {
+    // other options...
+    parserOptions: {
+      project: ['./tsconfig.node.json', './tsconfig.app.json'],
+      tsconfigRootDir: import.meta.dirname,
+    },
+  },
+})
+```
+
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
+
+export default tseslint.config({
+  plugins: {
+    // Add the react-x and react-dom plugins
+    'react-x': reactX,
+    'react-dom': reactDom,
+  },
+  rules: {
+    // other rules...
+    // Enable its recommended typescript rules
+    ...reactX.configs['recommended-typescript'].rules,
+    ...reactDom.configs.recommended.rules,
+  },
+})
+```
+
+````
+--- End of File: vibe-player-v2-react/README.md ---
 --- File: vibe-player-v2-react/src/App.css ---
 ````css
 #root {
@@ -8346,163 +8484,6 @@ createRoot(document.getElementById('root')!).render(
 
 ````
 --- End of File: vibe-player-v2-react/src/main.tsx ---
---- File: vibe-player-v2-react/src/services/AudioOrchestrator.service.ts ---
-````typescript
-// vibe-player-v2-react/src/services/AudioOrchestrator.service.ts
-// vibe-player-v2/src/lib/services/AudioOrchestrator.service.ts
-import { get } from "svelte/store";
-import { playerStore } from "$lib/stores/player.store";
-import { statusStore } from "$lib/stores/status.store";
-import type { StatusState } from "$lib/types/status.types"; // Added this import
-import { analysisStore } from "$lib/stores/analysis.store";
-import audioEngine from "./audioEngine.service"; // Changed to default import
-import dtmfService from "./dtmf.service"; // Changed to default import
-import spectrogramService from "./spectrogram.service"; // Changed to default import
-import { debounce } from "$lib/utils/async";
-import { updateUrlWithParams } from "$lib/utils/urlState";
-import { UI_CONSTANTS, URL_HASH_KEYS } from "$lib/utils/constants";
-
-export class AudioOrchestrator {
-  private static instance: AudioOrchestrator;
-
-  private constructor() {
-    // Private constructor for singleton
-  }
-
-  public static getInstance(): AudioOrchestrator {
-    if (!AudioOrchestrator.instance) {
-      AudioOrchestrator.instance = new AudioOrchestrator();
-    }
-    return AudioOrchestrator.instance;
-  }
-
-  public async loadFileAndAnalyze(file: File): Promise<void> {
-    console.log(`[Orchestrator] === Starting New File Load: ${file.name} ===`);
-    statusStore.set({
-      message: `Loading ${file.name}...`,
-      type: "info",
-      isLoading: true,
-      details: null,
-      progress: null,
-    });
-    // Ensure other relevant stores are reset if that's current behavior (e.g., analysisStore, waveformStore)
-    playerStore.update((s) => ({
-      ...s,
-      error: null,
-      status: "Loading",
-      isPlayable: false,
-      fileName: file.name,
-      duration: 0,
-      currentTime: 0,
-    })); // Added fileName and reset duration/currentTime
-    analysisStore.update((store) => ({
-      ...store,
-      dtmfResults: [],
-      spectrogramData: null,
-    }));
-
-    try {
-      await audioEngine.unlockAudio();
-      const audioBuffer = await audioEngine.loadFile(file);
-      // audioEngine.decodeAudioData() is usually part of loadFile or handled by the browser's AudioContext directly
-
-      const duration = audioBuffer.duration;
-      const sampleRate = audioBuffer.sampleRate;
-      const channels = audioBuffer.numberOfChannels; // Assuming this property exists
-
-      playerStore.update((s) => ({
-        ...s,
-        duration,
-        sampleRate,
-        channels, // Added channels
-        isPlayable: true,
-        status: "Ready", // Updated status here
-      }));
-      statusStore.set({ message: "Ready", type: "success", isLoading: false });
-
-      spectrogramService.init(audioBuffer.sampleRate);
-      dtmfService.init(audioBuffer.sampleRate);
-
-      console.log("AudioOrchestrator: Starting background analysis tasks.");
-      const analysisPromises = [
-        dtmfService.process(audioBuffer),
-        spectrogramService.process(audioBuffer.getChannelData(0)),
-      ];
-
-      const results = await Promise.allSettled(analysisPromises);
-      console.log(
-        "AudioOrchestrator: All background analysis tasks settled.",
-        results,
-      );
-
-      results.forEach((result, index) => {
-        if (result.status === "rejected") {
-          console.error(
-            `AudioOrchestrator: Analysis task ${index} failed:`,
-            result.reason,
-          );
-          // Optionally, update a specific error state in analysisStore or playerStore
-        }
-      });
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(
-        `[Orchestrator] !!! CRITICAL ERROR during file load:`,
-        error,
-      );
-      statusStore.set({
-        message: "File processing failed.",
-        type: "error",
-        isLoading: false,
-        details: message,
-      });
-      // Update playerStore to reflect the error state specifically for the player
-      playerStore.update((s) => ({
-        ...s,
-        status: "Error",
-        error: message,
-        isPlayable: false,
-        duration: 0,
-        currentTime: 0,
-      }));
-    }
-  }
-
-  /**
-   * Sets up debounced URL serialization based on player and analysis store changes.
-   * @public
-   */
-  public setupUrlSerialization(): void {
-    console.log("[Orchestrator] Setting up URL serialization.");
-
-    const debouncedUpdater = debounce(() => {
-      const pStore = get(playerStore);
-      // const aStore = get(analysisStore); // Keep this commented out if analysisStore part is not for this step yet
-
-      const params: Record<string, string> = {
-        [URL_HASH_KEYS.SPEED]: pStore.speed.toFixed(2),
-        [URL_HASH_KEYS.PITCH]: pStore.pitch.toFixed(1), // Assuming pitch is semitones
-        [URL_HASH_KEYS.GAIN]: pStore.gain.toFixed(2),
-        // [URL_HASH_KEYS.VAD_THRESHOLD]: aStore.vadPositiveThreshold.toFixed(2), // Keep commented
-        // ... any other relevant params from playerStore that should be serialized
-      };
-
-      console.log(
-        `[Orchestrator/URL] Debounced update triggered. New params:`,
-        params,
-      );
-      updateUrlWithParams(params); // Make sure updateUrlWithParams is correctly imported/defined
-    }, UI_CONSTANTS.DEBOUNCE_TIME_MS_URL_UPDATE);
-
-    playerStore.subscribe(debouncedUpdater);
-    // analysisStore.subscribe(debouncedUpdater); // Only subscribe if aStore is used in params
-  }
-}
-
-export const audioOrchestrator = AudioOrchestrator.getInstance();
-
-````
---- End of File: vibe-player-v2-react/src/services/AudioOrchestrator.service.ts ---
 --- File: vibe-player-v2-react/src/services/analysis.service.ts ---
 ````typescript
 // vibe-player-v2-react/src/services/analysis.service.ts
@@ -9623,6 +9604,163 @@ export default AudioEngineService.getInstance();
 
 ````
 --- End of File: vibe-player-v2-react/src/services/audioEngine.service.ts ---
+--- File: vibe-player-v2-react/src/services/AudioOrchestrator.service.ts ---
+````typescript
+// vibe-player-v2-react/src/services/AudioOrchestrator.service.ts
+// vibe-player-v2/src/lib/services/AudioOrchestrator.service.ts
+import { get } from "svelte/store";
+import { playerStore } from "$lib/stores/player.store";
+import { statusStore } from "$lib/stores/status.store";
+import type { StatusState } from "$lib/types/status.types"; // Added this import
+import { analysisStore } from "$lib/stores/analysis.store";
+import audioEngine from "./audioEngine.service"; // Changed to default import
+import dtmfService from "./dtmf.service"; // Changed to default import
+import spectrogramService from "./spectrogram.service"; // Changed to default import
+import { debounce } from "$lib/utils/async";
+import { updateUrlWithParams } from "$lib/utils/urlState";
+import { UI_CONSTANTS, URL_HASH_KEYS } from "$lib/utils/constants";
+
+export class AudioOrchestrator {
+  private static instance: AudioOrchestrator;
+
+  private constructor() {
+    // Private constructor for singleton
+  }
+
+  public static getInstance(): AudioOrchestrator {
+    if (!AudioOrchestrator.instance) {
+      AudioOrchestrator.instance = new AudioOrchestrator();
+    }
+    return AudioOrchestrator.instance;
+  }
+
+  public async loadFileAndAnalyze(file: File): Promise<void> {
+    console.log(`[Orchestrator] === Starting New File Load: ${file.name} ===`);
+    statusStore.set({
+      message: `Loading ${file.name}...`,
+      type: "info",
+      isLoading: true,
+      details: null,
+      progress: null,
+    });
+    // Ensure other relevant stores are reset if that's current behavior (e.g., analysisStore, waveformStore)
+    playerStore.update((s) => ({
+      ...s,
+      error: null,
+      status: "Loading",
+      isPlayable: false,
+      fileName: file.name,
+      duration: 0,
+      currentTime: 0,
+    })); // Added fileName and reset duration/currentTime
+    analysisStore.update((store) => ({
+      ...store,
+      dtmfResults: [],
+      spectrogramData: null,
+    }));
+
+    try {
+      await audioEngine.unlockAudio();
+      const audioBuffer = await audioEngine.loadFile(file);
+      // audioEngine.decodeAudioData() is usually part of loadFile or handled by the browser's AudioContext directly
+
+      const duration = audioBuffer.duration;
+      const sampleRate = audioBuffer.sampleRate;
+      const channels = audioBuffer.numberOfChannels; // Assuming this property exists
+
+      playerStore.update((s) => ({
+        ...s,
+        duration,
+        sampleRate,
+        channels, // Added channels
+        isPlayable: true,
+        status: "Ready", // Updated status here
+      }));
+      statusStore.set({ message: "Ready", type: "success", isLoading: false });
+
+      spectrogramService.init(audioBuffer.sampleRate);
+      dtmfService.init(audioBuffer.sampleRate);
+
+      console.log("AudioOrchestrator: Starting background analysis tasks.");
+      const analysisPromises = [
+        dtmfService.process(audioBuffer),
+        spectrogramService.process(audioBuffer.getChannelData(0)),
+      ];
+
+      const results = await Promise.allSettled(analysisPromises);
+      console.log(
+        "AudioOrchestrator: All background analysis tasks settled.",
+        results,
+      );
+
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          console.error(
+            `AudioOrchestrator: Analysis task ${index} failed:`,
+            result.reason,
+          );
+          // Optionally, update a specific error state in analysisStore or playerStore
+        }
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        `[Orchestrator] !!! CRITICAL ERROR during file load:`,
+        error,
+      );
+      statusStore.set({
+        message: "File processing failed.",
+        type: "error",
+        isLoading: false,
+        details: message,
+      });
+      // Update playerStore to reflect the error state specifically for the player
+      playerStore.update((s) => ({
+        ...s,
+        status: "Error",
+        error: message,
+        isPlayable: false,
+        duration: 0,
+        currentTime: 0,
+      }));
+    }
+  }
+
+  /**
+   * Sets up debounced URL serialization based on player and analysis store changes.
+   * @public
+   */
+  public setupUrlSerialization(): void {
+    console.log("[Orchestrator] Setting up URL serialization.");
+
+    const debouncedUpdater = debounce(() => {
+      const pStore = get(playerStore);
+      // const aStore = get(analysisStore); // Keep this commented out if analysisStore part is not for this step yet
+
+      const params: Record<string, string> = {
+        [URL_HASH_KEYS.SPEED]: pStore.speed.toFixed(2),
+        [URL_HASH_KEYS.PITCH]: pStore.pitch.toFixed(1), // Assuming pitch is semitones
+        [URL_HASH_KEYS.GAIN]: pStore.gain.toFixed(2),
+        // [URL_HASH_KEYS.VAD_THRESHOLD]: aStore.vadPositiveThreshold.toFixed(2), // Keep commented
+        // ... any other relevant params from playerStore that should be serialized
+      };
+
+      console.log(
+        `[Orchestrator/URL] Debounced update triggered. New params:`,
+        params,
+      );
+      updateUrlWithParams(params); // Make sure updateUrlWithParams is correctly imported/defined
+    }, UI_CONSTANTS.DEBOUNCE_TIME_MS_URL_UPDATE);
+
+    playerStore.subscribe(debouncedUpdater);
+    // analysisStore.subscribe(debouncedUpdater); // Only subscribe if aStore is used in params
+  }
+}
+
+export const audioOrchestrator = AudioOrchestrator.getInstance();
+
+````
+--- End of File: vibe-player-v2-react/src/services/AudioOrchestrator.service.ts ---
 --- File: vibe-player-v2-react/src/services/dtmf.service.ts ---
 ````typescript
 // vibe-player-v2-react/src/services/dtmf.service.ts
@@ -11785,65 +11923,6 @@ dist-ssr
 
 ````
 --- End of File: vibe-player-v2-react-old/.gitignore ---
---- File: vibe-player-v2-react-old/README.md ---
-````markdown
-# React + TypeScript + Vite
-
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
-
-Currently, two official plugins are available:
-
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
-```
-
-````
---- End of File: vibe-player-v2-react-old/README.md ---
 --- File: vibe-player-v2-react-old/components.json ---
 ````json
 {
@@ -12873,6 +12952,65 @@ var Rubberband = (() => {
 
 ````
 --- End of File: vibe-player-v2-react-old/public/vendor/rubberband/rubberband-loader.js ---
+--- File: vibe-player-v2-react-old/README.md ---
+````markdown
+# React + TypeScript + Vite
+
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+
+Currently, two official plugins are available:
+
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+
+## Expanding the ESLint configuration
+
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+
+```js
+export default tseslint.config({
+  extends: [
+    // Remove ...tseslint.configs.recommended and replace with this
+    ...tseslint.configs.recommendedTypeChecked,
+    // Alternatively, use this for stricter rules
+    ...tseslint.configs.strictTypeChecked,
+    // Optionally, add this for stylistic rules
+    ...tseslint.configs.stylisticTypeChecked,
+  ],
+  languageOptions: {
+    // other options...
+    parserOptions: {
+      project: ['./tsconfig.node.json', './tsconfig.app.json'],
+      tsconfigRootDir: import.meta.dirname,
+    },
+  },
+})
+```
+
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
+
+export default tseslint.config({
+  plugins: {
+    // Add the react-x and react-dom plugins
+    'react-x': reactX,
+    'react-dom': reactDom,
+  },
+  rules: {
+    // other rules...
+    // Enable its recommended typescript rules
+    ...reactX.configs['recommended-typescript'].rules,
+    ...reactDom.configs.recommended.rules,
+  },
+})
+```
+
+````
+--- End of File: vibe-player-v2-react-old/README.md ---
 --- File: vibe-player-v2-react-old/src/App.tsx ---
 ````tsx
 // vibe-player-v2-react/src/App.tsx
@@ -14321,412 +14459,6 @@ createRoot(document.getElementById('root')!).render(
 
 ````
 --- End of File: vibe-player-v2-react-old/src/main.tsx ---
---- File: vibe-player-v2-react-old/src/services/AudioOrchestrator.service.test.ts ---
-````typescript
-// vibe-player-v2-react/src/services/AudioOrchestrator.service.test.ts
-import {
-  vi,
-  describe,
-  it,
-  expect,
-  beforeEach,
-  afterEach,
-  beforeAll,
-  // type MockInstance, // Not needed for svelteStoreGetMock anymore
-} from "vitest";
-// No longer importing get, writable from svelte/store
-import { AudioOrchestrator } from "./AudioOrchestrator.service";
-import audioEngine from "./audioEngine.service";
-// Types for stores (adjust paths)
-import type { PlayerState } from "../types/player.types"; // Adjusted path
-import type { AnalysisState } from "../types/analysis.types"; // Adjusted path
-import type { StatusState } from "../types/status.types"; // Adjusted path
-
-// Import Zustand stores
-import { usePlayerStore } from "../stores/player.store";
-import { useAnalysisStore } from "../stores/analysis.store";
-import { useStatusStore } from "../stores/status.store";
-
-import dtmfService from "./dtmf.service";
-import spectrogramService from "./spectrogram.service";
-import { updateUrlWithParams } from "../utils/urlState"; // Adjusted path
-import { URL_HASH_KEYS } from "../utils/constants"; // Adjusted path
-// import { act } from "@testing-library/svelte"; // Not needed
-
-// --- Define Initial States for Tests ---
-const initialPlayerState: PlayerState = {
-  status: "idle", // Changed from "Idle" to match type
-  fileName: null,
-  duration: 0,
-  currentTime: 0,
-  isPlaying: false,
-  isPlayable: false,
-  speed: 1.0,
-  pitchShift: 0.0, // Removed 'pitch', ensuring only 'pitchShift'
-  gain: 1.0,
-  waveformData: undefined,
-  error: null,
-  audioBuffer: undefined,
-  audioContextResumed: false,
-  channels: undefined, // Changed from 0
-  sampleRate: undefined, // Changed from 0
-  lastProcessedChunk: undefined,
-};
-
-const initialAnalysisState: AnalysisState = {
-  // Removed dtmfResults as it's not in AnalysisState type
-  spectrogramData: null,
-  // Removed vadEvents as it's not in AnalysisState type
-  vadPositiveThreshold: 0.9,
-  vadNegativeThreshold: 0.7,
-  isSpeaking: undefined, // Changed from false
-  vadInitialized: false,
-  vadStatus: "idle", // Corrected to match type, was undefined
-  vadError: null,
-  // Removed vadNoiseFloor, vadSensitivity as they are not in AnalysisState type
-  isLoading: false, // Added isLoading as it is in AnalysisState
-  spectrogramStatus: undefined, // Added from AnalysisState
-  spectrogramError: null, // Added from AnalysisState
-  spectrogramInitialized: false, // Added from AnalysisState
-  lastVadResult: null, // Added from AnalysisState
-  vadStateResetted: undefined, // Added from AnalysisState
-};
-
-const initialStatusState: StatusState = {
-  message: null,
-  type: null,
-  isLoading: false,
-  details: null,
-  progress: null,
-};
-
-
-// --- Service Mocks ---
-vi.mock("./audioEngine.service", () => ({
-  default: {
-    unlockAudio: vi.fn().mockResolvedValue(undefined),
-    loadFile: vi.fn(),
-    // getDuration, getSampleRate, getNumberOfChannels are not part of audioEngineService's public API
-    // They were likely used to mock values returned by loadFile.
-    // The mockAudioBuffer below serves this purpose better.
-  },
-}));
-vi.mock("./dtmf.service", () => ({
-  default: { init: vi.fn(), process: vi.fn().mockResolvedValue([]) },
-}));
-vi.mock("./spectrogram.service", () => ({
-  default: {
-    init: vi.fn(),
-    process: vi.fn().mockResolvedValue(new Float32Array()),
-  },
-}));
-vi.mock("../utils/urlState", () => ({ updateUrlWithParams: vi.fn() })); // Adjusted path
-
-// --- Store Mocks are no longer needed as we use the actual Zustand stores ---
-
-describe("AudioOrchestrator.service.ts", () => {
-  let audioOrchestrator: AudioOrchestrator;
-  const mockFile = new File([""], "test-audio.mp3", { type: "audio/mpeg" });
-  const mockAudioBuffer = {
-    duration: 120,
-    sampleRate: 44100,
-    numberOfChannels: 1,
-    getChannelData: vi.fn(() => new Float32Array(1024)),
-  } as unknown as AudioBuffer; // Keep as is, service expects AudioBuffer
-
-  beforeAll(() => {
-    vi.useFakeTimers();
-  });
-
-  beforeEach(() => { // No longer async
-    audioOrchestrator = AudioOrchestrator.getInstance();
-    vi.clearAllMocks(); // Clears all mocks
-
-    // Reset Zustand stores
-    usePlayerStore.setState({ ...initialPlayerState }, true);
-    useAnalysisStore.setState({ ...initialAnalysisState }, true);
-    useStatusStore.setState({ ...initialStatusState }, true);
-
-    (audioEngine.loadFile as vi.Mock).mockResolvedValue(mockAudioBuffer);
-    // svelteStoreGetMock is no longer needed
-  });
-
-  afterEach(() => {
-    vi.clearAllTimers();
-  });
-
-  describe("loadFileAndAnalyze", () => {
-    it("should set loading status, update player store, and then set ready status on successful load", async () => {
-      await audioOrchestrator.loadFileAndAnalyze(mockFile);
-
-      const finalPlayerState = usePlayerStore.getState();
-      expect(finalPlayerState.fileName).toBe(mockFile.name);
-      expect(finalPlayerState.duration).toBe(mockAudioBuffer.duration);
-      expect(finalPlayerState.sampleRate).toBe(mockAudioBuffer.sampleRate);
-      expect(finalPlayerState.channels).toBe(mockAudioBuffer.numberOfChannels);
-      expect(finalPlayerState.isPlayable).toBe(true);
-      expect(finalPlayerState.status).toBe("Ready");
-
-      expect(useStatusStore.getState()).toEqual(expect.objectContaining({ // Use expect.objectContaining if not all fields are relevant or set
-        message: "Ready",
-        type: "success",
-        isLoading: false,
-      }));
-
-      // Verify analysis services were initialized and called
-      expect(audioEngine.unlockAudio).toHaveBeenCalled();
-      expect(audioEngine.loadFile).toHaveBeenCalledWith(mockFile);
-      expect(spectrogramService.init).toHaveBeenCalledWith(
-        mockAudioBuffer.sampleRate,
-      );
-      expect(dtmfService.init).toHaveBeenCalledWith(mockAudioBuffer.sampleRate);
-      expect(spectrogramService.process).toHaveBeenCalled();
-      expect(dtmfService.process).toHaveBeenCalled();
-    });
-
-    it("should set error status in statusStore and playerStore if audioEngine.loadFile fails", async () => {
-      const errorMessage = "Failed to load file";
-      (audioEngine.loadFile as vi.Mock).mockRejectedValueOnce(
-        new Error(errorMessage),
-      );
-
-      await audioOrchestrator.loadFileAndAnalyze(mockFile);
-
-      expect(useStatusStore.getState()).toEqual(
-        expect.objectContaining({
-          message: "File processing failed.",
-          type: "error",
-          isLoading: false,
-          details: errorMessage,
-        }),
-      );
-
-      const finalPlayerState = usePlayerStore.getState();
-      expect(finalPlayerState.status).toBe("Error");
-      expect(finalPlayerState.error).toBe(errorMessage);
-      expect(finalPlayerState.isPlayable).toBe(false);
-      expect(finalPlayerState.duration).toBe(0);
-    });
-
-    it("should handle errors from analysis services gracefully", async () => {
-      const dtmfError = "DTMF processing failed";
-      (dtmfService.process as vi.Mock).mockRejectedValueOnce(
-        new Error(dtmfError),
-      );
-
-      await audioOrchestrator.loadFileAndAnalyze(mockFile);
-
-      expect(useStatusStore.getState()).toEqual(
-        expect.objectContaining({
-          message: "Ready",
-          type: "success",
-          isLoading: false,
-        }),
-      );
-      expect(usePlayerStore.getState().status).toBe("Ready");
-    });
-  });
-
-  describe("setupUrlSerialization", () => {
-    const localInitialPlayerStateForUrlTest: PlayerState = {
-      ...initialPlayerState, // Start with base initial state
-      speed: 0.75,
-      pitchShift: -2.5, // Use pitchShift
-      gain: 1.25,
-      status: "Ready",
-      fileName: "test-audio.mp3",
-      isPlayable: true, // Make sure it's playable for test logic
-    };
-
-    beforeEach(() => {
-      usePlayerStore.setState({ ...localInitialPlayerStateForUrlTest }, true);
-    });
-
-    it("should call updateUrlWithParams with correct parameters after debounced interval", () => {
-      audioOrchestrator.setupUrlSerialization();
-      // Directly use setState on the actual store
-      usePlayerStore.setState({ speed: 0.5 });
-      vi.runAllTimers();
-
-      expect(updateUrlWithParams).toHaveBeenCalled();
-      expect(updateUrlWithParams).toHaveBeenLastCalledWith({
-        [URL_HASH_KEYS.SPEED]: "0.50",
-        [URL_HASH_KEYS.PITCH]: localInitialPlayerStateForUrlTest.pitchShift.toFixed(1), // Use pitchShift
-        [URL_HASH_KEYS.GAIN]: localInitialPlayerStateForUrlTest.gain.toFixed(2),
-      });
-    });
-
-    it("should use updated values if store changes multiple times before debounce", () => {
-      audioOrchestrator.setupUrlSerialization();
-      usePlayerStore.setState({ speed: 0.5 });
-      usePlayerStore.setState({ speed: 0.8, pitchShift: 1.5 }); // Use pitchShift
-      vi.runAllTimers();
-
-      expect(updateUrlWithParams).toHaveBeenCalled();
-      expect(updateUrlWithParams).toHaveBeenLastCalledWith({
-        [URL_HASH_KEYS.SPEED]: "0.80",
-        [URL_HASH_KEYS.PITCH]: "1.5", // Use pitchShift
-        [URL_HASH_KEYS.GAIN]: localInitialPlayerStateForUrlTest.gain.toFixed(2),
-      });
-    });
-  });
-});
-
-````
---- End of File: vibe-player-v2-react-old/src/services/AudioOrchestrator.service.test.ts ---
---- File: vibe-player-v2-react-old/src/services/AudioOrchestrator.service.ts ---
-````typescript
-// vibe-player-v2-react/src/services/AudioOrchestrator.service.ts
-// import { get } from "svelte/store"; // Removed
-import { usePlayerStore } from '../stores/player.store';
-import { useStatusStore } from '../stores/status.store';
-import type { StatusState } from '../types/status.types'; // Adjusted path
-import { useAnalysisStore } from '../stores/analysis.store';
-import audioEngine from "./audioEngine.service";
-import dtmfService from "./dtmf.service";
-import spectrogramService from "./spectrogram.service";
-import { debounce } from '../utils/async'; // Adjusted path
-import { updateUrlWithParams } from '../utils/urlState'; // Adjusted path
-import { UI_CONSTANTS, URL_HASH_KEYS } from '../utils/constants'; // Adjusted path
-
-export class AudioOrchestrator {
-  private static instance: AudioOrchestrator;
-
-  private constructor() {
-    // Private constructor for singleton
-  }
-
-  public static getInstance(): AudioOrchestrator {
-    if (!AudioOrchestrator.instance) {
-      AudioOrchestrator.instance = new AudioOrchestrator();
-    }
-    return AudioOrchestrator.instance;
-  }
-
-  public async loadFileAndAnalyze(file: File): Promise<void> {
-    console.log(`[Orchestrator] === Starting New File Load: ${file.name} ===`);
-    useStatusStore.setState({
-      message: `Loading ${file.name}...`,
-      type: "info",
-      isLoading: true,
-      details: null,
-      progress: null,
-    });
-    // Ensure other relevant stores are reset if that's current behavior (e.g., analysisStore, waveformStore)
-    usePlayerStore.setState({
-      error: null,
-      status: "Loading",
-      isPlayable: false,
-      fileName: file.name,
-      duration: 0,
-      currentTime: 0,
-    }); // Added fileName and reset duration/currentTime
-    useAnalysisStore.setState({
-      // ...store, // Spreading previous state is default in Zustand's setState merge
-      // dtmfResults: [], // This property does not exist on AnalysisState. It's on DtmfState. Addressed by commenting out.
-      spectrogramData: null, // This exists on AnalysisState
-    });
-
-    try {
-      await audioEngine.unlockAudio();
-      const audioBuffer = await audioEngine.loadFile(file);
-      // audioEngine.decodeAudioData() is usually part of loadFile or handled by the browser's AudioContext directly
-
-      const duration = audioBuffer.duration;
-      const sampleRate = audioBuffer.sampleRate;
-      const channels = audioBuffer.numberOfChannels; // Assuming this property exists
-
-      usePlayerStore.setState({
-        duration,
-        sampleRate,
-        channels, // Added channels
-        isPlayable: true,
-        status: "Ready", // Updated status here
-      });
-      useStatusStore.setState({ message: "Ready", type: "success", isLoading: false });
-
-      spectrogramService.init(audioBuffer.sampleRate);
-      dtmfService.init(audioBuffer.sampleRate);
-
-      console.log("AudioOrchestrator: Starting background analysis tasks.");
-      const analysisPromises = [
-        dtmfService.process(audioBuffer),
-        spectrogramService.process(audioBuffer.getChannelData(0)),
-      ];
-
-      const results = await Promise.allSettled(analysisPromises);
-      console.log(
-        "AudioOrchestrator: All background analysis tasks settled.",
-        results,
-      );
-
-      results.forEach((result, index) => {
-        if (result.status === "rejected") {
-          console.error(
-            `AudioOrchestrator: Analysis task ${index} failed:`,
-            result.reason,
-          );
-          // Optionally, update a specific error state in analysisStore or playerStore
-        }
-      });
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      console.error(
-        `[Orchestrator] !!! CRITICAL ERROR during file load:`,
-        error,
-      );
-      useStatusStore.setState({
-        message: "File processing failed.",
-        type: "error",
-        isLoading: false,
-        details: message,
-      });
-      // Update playerStore to reflect the error state specifically for the player
-      usePlayerStore.setState({
-        status: "Error",
-        error: message,
-        isPlayable: false,
-        duration: 0,
-        currentTime: 0,
-      });
-    }
-  }
-
-  /**
-   * Sets up debounced URL serialization based on player and analysis store changes.
-   * @public
-   */
-  public setupUrlSerialization(): void {
-    console.log("[Orchestrator] Setting up URL serialization.");
-
-    const debouncedUpdater = debounce(() => {
-      const pStore = usePlayerStore.getState();
-      // const aStore = useAnalysisStore.getState(); // Keep this commented out if analysisStore part is not for this step yet
-
-      const params: Record<string, string> = {
-        [URL_HASH_KEYS.SPEED]: pStore.speed.toFixed(2),
-        [URL_HASH_KEYS.PITCH]: pStore.pitchShift.toFixed(1), // Corrected: pStore.pitch -> pStore.pitchShift
-        [URL_HASH_KEYS.GAIN]: pStore.gain.toFixed(2),
-        // [URL_HASH_KEYS.VAD_THRESHOLD]: aStore.vadPositiveThreshold.toFixed(2), // Keep commented
-        // ... any other relevant params from playerStore that should be serialized
-      };
-
-      console.log(
-        `[Orchestrator/URL] Debounced update triggered. New params:`,
-        params,
-      );
-      updateUrlWithParams(params); // Make sure updateUrlWithParams is correctly imported/defined
-    }, UI_CONSTANTS.DEBOUNCE_TIME_MS_URL_UPDATE);
-
-    usePlayerStore.subscribe(debouncedUpdater);
-    // useAnalysisStore.subscribe(debouncedUpdater); // Only subscribe if aStore is used in params
-  }
-}
-
-export const audioOrchestrator = AudioOrchestrator.getInstance();
-
-````
---- End of File: vibe-player-v2-react-old/src/services/AudioOrchestrator.service.ts ---
 --- File: vibe-player-v2-react-old/src/services/analysis.service.test.ts ---
 ````typescript
 // vibe-player-v2-react/src/services/analysis.service.test.ts
@@ -16635,6 +16367,412 @@ export default AudioEngineService.getInstance();
 
 ````
 --- End of File: vibe-player-v2-react-old/src/services/audioEngine.service.ts ---
+--- File: vibe-player-v2-react-old/src/services/AudioOrchestrator.service.test.ts ---
+````typescript
+// vibe-player-v2-react/src/services/AudioOrchestrator.service.test.ts
+import {
+  vi,
+  describe,
+  it,
+  expect,
+  beforeEach,
+  afterEach,
+  beforeAll,
+  // type MockInstance, // Not needed for svelteStoreGetMock anymore
+} from "vitest";
+// No longer importing get, writable from svelte/store
+import { AudioOrchestrator } from "./AudioOrchestrator.service";
+import audioEngine from "./audioEngine.service";
+// Types for stores (adjust paths)
+import type { PlayerState } from "../types/player.types"; // Adjusted path
+import type { AnalysisState } from "../types/analysis.types"; // Adjusted path
+import type { StatusState } from "../types/status.types"; // Adjusted path
+
+// Import Zustand stores
+import { usePlayerStore } from "../stores/player.store";
+import { useAnalysisStore } from "../stores/analysis.store";
+import { useStatusStore } from "../stores/status.store";
+
+import dtmfService from "./dtmf.service";
+import spectrogramService from "./spectrogram.service";
+import { updateUrlWithParams } from "../utils/urlState"; // Adjusted path
+import { URL_HASH_KEYS } from "../utils/constants"; // Adjusted path
+// import { act } from "@testing-library/svelte"; // Not needed
+
+// --- Define Initial States for Tests ---
+const initialPlayerState: PlayerState = {
+  status: "idle", // Changed from "Idle" to match type
+  fileName: null,
+  duration: 0,
+  currentTime: 0,
+  isPlaying: false,
+  isPlayable: false,
+  speed: 1.0,
+  pitchShift: 0.0, // Removed 'pitch', ensuring only 'pitchShift'
+  gain: 1.0,
+  waveformData: undefined,
+  error: null,
+  audioBuffer: undefined,
+  audioContextResumed: false,
+  channels: undefined, // Changed from 0
+  sampleRate: undefined, // Changed from 0
+  lastProcessedChunk: undefined,
+};
+
+const initialAnalysisState: AnalysisState = {
+  // Removed dtmfResults as it's not in AnalysisState type
+  spectrogramData: null,
+  // Removed vadEvents as it's not in AnalysisState type
+  vadPositiveThreshold: 0.9,
+  vadNegativeThreshold: 0.7,
+  isSpeaking: undefined, // Changed from false
+  vadInitialized: false,
+  vadStatus: "idle", // Corrected to match type, was undefined
+  vadError: null,
+  // Removed vadNoiseFloor, vadSensitivity as they are not in AnalysisState type
+  isLoading: false, // Added isLoading as it is in AnalysisState
+  spectrogramStatus: undefined, // Added from AnalysisState
+  spectrogramError: null, // Added from AnalysisState
+  spectrogramInitialized: false, // Added from AnalysisState
+  lastVadResult: null, // Added from AnalysisState
+  vadStateResetted: undefined, // Added from AnalysisState
+};
+
+const initialStatusState: StatusState = {
+  message: null,
+  type: null,
+  isLoading: false,
+  details: null,
+  progress: null,
+};
+
+
+// --- Service Mocks ---
+vi.mock("./audioEngine.service", () => ({
+  default: {
+    unlockAudio: vi.fn().mockResolvedValue(undefined),
+    loadFile: vi.fn(),
+    // getDuration, getSampleRate, getNumberOfChannels are not part of audioEngineService's public API
+    // They were likely used to mock values returned by loadFile.
+    // The mockAudioBuffer below serves this purpose better.
+  },
+}));
+vi.mock("./dtmf.service", () => ({
+  default: { init: vi.fn(), process: vi.fn().mockResolvedValue([]) },
+}));
+vi.mock("./spectrogram.service", () => ({
+  default: {
+    init: vi.fn(),
+    process: vi.fn().mockResolvedValue(new Float32Array()),
+  },
+}));
+vi.mock("../utils/urlState", () => ({ updateUrlWithParams: vi.fn() })); // Adjusted path
+
+// --- Store Mocks are no longer needed as we use the actual Zustand stores ---
+
+describe("AudioOrchestrator.service.ts", () => {
+  let audioOrchestrator: AudioOrchestrator;
+  const mockFile = new File([""], "test-audio.mp3", { type: "audio/mpeg" });
+  const mockAudioBuffer = {
+    duration: 120,
+    sampleRate: 44100,
+    numberOfChannels: 1,
+    getChannelData: vi.fn(() => new Float32Array(1024)),
+  } as unknown as AudioBuffer; // Keep as is, service expects AudioBuffer
+
+  beforeAll(() => {
+    vi.useFakeTimers();
+  });
+
+  beforeEach(() => { // No longer async
+    audioOrchestrator = AudioOrchestrator.getInstance();
+    vi.clearAllMocks(); // Clears all mocks
+
+    // Reset Zustand stores
+    usePlayerStore.setState({ ...initialPlayerState }, true);
+    useAnalysisStore.setState({ ...initialAnalysisState }, true);
+    useStatusStore.setState({ ...initialStatusState }, true);
+
+    (audioEngine.loadFile as vi.Mock).mockResolvedValue(mockAudioBuffer);
+    // svelteStoreGetMock is no longer needed
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+  });
+
+  describe("loadFileAndAnalyze", () => {
+    it("should set loading status, update player store, and then set ready status on successful load", async () => {
+      await audioOrchestrator.loadFileAndAnalyze(mockFile);
+
+      const finalPlayerState = usePlayerStore.getState();
+      expect(finalPlayerState.fileName).toBe(mockFile.name);
+      expect(finalPlayerState.duration).toBe(mockAudioBuffer.duration);
+      expect(finalPlayerState.sampleRate).toBe(mockAudioBuffer.sampleRate);
+      expect(finalPlayerState.channels).toBe(mockAudioBuffer.numberOfChannels);
+      expect(finalPlayerState.isPlayable).toBe(true);
+      expect(finalPlayerState.status).toBe("Ready");
+
+      expect(useStatusStore.getState()).toEqual(expect.objectContaining({ // Use expect.objectContaining if not all fields are relevant or set
+        message: "Ready",
+        type: "success",
+        isLoading: false,
+      }));
+
+      // Verify analysis services were initialized and called
+      expect(audioEngine.unlockAudio).toHaveBeenCalled();
+      expect(audioEngine.loadFile).toHaveBeenCalledWith(mockFile);
+      expect(spectrogramService.init).toHaveBeenCalledWith(
+        mockAudioBuffer.sampleRate,
+      );
+      expect(dtmfService.init).toHaveBeenCalledWith(mockAudioBuffer.sampleRate);
+      expect(spectrogramService.process).toHaveBeenCalled();
+      expect(dtmfService.process).toHaveBeenCalled();
+    });
+
+    it("should set error status in statusStore and playerStore if audioEngine.loadFile fails", async () => {
+      const errorMessage = "Failed to load file";
+      (audioEngine.loadFile as vi.Mock).mockRejectedValueOnce(
+        new Error(errorMessage),
+      );
+
+      await audioOrchestrator.loadFileAndAnalyze(mockFile);
+
+      expect(useStatusStore.getState()).toEqual(
+        expect.objectContaining({
+          message: "File processing failed.",
+          type: "error",
+          isLoading: false,
+          details: errorMessage,
+        }),
+      );
+
+      const finalPlayerState = usePlayerStore.getState();
+      expect(finalPlayerState.status).toBe("Error");
+      expect(finalPlayerState.error).toBe(errorMessage);
+      expect(finalPlayerState.isPlayable).toBe(false);
+      expect(finalPlayerState.duration).toBe(0);
+    });
+
+    it("should handle errors from analysis services gracefully", async () => {
+      const dtmfError = "DTMF processing failed";
+      (dtmfService.process as vi.Mock).mockRejectedValueOnce(
+        new Error(dtmfError),
+      );
+
+      await audioOrchestrator.loadFileAndAnalyze(mockFile);
+
+      expect(useStatusStore.getState()).toEqual(
+        expect.objectContaining({
+          message: "Ready",
+          type: "success",
+          isLoading: false,
+        }),
+      );
+      expect(usePlayerStore.getState().status).toBe("Ready");
+    });
+  });
+
+  describe("setupUrlSerialization", () => {
+    const localInitialPlayerStateForUrlTest: PlayerState = {
+      ...initialPlayerState, // Start with base initial state
+      speed: 0.75,
+      pitchShift: -2.5, // Use pitchShift
+      gain: 1.25,
+      status: "Ready",
+      fileName: "test-audio.mp3",
+      isPlayable: true, // Make sure it's playable for test logic
+    };
+
+    beforeEach(() => {
+      usePlayerStore.setState({ ...localInitialPlayerStateForUrlTest }, true);
+    });
+
+    it("should call updateUrlWithParams with correct parameters after debounced interval", () => {
+      audioOrchestrator.setupUrlSerialization();
+      // Directly use setState on the actual store
+      usePlayerStore.setState({ speed: 0.5 });
+      vi.runAllTimers();
+
+      expect(updateUrlWithParams).toHaveBeenCalled();
+      expect(updateUrlWithParams).toHaveBeenLastCalledWith({
+        [URL_HASH_KEYS.SPEED]: "0.50",
+        [URL_HASH_KEYS.PITCH]: localInitialPlayerStateForUrlTest.pitchShift.toFixed(1), // Use pitchShift
+        [URL_HASH_KEYS.GAIN]: localInitialPlayerStateForUrlTest.gain.toFixed(2),
+      });
+    });
+
+    it("should use updated values if store changes multiple times before debounce", () => {
+      audioOrchestrator.setupUrlSerialization();
+      usePlayerStore.setState({ speed: 0.5 });
+      usePlayerStore.setState({ speed: 0.8, pitchShift: 1.5 }); // Use pitchShift
+      vi.runAllTimers();
+
+      expect(updateUrlWithParams).toHaveBeenCalled();
+      expect(updateUrlWithParams).toHaveBeenLastCalledWith({
+        [URL_HASH_KEYS.SPEED]: "0.80",
+        [URL_HASH_KEYS.PITCH]: "1.5", // Use pitchShift
+        [URL_HASH_KEYS.GAIN]: localInitialPlayerStateForUrlTest.gain.toFixed(2),
+      });
+    });
+  });
+});
+
+````
+--- End of File: vibe-player-v2-react-old/src/services/AudioOrchestrator.service.test.ts ---
+--- File: vibe-player-v2-react-old/src/services/AudioOrchestrator.service.ts ---
+````typescript
+// vibe-player-v2-react/src/services/AudioOrchestrator.service.ts
+// import { get } from "svelte/store"; // Removed
+import { usePlayerStore } from '../stores/player.store';
+import { useStatusStore } from '../stores/status.store';
+import type { StatusState } from '../types/status.types'; // Adjusted path
+import { useAnalysisStore } from '../stores/analysis.store';
+import audioEngine from "./audioEngine.service";
+import dtmfService from "./dtmf.service";
+import spectrogramService from "./spectrogram.service";
+import { debounce } from '../utils/async'; // Adjusted path
+import { updateUrlWithParams } from '../utils/urlState'; // Adjusted path
+import { UI_CONSTANTS, URL_HASH_KEYS } from '../utils/constants'; // Adjusted path
+
+export class AudioOrchestrator {
+  private static instance: AudioOrchestrator;
+
+  private constructor() {
+    // Private constructor for singleton
+  }
+
+  public static getInstance(): AudioOrchestrator {
+    if (!AudioOrchestrator.instance) {
+      AudioOrchestrator.instance = new AudioOrchestrator();
+    }
+    return AudioOrchestrator.instance;
+  }
+
+  public async loadFileAndAnalyze(file: File): Promise<void> {
+    console.log(`[Orchestrator] === Starting New File Load: ${file.name} ===`);
+    useStatusStore.setState({
+      message: `Loading ${file.name}...`,
+      type: "info",
+      isLoading: true,
+      details: null,
+      progress: null,
+    });
+    // Ensure other relevant stores are reset if that's current behavior (e.g., analysisStore, waveformStore)
+    usePlayerStore.setState({
+      error: null,
+      status: "Loading",
+      isPlayable: false,
+      fileName: file.name,
+      duration: 0,
+      currentTime: 0,
+    }); // Added fileName and reset duration/currentTime
+    useAnalysisStore.setState({
+      // ...store, // Spreading previous state is default in Zustand's setState merge
+      // dtmfResults: [], // This property does not exist on AnalysisState. It's on DtmfState. Addressed by commenting out.
+      spectrogramData: null, // This exists on AnalysisState
+    });
+
+    try {
+      await audioEngine.unlockAudio();
+      const audioBuffer = await audioEngine.loadFile(file);
+      // audioEngine.decodeAudioData() is usually part of loadFile or handled by the browser's AudioContext directly
+
+      const duration = audioBuffer.duration;
+      const sampleRate = audioBuffer.sampleRate;
+      const channels = audioBuffer.numberOfChannels; // Assuming this property exists
+
+      usePlayerStore.setState({
+        duration,
+        sampleRate,
+        channels, // Added channels
+        isPlayable: true,
+        status: "Ready", // Updated status here
+      });
+      useStatusStore.setState({ message: "Ready", type: "success", isLoading: false });
+
+      spectrogramService.init(audioBuffer.sampleRate);
+      dtmfService.init(audioBuffer.sampleRate);
+
+      console.log("AudioOrchestrator: Starting background analysis tasks.");
+      const analysisPromises = [
+        dtmfService.process(audioBuffer),
+        spectrogramService.process(audioBuffer.getChannelData(0)),
+      ];
+
+      const results = await Promise.allSettled(analysisPromises);
+      console.log(
+        "AudioOrchestrator: All background analysis tasks settled.",
+        results,
+      );
+
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          console.error(
+            `AudioOrchestrator: Analysis task ${index} failed:`,
+            result.reason,
+          );
+          // Optionally, update a specific error state in analysisStore or playerStore
+        }
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(
+        `[Orchestrator] !!! CRITICAL ERROR during file load:`,
+        error,
+      );
+      useStatusStore.setState({
+        message: "File processing failed.",
+        type: "error",
+        isLoading: false,
+        details: message,
+      });
+      // Update playerStore to reflect the error state specifically for the player
+      usePlayerStore.setState({
+        status: "Error",
+        error: message,
+        isPlayable: false,
+        duration: 0,
+        currentTime: 0,
+      });
+    }
+  }
+
+  /**
+   * Sets up debounced URL serialization based on player and analysis store changes.
+   * @public
+   */
+  public setupUrlSerialization(): void {
+    console.log("[Orchestrator] Setting up URL serialization.");
+
+    const debouncedUpdater = debounce(() => {
+      const pStore = usePlayerStore.getState();
+      // const aStore = useAnalysisStore.getState(); // Keep this commented out if analysisStore part is not for this step yet
+
+      const params: Record<string, string> = {
+        [URL_HASH_KEYS.SPEED]: pStore.speed.toFixed(2),
+        [URL_HASH_KEYS.PITCH]: pStore.pitchShift.toFixed(1), // Corrected: pStore.pitch -> pStore.pitchShift
+        [URL_HASH_KEYS.GAIN]: pStore.gain.toFixed(2),
+        // [URL_HASH_KEYS.VAD_THRESHOLD]: aStore.vadPositiveThreshold.toFixed(2), // Keep commented
+        // ... any other relevant params from playerStore that should be serialized
+      };
+
+      console.log(
+        `[Orchestrator/URL] Debounced update triggered. New params:`,
+        params,
+      );
+      updateUrlWithParams(params); // Make sure updateUrlWithParams is correctly imported/defined
+    }, UI_CONSTANTS.DEBOUNCE_TIME_MS_URL_UPDATE);
+
+    usePlayerStore.subscribe(debouncedUpdater);
+    // useAnalysisStore.subscribe(debouncedUpdater); // Only subscribe if aStore is used in params
+  }
+}
+
+export const audioOrchestrator = AudioOrchestrator.getInstance();
+
+````
+--- End of File: vibe-player-v2-react-old/src/services/AudioOrchestrator.service.ts ---
 --- File: vibe-player-v2-react-old/src/services/dtmf.service.test.ts ---
 ````typescript
 // vibe-player-v2-react/src/services/dtmf.service.test.ts
@@ -20258,146 +20396,6 @@ test.describe("Application Startup Smoke Test", () => {
 
 ````
 --- End of File: vibe-player-v2-react-old/tests-e2e/00-load.e2e.spec.js ---
---- File: vibe-player-v2-react-old/tests-e2e/PlayerPage.mjs ---
-````mjs
-// vibe-player-v2-react/tests-e2e/PlayerPage.mjs
-import { expect } from "@playwright/test";
-
-export class PlayerPage {
-  constructor(page) {
-    this.page = page;
-    this.devServerUrl = "http://localhost:5173/"; // Updated port
-    this.appBarTitle = page.locator('h1:has-text("Vibe Player V2 - React Edition")'); // Updated
-    this.fileInput = page.locator('input[type="file"]'); // Should still work
-    this.fileNameDisplay = page.locator('p:has-text("Selected:")'); // Updated, might need refinement
-    // fileStatusDisplay focuses on positive status like 'Ready' or general success.
-    this.fileStatusDisplay = page.locator('[data-testid="status-success"], [data-testid="file-success-message"], [data-testid="status-loading"]:has-text("Ready")'); // Updated to catch success or specific loading messages
-    this.fileErrorDisplay = page.locator('[data-testid="status-error"], [data-testid="file-error-message"]'); // Updated
-
-    this.playButton = page.getByTestId("play-button");
-    this.stopButton = page.getByTestId("stop-button");
-
-    // this.timeDisplay = page.getByTestId("time-display"); // Commented out - Not implemented in React yet
-    // this.seekSliderInput = page.getByTestId("seek-slider-input"); // Commented out - Not implemented
-
-    this.speedSliderInput = page.getByTestId("speed-slider-input");
-    this.speedValueDisplay = page.getByTestId("speed-value");
-    this.pitchSliderInput = page.getByTestId("pitch-slider-input");
-    this.pitchValueDisplay = page.getByTestId("pitch-value");
-    this.gainSliderInput = page.getByTestId("gain-slider-input");
-    this.gainValueDisplay = page.getByTestId("gain-value");
-    this.vadPositiveSliderInput = page.getByTestId("vad-positive-slider-input");
-    this.vadPositiveValueDisplay = page.getByTestId("vad-positive-value");
-    this.vadNegativeSliderInput = page.getByTestId("vad-negative-slider-input");
-    this.vadNegativeValueDisplay = page.getByTestId("vad-negative-value");
-    this.dtmfDisplay = page.getByTestId("dtmf-display");
-  }
-
-  async goto() {
-    await this.page.goto(this.devServerUrl);
-    // Increased timeout for initial load, especially in CI
-    await expect(this.appBarTitle).toBeVisible({ timeout: 20000 });
-    await expect(this.fileInput).toBeVisible({ timeout: 10000 });
-  }
-
-  async loadAudioFile(fileName) {
-    // In Vite, public assets are served from the root.
-    // The original Svelte project had /static/test-audio. The React project also has /public/test-audio
-    // `setInputFiles` expects a file path on the system running the test.
-    // Playwright runs from project root (`vibe-player-v2-react`), so path is `public/test-audio/${fileName}`.
-    const filePath = `public/test-audio/${fileName}`;
-    await this.fileInput.setInputFiles(filePath);
-  }
-
-  async expectControlsToBeReadyForPlayback() {
-    // Check for absence of general loading/error messages that would block playback.
-    // StatusMessages component hides when message is null or "Ready" and not loading.
-    // FileLoader hides its messages when not loading/error.
-    // So, if play button is enabled, it's a good sign.
-    await expect(this.playButton, "Play button was not enabled after file load").toBeEnabled({
-      timeout: 20000, // Increased timeout for file processing
-    });
-    // A more specific check for "Ready" status could be if a specific "loading done" message appears briefly
-    // or if the waveform visualizer shows data.
-    // For now, playButton enabled is the primary check.
-    // The fileStatusDisplay locator might catch a "Ready" message if one is specifically set.
-    // await expect(this.fileStatusDisplay.first()).toBeVisible({ timeout: 20000 }); // Example: Check if any relevant status is visible
-  }
-
-  async getPlayButtonText() {
-    return this.playButton.textContent();
-  }
-
-  async setSliderValue(sliderInputLocator, valueStr) {
-    // This method might need adjustment for Shadcn sliders if direct input manipulation is better.
-    // For now, keeping the click simulation logic.
-    const targetValue = parseFloat(valueStr);
-    const boundingBox = await sliderInputLocator.boundingBox();
-    if (!boundingBox) throw new Error(`Could not get bounding box for slider ${sliderInputLocator}`);
-
-    const min = parseFloat(await sliderInputLocator.getAttribute("min") || "0");
-    const max = parseFloat(await sliderInputLocator.getAttribute("max") || "100");
-
-    // Handle case where min or max might be null or slider not fully initialized
-    if (min == null || max == null) throw new Error("Slider min/max attributes not found or invalid.");
-
-    // Prevent division by zero if min and max are the same
-    if (max === min) {
-        if (targetValue === min) { // If target is the only value, click center
-            await this.page.mouse.click(boundingBox.x + boundingBox.width / 2, boundingBox.y + boundingBox.height / 2);
-            await this.page.waitForTimeout(350);
-            return;
-        }
-        throw new Error("Slider min and max are equal, but target value is different.");
-    }
-
-    const ratio = (targetValue - min) / (max - min);
-    let clickX = boundingBox.x + boundingBox.width * ratio;
-
-    // Ensure clickX is within the slider's bounds
-    clickX = Math.max(boundingBox.x, Math.min(clickX, boundingBox.x + boundingBox.width -1)); // -1 to avoid clicking exact edge
-
-    const clickY = boundingBox.y + boundingBox.height / 2;
-
-    await this.page.mouse.click(clickX, clickY);
-    await this.page.waitForTimeout(350); // Allow for debounced updates
-  }
-
-  async getSliderInputValue(sliderInputLocator) {
-    return sliderInputLocator.inputValue(); // This might not work for Shadcn sliders which aren't native inputs
-                                          // May need .getAttribute('aria-valuenow') or similar
-  }
-
-  // Commenting out getCurrentTime as timeDisplay is not implemented
-  /*
-  async getCurrentTime() {
-    const timeDisplayText = await this.timeDisplay.textContent();
-    if (!timeDisplayText)
-      throw new Error("Time display text content is empty or null.");
-
-    const timeParts = timeDisplayText.split(" / ");
-    if (timeParts.length < 1)
-      throw new Error(`Unexpected time display format: ${timeDisplayText}`);
-
-    const currentTimeStr = timeParts[0].trim();
-    const segments = currentTimeStr.split(":").map(Number);
-    let currentTimeInSeconds = 0;
-    if (segments.length === 3) {
-      currentTimeInSeconds = segments[0] * 3600 + segments[1] * 60 + segments[2];
-    } else if (segments.length === 2) {
-      currentTimeInSeconds = segments[0] * 60 + segments[1];
-    } else if (segments.length === 1) {
-      currentTimeInSeconds = segments[0];
-    } else {
-      throw new Error(`Unexpected current time segment format: ${currentTimeStr}`);
-    }
-    return currentTimeInSeconds;
-  }
-  */
-}
-
-````
---- End of File: vibe-player-v2-react-old/tests-e2e/PlayerPage.mjs ---
 --- File: vibe-player-v2-react-old/tests-e2e/player.e2e.spec.js ---
 ````javascript
 // vibe-player-v2-react/tests-e2e/player.e2e.spec.js
@@ -20631,6 +20629,146 @@ test.describe("Vibe Player V2 E2E", () => {
 
 ````
 --- End of File: vibe-player-v2-react-old/tests-e2e/player.e2e.spec.js ---
+--- File: vibe-player-v2-react-old/tests-e2e/PlayerPage.mjs ---
+````mjs
+// vibe-player-v2-react/tests-e2e/PlayerPage.mjs
+import { expect } from "@playwright/test";
+
+export class PlayerPage {
+  constructor(page) {
+    this.page = page;
+    this.devServerUrl = "http://localhost:5173/"; // Updated port
+    this.appBarTitle = page.locator('h1:has-text("Vibe Player V2 - React Edition")'); // Updated
+    this.fileInput = page.locator('input[type="file"]'); // Should still work
+    this.fileNameDisplay = page.locator('p:has-text("Selected:")'); // Updated, might need refinement
+    // fileStatusDisplay focuses on positive status like 'Ready' or general success.
+    this.fileStatusDisplay = page.locator('[data-testid="status-success"], [data-testid="file-success-message"], [data-testid="status-loading"]:has-text("Ready")'); // Updated to catch success or specific loading messages
+    this.fileErrorDisplay = page.locator('[data-testid="status-error"], [data-testid="file-error-message"]'); // Updated
+
+    this.playButton = page.getByTestId("play-button");
+    this.stopButton = page.getByTestId("stop-button");
+
+    // this.timeDisplay = page.getByTestId("time-display"); // Commented out - Not implemented in React yet
+    // this.seekSliderInput = page.getByTestId("seek-slider-input"); // Commented out - Not implemented
+
+    this.speedSliderInput = page.getByTestId("speed-slider-input");
+    this.speedValueDisplay = page.getByTestId("speed-value");
+    this.pitchSliderInput = page.getByTestId("pitch-slider-input");
+    this.pitchValueDisplay = page.getByTestId("pitch-value");
+    this.gainSliderInput = page.getByTestId("gain-slider-input");
+    this.gainValueDisplay = page.getByTestId("gain-value");
+    this.vadPositiveSliderInput = page.getByTestId("vad-positive-slider-input");
+    this.vadPositiveValueDisplay = page.getByTestId("vad-positive-value");
+    this.vadNegativeSliderInput = page.getByTestId("vad-negative-slider-input");
+    this.vadNegativeValueDisplay = page.getByTestId("vad-negative-value");
+    this.dtmfDisplay = page.getByTestId("dtmf-display");
+  }
+
+  async goto() {
+    await this.page.goto(this.devServerUrl);
+    // Increased timeout for initial load, especially in CI
+    await expect(this.appBarTitle).toBeVisible({ timeout: 20000 });
+    await expect(this.fileInput).toBeVisible({ timeout: 10000 });
+  }
+
+  async loadAudioFile(fileName) {
+    // In Vite, public assets are served from the root.
+    // The original Svelte project had /static/test-audio. The React project also has /public/test-audio
+    // `setInputFiles` expects a file path on the system running the test.
+    // Playwright runs from project root (`vibe-player-v2-react`), so path is `public/test-audio/${fileName}`.
+    const filePath = `public/test-audio/${fileName}`;
+    await this.fileInput.setInputFiles(filePath);
+  }
+
+  async expectControlsToBeReadyForPlayback() {
+    // Check for absence of general loading/error messages that would block playback.
+    // StatusMessages component hides when message is null or "Ready" and not loading.
+    // FileLoader hides its messages when not loading/error.
+    // So, if play button is enabled, it's a good sign.
+    await expect(this.playButton, "Play button was not enabled after file load").toBeEnabled({
+      timeout: 20000, // Increased timeout for file processing
+    });
+    // A more specific check for "Ready" status could be if a specific "loading done" message appears briefly
+    // or if the waveform visualizer shows data.
+    // For now, playButton enabled is the primary check.
+    // The fileStatusDisplay locator might catch a "Ready" message if one is specifically set.
+    // await expect(this.fileStatusDisplay.first()).toBeVisible({ timeout: 20000 }); // Example: Check if any relevant status is visible
+  }
+
+  async getPlayButtonText() {
+    return this.playButton.textContent();
+  }
+
+  async setSliderValue(sliderInputLocator, valueStr) {
+    // This method might need adjustment for Shadcn sliders if direct input manipulation is better.
+    // For now, keeping the click simulation logic.
+    const targetValue = parseFloat(valueStr);
+    const boundingBox = await sliderInputLocator.boundingBox();
+    if (!boundingBox) throw new Error(`Could not get bounding box for slider ${sliderInputLocator}`);
+
+    const min = parseFloat(await sliderInputLocator.getAttribute("min") || "0");
+    const max = parseFloat(await sliderInputLocator.getAttribute("max") || "100");
+
+    // Handle case where min or max might be null or slider not fully initialized
+    if (min == null || max == null) throw new Error("Slider min/max attributes not found or invalid.");
+
+    // Prevent division by zero if min and max are the same
+    if (max === min) {
+        if (targetValue === min) { // If target is the only value, click center
+            await this.page.mouse.click(boundingBox.x + boundingBox.width / 2, boundingBox.y + boundingBox.height / 2);
+            await this.page.waitForTimeout(350);
+            return;
+        }
+        throw new Error("Slider min and max are equal, but target value is different.");
+    }
+
+    const ratio = (targetValue - min) / (max - min);
+    let clickX = boundingBox.x + boundingBox.width * ratio;
+
+    // Ensure clickX is within the slider's bounds
+    clickX = Math.max(boundingBox.x, Math.min(clickX, boundingBox.x + boundingBox.width -1)); // -1 to avoid clicking exact edge
+
+    const clickY = boundingBox.y + boundingBox.height / 2;
+
+    await this.page.mouse.click(clickX, clickY);
+    await this.page.waitForTimeout(350); // Allow for debounced updates
+  }
+
+  async getSliderInputValue(sliderInputLocator) {
+    return sliderInputLocator.inputValue(); // This might not work for Shadcn sliders which aren't native inputs
+                                          // May need .getAttribute('aria-valuenow') or similar
+  }
+
+  // Commenting out getCurrentTime as timeDisplay is not implemented
+  /*
+  async getCurrentTime() {
+    const timeDisplayText = await this.timeDisplay.textContent();
+    if (!timeDisplayText)
+      throw new Error("Time display text content is empty or null.");
+
+    const timeParts = timeDisplayText.split(" / ");
+    if (timeParts.length < 1)
+      throw new Error(`Unexpected time display format: ${timeDisplayText}`);
+
+    const currentTimeStr = timeParts[0].trim();
+    const segments = currentTimeStr.split(":").map(Number);
+    let currentTimeInSeconds = 0;
+    if (segments.length === 3) {
+      currentTimeInSeconds = segments[0] * 3600 + segments[1] * 60 + segments[2];
+    } else if (segments.length === 2) {
+      currentTimeInSeconds = segments[0] * 60 + segments[1];
+    } else if (segments.length === 1) {
+      currentTimeInSeconds = segments[0];
+    } else {
+      throw new Error(`Unexpected current time segment format: ${currentTimeStr}`);
+    }
+    return currentTimeInSeconds;
+  }
+  */
+}
+
+````
+--- End of File: vibe-player-v2-react-old/tests-e2e/PlayerPage.mjs ---
 --- File: vibe-player-v2-react-old/tsconfig.app.json ---
 ````json
 {
