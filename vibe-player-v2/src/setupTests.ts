@@ -112,3 +112,36 @@ vi.mock("@skeletonlabs/skeleton", async () => {
 console.log(
   "Global Skeleton mock via specific mocks + Generic fallback is NOW ENABLED.",
 );
+
+// Mock AudioContext for jsdom environment
+if (typeof global.AudioContext === "undefined") {
+  class MockAudioContext {
+    resume = vi.fn(() => Promise.resolve());
+    createGain = vi.fn(() => ({
+      gain: { setValueAtTime: vi.fn() },
+      connect: vi.fn(),
+    }));
+    destination = {}; // Simple object, can be expanded if needed
+    currentTime = 0;
+    state = "suspended";
+    sampleRate = 44100;
+    decodeAudioData = vi.fn(() => Promise.resolve({} as AudioBuffer)); // Cast to AudioBuffer
+    createBuffer = vi.fn((_channels, _length, _sampleRate) => ({
+      getChannelData: vi.fn(() => new Float32Array(0)),
+      // Add other AudioBuffer methods if needed by tests
+    }));
+    createBufferSource = vi.fn(() => ({
+      buffer: null,
+      connect: vi.fn(),
+      start: vi.fn(),
+      onended: null,
+      disconnect: vi.fn(), // Added disconnect as it's commonly used
+    }));
+    close = vi.fn(() => Promise.resolve());
+
+    // You can add other AudioContext methods and properties here if your tests need them
+    // For example: createOscillator, createAnalyser, etc.
+  }
+  global.AudioContext = MockAudioContext as any; // Use 'as any' to satisfy TypeScript
+  console.log("Mocked global.AudioContext for jsdom.");
+}

@@ -259,7 +259,11 @@ class AudioEngineService {
   };
 
   /**
-   * Starts or resumes playback.
+   * Starts or resumes playback. This method also acts as a gatekeeper for audio
+   * playback, ensuring the AudioContext is resumed if it's in a suspended state,
+   * which is crucial for browsers that require user interaction to start audio.
+   * If the AudioContext is suspended, it will asynchronously attempt to resume it
+   * before proceeding with playback.
    */
   public play = async (): Promise<void> => {
     console.log(

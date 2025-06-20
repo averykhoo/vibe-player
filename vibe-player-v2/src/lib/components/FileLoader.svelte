@@ -3,11 +3,15 @@
 <script lang="ts">
     import { playerStore } from '$lib/stores/player.store'; // To show status or file name
     import AudioOrchestrator from '$lib/services/AudioOrchestrator.service';
+    import audioEngine from '$lib/services/audioEngine.service';
 
     let currentFile: File | null = null;
     let isLoading = false;
 
     async function handleFileSelect(event: Event) {
+        // Proactively unlock audio context
+        audioEngine.unlockAudio(); // Non-blocking
+
         const input = event.target as HTMLInputElement;
         if (input.files?.[0]) {
             currentFile = input.files[0];
