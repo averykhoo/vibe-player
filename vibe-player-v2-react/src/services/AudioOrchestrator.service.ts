@@ -1,15 +1,16 @@
 // vibe-player-v2-react/src/services/AudioOrchestrator.service.ts
-// import { get } from "svelte/store"; // Removed
-import { usePlayerStore } from '../stores/player.store';
-import { useStatusStore } from '../stores/status.store';
-import type { StatusState } from '../types/status.types'; // Adjusted path
-import { useAnalysisStore } from '../stores/analysis.store';
-import audioEngine from "./audioEngine.service";
-import dtmfService from "./dtmf.service";
-import spectrogramService from "./spectrogram.service";
-import { debounce } from '../utils/async'; // Adjusted path
-import { updateUrlWithParams } from '../utils/urlState'; // Adjusted path
-import { UI_CONSTANTS, URL_HASH_KEYS } from '../utils/constants'; // Adjusted path
+// vibe-player-v2/src/lib/services/AudioOrchestrator.service.ts
+import { get } from "svelte/store";
+import { playerStore } from "$lib/stores/player.store";
+import { statusStore } from "$lib/stores/status.store";
+import type { StatusState } from "$lib/types/status.types"; // Added this import
+import { analysisStore } from "$lib/stores/analysis.store";
+import audioEngine from "./audioEngine.service"; // Changed to default import
+import dtmfService from "./dtmf.service"; // Changed to default import
+import spectrogramService from "./spectrogram.service"; // Changed to default import
+import { debounce } from "$lib/utils/async";
+import { updateUrlWithParams } from "$lib/utils/urlState";
+import { UI_CONSTANTS, URL_HASH_KEYS } from "$lib/utils/constants";
 
 export class AudioOrchestrator {
   private static instance: AudioOrchestrator;
@@ -27,7 +28,7 @@ export class AudioOrchestrator {
 
   public async loadFileAndAnalyze(file: File): Promise<void> {
     console.log(`[Orchestrator] === Starting New File Load: ${file.name} ===`);
-    useStatusStore.setState({
+    statusStore.set({
       message: `Loading ${file.name}...`,
       type: "info",
       isLoading: true,
@@ -35,19 +36,20 @@ export class AudioOrchestrator {
       progress: null,
     });
     // Ensure other relevant stores are reset if that's current behavior (e.g., analysisStore, waveformStore)
-    usePlayerStore.setState({
+    playerStore.update((s) => ({
+      ...s,
       error: null,
       status: "Loading",
       isPlayable: false,
       fileName: file.name,
       duration: 0,
       currentTime: 0,
-    }); // Added fileName and reset duration/currentTime
-    useAnalysisStore.setState({
-      // ...store, // Spreading previous state is default in Zustand's setState merge
-      // dtmfResults: [], // This property does not exist on AnalysisState. It's on DtmfState. Addressed by commenting out.
-      spectrogramData: null, // This exists on AnalysisState
-    });
+    })); // Added fileName and reset duration/currentTime
+    analysisStore.update((store) => ({
+      ...store,
+      dtmfResults: [],
+      spectrogramData: null,
+    }));
 
     try {
       await audioEngine.unlockAudio();
@@ -58,14 +60,15 @@ export class AudioOrchestrator {
       const sampleRate = audioBuffer.sampleRate;
       const channels = audioBuffer.numberOfChannels; // Assuming this property exists
 
-      usePlayerStore.setState({
+      playerStore.update((s) => ({
+        ...s,
         duration,
         sampleRate,
         channels, // Added channels
         isPlayable: true,
         status: "Ready", // Updated status here
-      });
-      useStatusStore.setState({ message: "Ready", type: "success", isLoading: false });
+      }));
+      statusStore.set({ message: "Ready", type: "success", isLoading: false });
 
       spectrogramService.init(audioBuffer.sampleRate);
       dtmfService.init(audioBuffer.sampleRate);
@@ -97,20 +100,21 @@ export class AudioOrchestrator {
         `[Orchestrator] !!! CRITICAL ERROR during file load:`,
         error,
       );
-      useStatusStore.setState({
+      statusStore.set({
         message: "File processing failed.",
         type: "error",
         isLoading: false,
         details: message,
       });
       // Update playerStore to reflect the error state specifically for the player
-      usePlayerStore.setState({
+      playerStore.update((s) => ({
+        ...s,
         status: "Error",
         error: message,
         isPlayable: false,
         duration: 0,
         currentTime: 0,
-      });
+      }));
     }
   }
 
@@ -122,12 +126,12 @@ export class AudioOrchestrator {
     console.log("[Orchestrator] Setting up URL serialization.");
 
     const debouncedUpdater = debounce(() => {
-      const pStore = usePlayerStore.getState();
-      // const aStore = useAnalysisStore.getState(); // Keep this commented out if analysisStore part is not for this step yet
+      const pStore = get(playerStore);
+      // const aStore = get(analysisStore); // Keep this commented out if analysisStore part is not for this step yet
 
       const params: Record<string, string> = {
         [URL_HASH_KEYS.SPEED]: pStore.speed.toFixed(2),
-        [URL_HASH_KEYS.PITCH]: pStore.pitchShift.toFixed(1), // Corrected: pStore.pitch -> pStore.pitchShift
+        [URL_HASH_KEYS.PITCH]: pStore.pitch.toFixed(1), // Assuming pitch is semitones
         [URL_HASH_KEYS.GAIN]: pStore.gain.toFixed(2),
         // [URL_HASH_KEYS.VAD_THRESHOLD]: aStore.vadPositiveThreshold.toFixed(2), // Keep commented
         // ... any other relevant params from playerStore that should be serialized
@@ -140,8 +144,8 @@ export class AudioOrchestrator {
       updateUrlWithParams(params); // Make sure updateUrlWithParams is correctly imported/defined
     }, UI_CONSTANTS.DEBOUNCE_TIME_MS_URL_UPDATE);
 
-    usePlayerStore.subscribe(debouncedUpdater);
-    // useAnalysisStore.subscribe(debouncedUpdater); // Only subscribe if aStore is used in params
+    playerStore.subscribe(debouncedUpdater);
+    // analysisStore.subscribe(debouncedUpdater); // Only subscribe if aStore is used in params
   }
 }
 

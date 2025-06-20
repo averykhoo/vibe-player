@@ -1,6 +1,8 @@
 // vibe-player-v2-react/src/utils/urlState.ts
+// vibe-player-v2/src/lib/utils/urlState.ts
 
-const BROWSER = typeof window !== 'undefined';
+// Vite equivalent for checking if in browser environment
+const BROWSER = !import.meta.env.SSR;
 
 /**
  * Updates the browser's URL with the given parameters without reloading the page.

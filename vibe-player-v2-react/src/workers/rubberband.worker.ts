@@ -5,8 +5,8 @@ import type {
   RubberbandProcessPayload,
   RubberbandProcessResultPayload,
   WorkerMessage,
-} from "../types/worker.types";
-import { RB_WORKER_MSG_TYPE } from "../types/worker.types";
+} from "@/types/worker.types";
+import { RB_WORKER_MSG_TYPE } from "@/types/worker.types";
 
 // --- Type definitions for the Emscripten/WASM Module ---
 interface RubberbandModule {

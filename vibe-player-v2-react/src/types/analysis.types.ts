@@ -1,6 +1,7 @@
 // vibe-player-v2-react/src/types/analysis.types.ts
 // vibe-player-v2/src/lib/types/analysis.types.ts
-import type { SileroVadProcessResultPayload } from "$lib/types/worker.types";
+// Adjusted import path for Vite/React setup
+import type { SileroVadProcessResultPayload } from "@/types/worker.types";
 
 export interface AnalysisState {
   // VAD related properties

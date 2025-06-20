@@ -1,21 +1,22 @@
 // vibe-player-v2-react/src/services/audioEngine.service.ts
+// vibe-player-v2/src/lib/services/audioEngine.service.ts
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  SECTION: Imports
 // ─────────────────────────────────────────────────────────────────────────────
 
-// import { get } from "svelte/store"; // No longer needed
+import { get } from "svelte/store";
 import type {
   RubberbandInitPayload,
   RubberbandProcessPayload,
   RubberbandProcessResultPayload,
   WorkerErrorPayload,
   WorkerMessage,
-} from '../types/worker.types'; // Adjusted path
-import { RB_WORKER_MSG_TYPE } from '../types/worker.types'; // Adjusted path
-import { usePlayerStore } from '../stores/player.store'; // Zustand import
-import RubberbandWorker from '../workers/rubberband.worker?worker&inline'; // Adjusted path
-import { assert, AUDIO_ENGINE_CONSTANTS } from '../utils'; // Adjusted path
+} from "$lib/types/worker.types";
+import { RB_WORKER_MSG_TYPE } from "$lib/types/worker.types";
+import { playerStore } from "$lib/stores/player.store";
+import RubberbandWorker from "$lib/workers/rubberband.worker?worker&inline";
+import { assert, AUDIO_ENGINE_CONSTANTS } from "$lib/utils";
 // import { analysisStore } from "../stores/analysis.store"; // Not used directly in this file after refactor
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -161,11 +162,12 @@ class AudioEngineService {
       if (!audioBuffer) {
         const errorMsg = "initializeWorker called with no AudioBuffer.";
         console.error(`[AudioEngineService] ${errorMsg}`);
-        usePlayerStore.setState({
+        playerStore.update((s) => ({
+          ...s,
           error: errorMsg,
           isPlayable: false,
           isPlaying: false,
-        });
+        }));
         reject(new Error(errorMsg));
         return;
       }
@@ -183,11 +185,12 @@ class AudioEngineService {
           );
           const errorMessage =
             "Worker crashed or encountered an unrecoverable error.";
-          usePlayerStore.setState({
+          playerStore.update((s) => ({
+            ...s,
             error: errorMessage,
             isPlayable: false,
             isPlaying: false,
-          });
+          }));
           this.isWorkerReady = false;
           if (this.workerInitPromiseCallbacks) {
             this.workerInitPromiseCallbacks.reject(
@@ -219,7 +222,7 @@ class AudioEngineService {
           const wasmBinary = await wasmResponse.arrayBuffer();
           const loaderScriptText = await loaderResponse.text();
 
-          const { speed: playbackSpeed, pitchShift } = usePlayerStore.getState(); // Renamed speed to playbackSpeed for consistency in this file
+          const { playbackSpeed, pitchShift } = get(playerStore);
 
           const initPayload: RubberbandInitPayload = {
             wasmBinary,
@@ -249,10 +252,11 @@ class AudioEngineService {
           const error = e as Error;
           const errorMsg = `Error fetching worker dependencies: ${error.message}`;
           console.error(`[AudioEngineService] ${errorMsg}`);
-          usePlayerStore.setState({
+          playerStore.update((s) => ({
+            ...s,
             error: errorMsg,
             isPlayable: false,
-          });
+          }));
           this.isWorkerReady = false;
           if (this.workerInitPromiseCallbacks) {
             this.workerInitPromiseCallbacks.reject(error);
@@ -490,7 +494,7 @@ class AudioEngineService {
   public updateSeek = (time: number): void => {
     if (!this.originalBuffer || !this.isWorkerReady) return;
     // Update the store directly for immediate UI feedback.
-    usePlayerStore.setState({ currentTime: time });
+    playerStore.update((s) => ({ ...s, currentTime: time }));
   };
 
   /**
@@ -557,9 +561,10 @@ class AudioEngineService {
     }
 
     // Update current time in store (can be handled by Orchestrator/UI if preferred)
-    usePlayerStore.setState({
+    playerStore.update((s) => ({
+      ...s,
       currentTime: this.sourcePlaybackOffset,
-    });
+    }));
 
     this._performSingleProcessAndPlayIteration();
 
@@ -629,10 +634,11 @@ class AudioEngineService {
         if (chunkDuration <= 0) {
           // Should not happen if previous checks are correct
           this.pause(); // Pause if we somehow have no duration left to process
-          usePlayerStore.setState({
+          playerStore.update((s) => ({
+            ...s,
             currentTime: this.originalBuffer!.duration,
             isPlaying: false,
-          });
+          }));
           return;
         }
 
@@ -802,7 +808,7 @@ class AudioEngineService {
         console.log(
           "[AudioEngineService] Worker initialized successfully (INIT_SUCCESS received).",
         );
-        usePlayerStore.setState({ isPlayable: true, error: null }); // Update store on successful init
+        playerStore.update((s) => ({ ...s, isPlayable: true, error: null })); // Update store on successful init
         if (this.workerInitPromiseCallbacks) {
           this.workerInitPromiseCallbacks.resolve();
           this.workerInitPromiseCallbacks = null;
@@ -815,11 +821,12 @@ class AudioEngineService {
           "[AudioEngineService] Worker Error Message:",
           errorPayload.message,
         );
-        usePlayerStore.setState({
+        playerStore.update((s) => ({
+          ...s,
           error: errorPayload.message,
           isPlaying: false, // Stop playback on worker error
           isPlayable: false, // Worker is not in a playable state
-        });
+        }));
         this.isWorkerReady = false;
         if (this.isPlaying) this.pause(); // Ensure playback stops
 

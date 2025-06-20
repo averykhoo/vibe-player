@@ -1,5 +1,4 @@
 // vibe-player-v2-react/public/vendor/fft.js
-// vibe-player-v2/static/vendor/fft.js
 // NOTE: This is 3rd party code (adapted). JSDoc annotations not added here.
 "use strict";
 

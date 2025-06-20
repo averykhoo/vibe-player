@@ -1,15 +1,16 @@
 // vibe-player-v2-react/src/services/spectrogram.service.ts
-const browser = typeof window !== 'undefined'; // Replaces SvelteKit's $app/environment
+// vibe-player-v2/src/lib/services/spectrogram.service.ts
+import { browser } from "$app/environment"; // <-- ADD THIS IMPORT
 import type {
   SpectrogramInitPayload,
   SpectrogramProcessPayload,
   SpectrogramResultPayload,
   WorkerMessage,
-} from '../types/worker.types'; // Adjusted path
-import { SPEC_WORKER_MSG_TYPE } from '../types/worker.types'; // Adjusted path
-import { VISUALIZER_CONSTANTS } from '../utils/constants'; // Adjusted path
-import { useAnalysisStore } from '../stores/analysis.store'; // Zustand import
-import SpectrogramWorker from '../workers/spectrogram.worker?worker&inline'; // Adjusted path
+} from "$lib/types/worker.types";
+import { SPEC_WORKER_MSG_TYPE } from "$lib/types/worker.types";
+import { VISUALIZER_CONSTANTS } from "$lib/utils/constants";
+import { analysisStore } from "$lib/stores/analysis.store";
+import SpectrogramWorker from "$lib/workers/spectrogram.worker?worker&inline";
 
 class SpectrogramService {
   private static instance: SpectrogramService;
@@ -55,10 +56,11 @@ class SpectrogramService {
       this.dispose();
     }
 
-    useAnalysisStore.setState({
+    analysisStore.update((s) => ({
+      ...s,
       spectrogramStatus: "Initializing worker...",
       spectrogramInitialized: false,
-    });
+    }));
     this.worker = new SpectrogramWorker();
 
     this.worker.onmessage = (event: MessageEvent<WorkerMessage<unknown>>) => {
@@ -69,27 +71,30 @@ class SpectrogramService {
       if (error) {
         const errorMsg =
           typeof error === "string" ? error : (error as Error).message;
-        useAnalysisStore.setState({
+        analysisStore.update((s) => ({
+          ...s,
           spectrogramError: `Worker error: ${errorMsg}`,
           spectrogramInitialized: false,
-        });
+        }));
         if (request) request.reject(errorMsg);
       } else {
         switch (type) {
           case SPEC_WORKER_MSG_TYPE.INIT_SUCCESS:
             this.isInitialized = true;
-            useAnalysisStore.setState({
+            analysisStore.update((s) => ({
+              ...s,
               spectrogramStatus: "Initialized",
               spectrogramInitialized: true,
               spectrogramError: null,
-            });
+            }));
             if (request) request.resolve(payload);
             break;
           case SPEC_WORKER_MSG_TYPE.PROCESS_RESULT:
             const specResult = payload as SpectrogramResultPayload;
-            useAnalysisStore.setState({
+            analysisStore.update((s) => ({
+              ...s,
               spectrogramData: specResult.magnitudes,
-            });
+            }));
             if (request) request.resolve(specResult);
             break;
           default:
@@ -106,10 +111,11 @@ class SpectrogramService {
           : err instanceof ErrorEvent
             ? err.message
             : "Unknown error";
-      useAnalysisStore.setState({
+      analysisStore.update((s) => ({
+        ...s,
         spectrogramError: `Worker onerror: ${errorMsg}`,
         spectrogramInitialized: false,
-      });
+      }));
       this.pendingRequests.forEach((req) =>
         req.reject(
           new Error(`Spectrogram Worker failed critically: ${errorMsg}`),
@@ -133,10 +139,11 @@ class SpectrogramService {
       fftScriptText = await fftResponse.text();
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
-      useAnalysisStore.setState({
+      analysisStore.update((s) => ({
+        ...s,
         spectrogramError: `FFT script fetch error: ${errorMessage}`,
         spectrogramInitialized: false,
-      });
+      }));
       this.isInitialized = false;
       return; // Stop initialization if script fetch fails
     }
@@ -156,10 +163,11 @@ class SpectrogramService {
       });
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
-      useAnalysisStore.setState({
+      analysisStore.update((s) => ({
+        ...s,
         spectrogramError: errorMessage,
         spectrogramInitialized: false,
-      });
+      }));
       this.isInitialized = false;
     }
   }
@@ -168,23 +176,26 @@ class SpectrogramService {
     if (!this.worker || !this.isInitialized) {
       throw new Error("Spectrogram worker not initialized or unavailable.");
     }
-    useAnalysisStore.setState({
+    analysisStore.update((s) => ({
+      ...s,
       spectrogramStatus: "Processing audio for spectrogram...",
-    });
+    }));
     try {
       await this.postMessageToWorker<SpectrogramProcessPayload>({
         type: SPEC_WORKER_MSG_TYPE.PROCESS,
         payload: { audioData },
       });
-      useAnalysisStore.setState({
+      analysisStore.update((s) => ({
+        ...s,
         spectrogramStatus: "Processing complete.",
-      });
+      }));
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : String(e);
-      useAnalysisStore.setState({
+      analysisStore.update((s) => ({
+        ...s,
         spectrogramStatus: "Processing failed.",
         spectrogramError: errorMessage,
-      });
+      }));
     }
   }
 
@@ -195,12 +206,13 @@ class SpectrogramService {
       this.isInitialized = false;
     }
     this.pendingRequests.clear();
-    useAnalysisStore.setState({
+    analysisStore.update((s) => ({
+      ...s,
       spectrogramStatus: "Disposed",
       spectrogramData: null,
       spectrogramInitialized: false,
       spectrogramError: null,
-    });
+    }));
     console.log("SpectrogramService disposed.");
   }
 }

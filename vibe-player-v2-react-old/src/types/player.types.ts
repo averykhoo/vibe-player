@@ -1,0 +1,20 @@
+// vibe-player-v2-react/src/types/player.types.ts
+// vibe-player-v2/src/lib/types/player.types.ts
+export interface PlayerState {
+  status: string;
+  fileName: string | null;
+  duration: number;
+  currentTime: number;
+  isPlaying: boolean;
+  isPlayable: boolean;
+  speed: number;
+  pitchShift: number;
+  gain: number;
+  waveformData?: number[][];
+  error: string | null;
+  audioBuffer?: AudioBuffer;
+  audioContextResumed?: boolean;
+  channels?: number;
+  sampleRate?: number;
+  lastProcessedChunk?: any; // TODO: Refine this type later
+}

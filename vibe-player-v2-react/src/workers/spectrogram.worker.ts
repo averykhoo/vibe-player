@@ -5,8 +5,8 @@ import type {
   SpectrogramProcessPayload,
   SpectrogramResultPayload,
   WorkerMessage,
-} from "../types/worker.types";
-import { SPEC_WORKER_MSG_TYPE } from "../types/worker.types";
+} from "@/types/worker.types";
+import { SPEC_WORKER_MSG_TYPE } from "@/types/worker.types";
 
 interface FFTClass {
   new (size: number): FFTInstance;

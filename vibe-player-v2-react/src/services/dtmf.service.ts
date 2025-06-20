@@ -1,7 +1,8 @@
 // vibe-player-v2-react/src/services/dtmf.service.ts
-const browser = typeof window !== 'undefined'; // Replaces SvelteKit's $app/environment
-import DtmfWorker from '../workers/dtmf.worker?worker&inline'; // Adjusted path
-import { useDtmfStore } from '../stores/dtmf.store'; // Zustand import
+// vibe-player-v2/src/lib/services/dtmf.service.ts
+import { browser } from "$app/environment";
+import DtmfWorker from "$lib/workers/dtmf.worker?worker&inline";
+import { dtmfStore } from "$lib/stores/dtmf.store";
 
 class DtmfService {
   private static instance: DtmfService;
@@ -28,15 +29,16 @@ class DtmfService {
     this.worker.onmessage = (event) => {
       const { type, payload, error } = event.data;
       if (type === "init_complete") {
-        useDtmfStore.setState({ status: "idle", error: null });
+        dtmfStore.update((s) => ({ ...s, status: "idle", error: null }));
       } else if (type === "result") {
-        useDtmfStore.setState({
+        dtmfStore.update((s) => ({
+          ...s,
           status: "complete",
           dtmf: payload.dtmf,
           cpt: payload.cpt || [],
-        });
+        }));
       } else if (type === "error") {
-        useDtmfStore.setState({ status: "error", error: payload });
+        dtmfStore.update((s) => ({ ...s, status: "error", error: payload }));
       }
     };
 
@@ -46,10 +48,11 @@ class DtmfService {
   public async process(audioBuffer: AudioBuffer): Promise<void> {
     // --- ADD THIS GUARD ---
     if (!this.worker) {
-      useDtmfStore.setState({
+      dtmfStore.update((s) => ({
+        ...s,
         status: "error",
         error: "DTMF Worker not initialized.",
-      });
+      }));
       return;
     }
     if (
@@ -57,18 +60,20 @@ class DtmfService {
       !(audioBuffer instanceof AudioBuffer) ||
       audioBuffer.length === 0
     ) {
-      useDtmfStore.setState({
+      dtmfStore.update((s) => ({
+        ...s,
         status: "error",
         error: "DTMF process called with invalid AudioBuffer.",
-      });
+      }));
       return;
     }
     // --- END GUARD ---
-    useDtmfStore.setState({
+    dtmfStore.update((s) => ({
+      ...s,
       status: "processing",
       dtmf: [],
       cpt: [],
-    });
+    }));
 
     // We need to resample the audio to 16kHz for the Goertzel algorithm
     const targetSampleRate = 16000;
@@ -91,10 +96,11 @@ class DtmfService {
       this.worker?.postMessage({ type: "process", payload: { pcmData } });
     } catch (e) {
       const error = e as Error;
-      useDtmfStore.setState({
+      dtmfStore.update((s) => ({
+        ...s,
         status: "error",
         error: `Resampling failed: ${error.message}`,
-      });
+      }));
       // Re-throw the error so the caller (like a test) can know it failed.
       throw error;
     }

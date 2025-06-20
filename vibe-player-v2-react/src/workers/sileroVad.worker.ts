@@ -6,9 +6,9 @@ import type {
   SileroVadProcessPayload,
   SileroVadProcessResultPayload,
   WorkerMessage,
-} from "../types/worker.types";
-import { VAD_WORKER_MSG_TYPE } from "../types/worker.types";
-import { assert } from "../utils/assert";
+} from "@/types/worker.types";
+import { VAD_WORKER_MSG_TYPE } from "@/types/worker.types";
+import { assert } from "@/utils/assert";
 
 let vadSession: ort.InferenceSession | null = null;
 let sampleRate: number = 16000;
@@ -57,7 +57,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
           );
         }
         // Ensure the path has a trailing slash before ORT uses it.
-        ort.env.wasm.wasmPaths = `${initPayload.origin}/`;
+        // Point to the /assets/wasm/ directory where viteStaticCopy places them.
+        ort.env.wasm.wasmPaths = `/assets/wasm/`;
         // --- END FIX ---
 
         if (!initPayload.modelBuffer) {

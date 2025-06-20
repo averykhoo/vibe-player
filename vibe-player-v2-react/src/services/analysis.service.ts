@@ -1,15 +1,16 @@
 // vibe-player-v2-react/src/services/analysis.service.ts
-const browser = typeof window !== 'undefined'; // Replaces SvelteKit's $app/environment
+// vibe-player-v2/src/lib/services/analysis.service.ts
+import { browser } from "$app/environment";
 import type {
   SileroVadInitPayload,
   SileroVadProcessPayload,
   SileroVadProcessResultPayload,
   WorkerMessage,
-} from '../types/worker.types'; // Adjusted path
-import { VAD_WORKER_MSG_TYPE } from '../types/worker.types'; // Adjusted path
-import { VAD_CONSTANTS } from '../utils'; // Adjusted path
-import { useAnalysisStore } from '../stores/analysis.store'; // Zustand import
-import SileroVadWorker from '../workers/sileroVad.worker?worker&inline'; // Adjusted path
+} from "$lib/types/worker.types";
+import { VAD_WORKER_MSG_TYPE } from "$lib/types/worker.types";
+import { VAD_CONSTANTS } from "$lib/utils";
+import { analysisStore } from "$lib/stores/analysis.store";
+import SileroVadWorker from "$lib/workers/sileroVad.worker?worker&inline";
 
 interface PendingRequest {
   resolve: (value: unknown) => void;
@@ -64,11 +65,12 @@ class AnalysisService {
       return;
     }
     this.isInitializing = true;
-    useAnalysisStore.setState({
+    analysisStore.update((s) => ({
+      ...s,
       vadStatus: "VAD service initializing...",
       vadInitialized: false,
       vadError: null,
-    });
+    }));
 
     this.worker = new SileroVadWorker();
 
@@ -80,44 +82,49 @@ class AnalysisService {
 
       if (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
-        useAnalysisStore.setState({
+        analysisStore.update((s) => ({
+          ...s,
           vadError: `VAD Worker error: ${errorMsg}`,
-        });
+        }));
         if (request) request.reject(new Error(errorMsg));
         if (type === VAD_WORKER_MSG_TYPE.INIT_ERROR) {
           this.isInitialized = false;
           this.isInitializing = false;
-          useAnalysisStore.setState({
+          analysisStore.update((s) => ({
+            ...s,
             vadStatus: "Error initializing VAD service.",
             vadInitialized: false,
-          });
+          }));
         }
       } else {
         switch (type) {
           case VAD_WORKER_MSG_TYPE.INIT_SUCCESS:
             this.isInitialized = true;
             this.isInitializing = false;
-            useAnalysisStore.setState({
+            analysisStore.update((s) => ({
+              ...s,
               vadStatus: "VAD service initialized.",
               vadInitialized: true,
               vadError: null,
-            });
+            }));
             if (request) request.resolve(payload);
             break;
           case VAD_WORKER_MSG_TYPE.PROCESS_RESULT:
             const resultPayload = payload as SileroVadProcessResultPayload;
-            useAnalysisStore.setState({
+            analysisStore.update((s) => ({
+              ...s,
               lastVadResult: resultPayload,
               isSpeaking: resultPayload.isSpeech,
-            });
+            }));
             if (request) request.resolve(resultPayload);
             break;
           case `${VAD_WORKER_MSG_TYPE.RESET}_SUCCESS`:
-            useAnalysisStore.setState({
+            analysisStore.update((s) => ({
+              ...s,
               vadStateResetted: true,
               lastVadResult: null,
               isSpeaking: false,
-            });
+            }));
             if (request) request.resolve(payload);
             break;
           default:
@@ -134,11 +141,12 @@ class AnalysisService {
           : err instanceof ErrorEvent
             ? err.message
             : "Unknown VAD worker error";
-      useAnalysisStore.setState({
+      analysisStore.update((s) => ({
+        ...s,
         vadStatus: "Critical VAD worker error.",
         vadError: errorMsg,
         vadInitialized: false,
-      });
+      }));
       this.pendingRequests.forEach((req) =>
         req.reject(new Error(`VAD Worker failed critically: ${errorMsg}`)),
       );
@@ -177,11 +185,12 @@ class AnalysisService {
       const errorMessage = err instanceof Error ? err.message : String(err);
       this.isInitialized = false;
       this.isInitializing = false;
-      useAnalysisStore.setState({
+      analysisStore.update((s) => ({
+        ...s,
         vadStatus: "Error sending VAD init to worker.",
         vadError: errorMessage,
         vadInitialized: false,
-      });
+      }));
       throw err;
     }
   }
@@ -192,7 +201,7 @@ class AnalysisService {
   ): Promise<SileroVadProcessResultPayload | null> {
     if (!this.worker || !this.isInitialized) {
       const errorMsg = "VAD Service not initialized or worker unavailable.";
-      useAnalysisStore.setState({ vadError: errorMsg });
+      analysisStore.update((s) => ({ ...s, vadError: errorMsg }));
       throw new Error(errorMsg);
     }
     const payload: SileroVadProcessPayload = { audioFrame, timestamp };
@@ -205,9 +214,10 @@ class AnalysisService {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
-      useAnalysisStore.setState({
+      analysisStore.update((s) => ({
+        ...s,
         vadError: `Error processing VAD frame: ${errorMessage}`,
-      });
+      }));
       return null;
     }
   }
@@ -221,13 +231,14 @@ class AnalysisService {
     this.nextMessageId = 0;
     this.isInitialized = false;
     this.isInitializing = false;
-    useAnalysisStore.setState({
+    analysisStore.update((s) => ({
+      ...s,
       vadStatus: "VAD service disposed.",
       vadInitialized: false,
       lastVadResult: null,
       isSpeaking: undefined,
       vadError: null,
-    });
+    }));
     console.log("AnalysisService disposed.");
   }
 }
