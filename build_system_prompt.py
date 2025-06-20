@@ -573,11 +573,16 @@ def generate_repo_prompt(repo_path: Path) -> Tuple[str, List[FileData], int]:
 
         # --- Filters applied ONLY for CONTENT inclusion ---
 
+        # Define the specific file to always include
+        always_include_file = repo_path / "vibe-player-v2/src/lib/services/AudioOrchestrator.service.ts"
+
         # <<< NEW: Filter 3: Content-Only Ignore ---
         # Check if the file is in the content-ignore list. If so, skip content processing.
-        if content_ignore_checker(abs_path):
+        # --- MODIFICATION: Add an exception for the always_include_file ---
+        if content_ignore_checker(abs_path) and abs_path != always_include_file:
             skipped_for_content_ignore_count += 1
             continue
+        # --- END MODIFICATION ---
 
         # Filter 4: Exclude the script file itself from content
         script_path = Path(__file__).resolve()
