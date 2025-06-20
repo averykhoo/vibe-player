@@ -3,9 +3,9 @@
     /**
      * @file Main page component for Vibe Player V2.
      * @description This component serves as the main entry point for the application. It orchestrates
-     * the initialization and disposal of various services (audio engine, analysis services) and
-     * manages the primary UI layout. It also contains the logic for serializing application
-     * state (like playback speed and VAD thresholds) to the URL for sharing.
+     * the initialization and disposal of various services and manages the primary UI layout.
+     * It interacts with `AudioEngineService` via events to update the UI and player state.
+     * It also leverages `url.store.ts` to synchronize relevant player parameters with the URL.
      */
 	import { onMount, onDestroy } from 'svelte';
 	import type { PageData } from './$types';
@@ -28,8 +28,7 @@
     import {playerStore} from '$lib/stores/player.store';
     import {analysisStore} from '$lib/stores/analysis.store';
     import {formatTime} from '$lib/utils/formatters';
-    import { updateUrlWithParams } from '$lib/utils';
-    import { urlParamsStore } from '$lib/stores/url.store';
+    import { updateUrlWithCurrentTime, urlParamsStore } from '$lib/stores/url.store';
 
     export let data: PageData;
 
@@ -121,10 +120,64 @@
 
         window.addEventListener('keydown', handleKeyDown);
 
+        // --- ADD EVENT LISTENERS ---
+        let lastUiUpdateTime = 0;
+        const UI_UPDATE_THROTTLE_MS = 100; // Update UI ~10 times/sec
+
+        const handleTimeUpdate = (event: Event) => {
+            const now = performance.now();
+            if (now - lastUiUpdateTime > UI_UPDATE_THROTTLE_MS) {
+                const customEvent = event as CustomEvent<{ currentTime: number }>;
+                playerStore.update(s => ({ ...s, currentTime: customEvent.detail.currentTime }));
+                lastUiUpdateTime = now;
+            }
+        };
+
+        const handlePlay = () => playerStore.update(s => ({ ...s, isPlaying: true, status: `Playing: ${get(playerStore).fileName}` }));
+        const handlePause = () => {
+            playerStore.update(s => ({ ...s, isPlaying: false, status: `Paused: ${get(playerStore).fileName || ""}` }));
+            updateUrlWithCurrentTime(); // Update URL on pause
+        };
+        const handleStop = () => {
+            playerStore.update(s => ({ ...s, isPlaying: false, currentTime: 0, status: `Stopped: ${get(playerStore).fileName || ""}` }));
+            updateUrlWithCurrentTime(); // Update URL on stop
+        };
+        const handleSeek = (event: Event) => {
+            const customEvent = event as CustomEvent<{ currentTime: number }>;
+            playerStore.update(s => ({...s, currentTime: customEvent.detail.currentTime}));
+            updateUrlWithCurrentTime(); // Update URL on seek
+        };
+        const handleReady = () => playerStore.update(s => ({ ...s, isPlayable: true, status: `Ready: ${get(playerStore).fileName || "Ready to play"}` }));
+        const handleError = (event: Event) => {
+            const customEvent = event as CustomEvent<{ message: string }>;
+            playerStore.update(s => ({ ...s, isPlaying: false, isPlayable: false, status: "Error", error: customEvent.detail.message }));
+        };
+
+
+        audioEngineService.addEventListener('timeupdate', handleTimeUpdate);
+        audioEngineService.addEventListener('play', handlePlay);
+        audioEngineService.addEventListener('pause', handlePause);
+        audioEngineService.addEventListener('stop', handleStop);
+        audioEngineService.addEventListener('seek', handleSeek);
+        audioEngineService.addEventListener('ready', handleReady);
+        audioEngineService.addEventListener('error', handleError); // Add listener for 'error'
+        audioEngineService.addEventListener('ended', handleStop); // Treat 'ended' like 'stop' for UI purposes
+
+
         // Cleanup function
         return () => {
             console.log('Disposing all services onDestroy...');
             window.removeEventListener('keydown', handleKeyDown);
+
+            // --- REMOVE EVENT LISTENERS ---
+            audioEngineService.removeEventListener('timeupdate', handleTimeUpdate);
+            audioEngineService.removeEventListener('play', handlePlay);
+            audioEngineService.removeEventListener('pause', handlePause);
+            audioEngineService.removeEventListener('stop', handleStop);
+            audioEngineService.removeEventListener('seek', handleSeek);
+            audioEngineService.removeEventListener('ready', handleReady);
+            audioEngineService.removeEventListener('error', handleError);
+            audioEngineService.removeEventListener('ended', handleStop);
 
             // Dispose all services when the component is destroyed.
             audioEngineService.dispose();
@@ -133,18 +186,6 @@
             spectrogramService.dispose();
         };
     });
-
-    // Reactive block to update URL when urlParamsStore changes
-    $: {
-        const debouncedUpdate = setTimeout(() => {
-            if (typeof window !== 'undefined') {
-                console.log('[+page.svelte] Derived store changed. Updating URL with params:', $urlParamsStore);
-                updateUrlWithParams($urlParamsStore);
-            }
-        }, 300);
-
-        onDestroy(() => clearTimeout(debouncedUpdate));
-    }
 </script>
 
 <Toaster/>

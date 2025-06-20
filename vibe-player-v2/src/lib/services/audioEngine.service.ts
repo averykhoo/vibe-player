@@ -4,7 +4,6 @@
 //  SECTION: Imports
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { get } from "svelte/store";
 import type {
   RubberbandInitPayload,
   RubberbandProcessPayload,
@@ -13,11 +12,8 @@ import type {
   WorkerMessage,
 } from "$lib/types/worker.types";
 import { RB_WORKER_MSG_TYPE } from "$lib/types/worker.types";
-import { playerStore } from "$lib/stores/player.store";
-import { updateUrlWithCurrentTime } from "$lib/stores/url.store";
 import RubberbandWorker from "$lib/workers/rubberband.worker?worker&inline";
 import { assert, AUDIO_ENGINE_CONSTANTS } from "$lib/utils";
-import { analysisStore } from "../stores/analysis.store";
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  SECTION: Class Definition
@@ -25,11 +21,21 @@ import { analysisStore } from "../stores/analysis.store";
 
 /**
  * @class AudioEngineService
- * @description A singleton service that manages all Web Audio API interactions. It handles
- * audio decoding, playback scheduling, and communication with the Rubberband Web Worker
- * for time-stretching and pitch-shifting.
+ * @description A singleton service that manages Web Audio API interactions. It handles
+ * audio decoding, playback scheduling, communication with the Rubberband Web Worker
+ * for time-stretching/pitch-shifting, and emits events for playback state changes.
+ *
+ * Events dispatched:
+ * - `ready`: When the engine is ready to play after a file is loaded and worker initialized.
+ * - `play`: When playback starts.
+ * - `pause`: When playback pauses.
+ * - `stop`: When playback stops.
+ * - `seek`: When the playback position is changed. Detail: `{ currentTime: number }`
+ * - `timeupdate`: Periodically during playback with the current time. Detail: `{ currentTime: number }`
+ * - `ended`: When playback reaches the end of the audio.
+ * - `error`: When an error occurs. Detail: `{ message: string }`
  */
-class AudioEngineService {
+class AudioEngineService extends EventTarget {
   // ---------------------------------------------------------------------------
   //  SUB-SECTION: Singleton and Private Properties
   // ---------------------------------------------------------------------------
@@ -52,7 +58,9 @@ class AudioEngineService {
   /** The ID of the current requestAnimationFrame loop, used to cancel it. */
   private animationFrameId: number | null = null;
 
-  private constructor() {}
+  private constructor() {
+    super();
+  }
 
   /**
    * Gets the singleton instance of the AudioEngineService.
@@ -70,15 +78,14 @@ class AudioEngineService {
   // ---------------------------------------------------------------------------
 
   /**
-   * Ensures the AudioContext is created. It must be called after a user
-   * [REFACTORED] Ensures the AudioContext is created and resumed. This method is now
-   * idempotent and can be safely called multiple times.
+   * Ensures the AudioContext is created and resumed.
+   * This method is idempotent and should be called after a user interaction
+   * to allow audio playback in browsers with autoplay restrictions.
    * @returns {void}
    */
   public unlockAudio = (): void => {
     // If we've already resumed, do nothing.
     if (this.audioContextResumed) {
-      playerStore.update((s) => ({ ...s, audioContextResumed: true }));
       return;
     }
 
@@ -94,28 +101,33 @@ class AudioEngineService {
             `[AudioEngineService] AudioContext state is now: ${ctx.state}`,
           );
           this.audioContextResumed = true;
-          playerStore.update((s) => ({ ...s, audioContextResumed: true }));
         })
         .catch((err) => {
           console.error(
             "[AudioEngineService] Error resuming AudioContext:",
             err,
           );
-          // Optionally update playerStore with an error state here if needed
+          // Optionally dispatch an error event here if needed
+          this.dispatchEvent(
+            new CustomEvent("error", {
+              detail: {
+                message: `Error resuming AudioContext: ${err.message}`,
+              },
+            }),
+          );
         });
     } else {
-      // If context is already running, just update our state and store
+      // If context is already running, just update our state
       this.audioContextResumed = true;
-      playerStore.update((s) => ({ ...s, audioContextResumed: true }));
     }
   };
 
   /**
    * Loads an audio file, decodes it, and initializes the processing worker.
-   * This is the primary entry point for loading new audio.
+   * Dispatches an 'error' event on failure or re-throws for the caller to handle.
    * @param {File} file - The audio file to load.
    * @returns {Promise<AudioBuffer>} The decoded audio buffer.
-   * @throws Will re-throw errors from decoding or worker initialization.
+   * @throws Will re-throw errors from decoding or worker initialization if not caught internally.
    */
   public loadFile = async (file: File): Promise<AudioBuffer> => {
     console.log(`[AudioEngineService] loadFile called for: ${file.name}`);
@@ -125,33 +137,13 @@ class AudioEngineService {
     if (!audioFileBuffer || audioFileBuffer.byteLength === 0) {
       const errorMsg = "loadFile received an invalid or empty ArrayBuffer.";
       console.error(`[AudioEngine] ${errorMsg}`);
-      playerStore.update((s) => ({
-        ...s,
-        status: `Error loading ${file.name}`,
-        error: errorMsg,
-        isPlayable: false,
-      }));
-      console.log(
-        "[AudioEngineService] playerStore updated by loadFile (invalid buffer). New state:",
-        get(playerStore),
-      );
       throw new Error(errorMsg);
     }
 
     await this.stop(); // Ensure any previous playback is stopped
 
     const ctx = this._getAudioContext();
-    playerStore.update((s) => ({
-      ...s,
-      status: `Decoding ${file.name}...`,
-      fileName: file.name,
-      error: null,
-      isPlayable: false,
-    }));
-    console.log(
-      "[AudioEngineService] playerStore updated by loadFile (before decoding). New state:",
-      get(playerStore),
-    );
+    console.log(`[AudioEngineService] Decoding ${file.name}...`);
 
     try {
       console.log(
@@ -170,16 +162,6 @@ class AudioEngineService {
     } catch (error: any) {
       console.error(
         `[AudioEngineService] Error during loadFile for ${file.name}: ${error.message}`,
-      );
-      playerStore.update((s) => ({
-        ...s,
-        status: `Error decoding ${file.name}`,
-        error: error.message,
-        isPlayable: false,
-      }));
-      console.log(
-        "[AudioEngineService] playerStore updated by loadFile (decode error). New state:",
-        get(playerStore),
       );
       throw error; // Re-throw for the orchestrator
     }
@@ -200,16 +182,11 @@ class AudioEngineService {
       this.worker.onmessage = this.handleWorkerMessage;
       this.worker.onerror = (err) => {
         console.error("[AudioEngineService] Unhandled worker error:", err);
-        // Potentially update store here if a generic worker error occurs not tied to a specific operation
-        playerStore.update((s) => ({
-          ...s,
-          status: "Error in worker",
-          error: "Worker encountered an unhandled error",
-          isPlayable: false,
-        }));
-        console.log(
-          "[AudioEngineService] playerStore updated by _initializeWorker (worker.onerror). New state:",
-          get(playerStore),
+        // Potentially dispatch an error event here if a generic worker error occurs
+        this.dispatchEvent(
+          new CustomEvent("error", {
+            detail: { message: "Worker encountered an unhandled error" },
+          }),
         );
       };
     } else {
@@ -228,17 +205,8 @@ class AudioEngineService {
         const errorMsg =
           "Failed to fetch worker dependencies (WASM or loader script).";
         console.error(`[AudioEngineService] ${errorMsg}`);
-        playerStore.update((s) => ({
-          ...s,
-          status: "Error initializing",
-          error: errorMsg,
-          isPlayable: false,
-        }));
-        console.log(
-          "[AudioEngineService] playerStore updated by _initializeWorker (dependency fetch error). New state:",
-          get(playerStore),
-        );
-        throw new Error(errorMsg);
+        // Dispatch is removed here, will be handled by the catch block or loadFile
+        throw new Error(errorMsg); // This error will be caught by the catch block below
       }
       const wasmBinary = await wasmResponse.arrayBuffer();
       const loaderScriptText = await loaderResponse.text();
@@ -249,8 +217,8 @@ class AudioEngineService {
         origin: location.origin,
         sampleRate: audioBuffer.sampleRate,
         channels: audioBuffer.numberOfChannels,
-        initialSpeed: get(playerStore).speed,
-        initialPitch: get(playerStore).pitch,
+        initialSpeed: 1.0, // Default speed
+        initialPitch: 0.0, // Default pitch
       };
 
       console.log(
@@ -270,15 +238,9 @@ class AudioEngineService {
       console.error(
         `[AudioEngineService] Error during worker initialization: ${error.message}`,
       );
-      playerStore.update((s) => ({
-        ...s,
-        status: "Error initializing worker",
-        error: error.message,
-        isPlayable: false,
-      }));
-      console.log(
-        "[AudioEngineService] playerStore updated by _initializeWorker (init error). New state:",
-        get(playerStore),
+      // This is the single point of dispatch for errors within _initializeWorker's try-catch
+      this.dispatchEvent(
+        new CustomEvent("error", { detail: { message: error.message } }),
       );
       throw error; // Re-throw for the orchestrator or loadFile to catch
     }
@@ -286,12 +248,9 @@ class AudioEngineService {
 
   /**
    * Starts or resumes playback. This method also acts as a gatekeeper for audio
-   * playback, ensuring the AudioContext is resumed if it's in a suspended state,
-   * which is crucial for browsers that require user interaction to start audio.
-   * Starts or resumes playback. This method is now synchronous to give immediate
-  /**
-   * [MODIFIED] Starts or resumes playback. This method assumes the audio context
-   * is already unlocked or will be by the time playback needs to produce sound.
+   * playback, ensuring the AudioContext is resumed if it's in a suspended state.
+   * Assumes the audio context is already unlocked or will be by the time playback needs to produce sound.
+   * Dispatches a `play` event.
    */
   public play = (): void => {
     console.log(
@@ -306,15 +265,7 @@ class AudioEngineService {
 
     // Set UI state immediately for responsiveness.
     this.isPlaying = true;
-    playerStore.update((s) => ({
-      ...s,
-      isPlaying: true,
-      status: `Playing: ${s.fileName}`,
-    }));
-    console.log(
-      "[AudioEngineService] playerStore updated by play. New state:",
-      get(playerStore),
-    );
+    this.dispatchEvent(new CustomEvent("play"));
 
     const audioCtx = this._getAudioContext();
 
@@ -339,6 +290,7 @@ class AudioEngineService {
 
   /**
    * Pauses playback.
+   * Dispatches a `pause` event.
    */
   public pause = (): void => {
     console.log(`[AudioEngineService] PAUSE called.`);
@@ -349,20 +301,13 @@ class AudioEngineService {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
-    updateUrlWithCurrentTime();
-    playerStore.update((s) => ({
-      ...s,
-      isPlaying: false,
-      status: `Paused: ${s.fileName || ""}`,
-    }));
-    console.log(
-      "[AudioEngineService] playerStore updated by pause. New state:",
-      get(playerStore),
-    );
+    this.dispatchEvent(new CustomEvent("pause"));
   };
 
   /**
-   * Stops playback and resets position.
+   * Stops playback, resets position, and clears worker state.
+   * Dispatches a `stop` event.
+   * @returns {Promise<void>}
    */
   public stop = async (): Promise<void> => {
     console.log(`[AudioEngineService] STOP called.`);
@@ -379,24 +324,16 @@ class AudioEngineService {
 
     this.sourcePlaybackOffset = 0;
     this.nextChunkTime = 0;
-    playerStore.update((s) => ({
-      ...s,
-      currentTime: 0,
-      isPlaying: false,
-      status: `Stopped: ${s.fileName || ""}`,
-    }));
-    updateUrlWithCurrentTime();
-    console.log(
-      "[AudioEngineService] playerStore updated by stop. New state:",
-      get(playerStore),
-    );
+    this.dispatchEvent(new CustomEvent("stop"));
     this.isStopping = false;
   };
 
   /**
    * Seeks to a specific time in the audio.
-   * This method now ONLY sets the time and leaves the player in a paused state.
-   * The caller is responsible for resuming playback.
+   * Playback will be paused after seeking. The caller is responsible for resuming.
+   * Dispatches a `seek` event with `detail: { currentTime: time }`.
+   * @param {number} time - The time to seek to, in seconds.
+   * @returns {Promise<void>}
    */
   public seek = async (time: number): Promise<void> => {
     console.log(
@@ -423,16 +360,14 @@ class AudioEngineService {
     // Update the internal state and the store's time.
     this.sourcePlaybackOffset = time;
     this.nextChunkTime = this.audioContext ? this.audioContext.currentTime : 0;
-    playerStore.update((s) => ({ ...s, currentTime: time }));
-    updateUrlWithCurrentTime();
-    console.log(
-      "[AudioEngineService] playerStore updated by seek. New state:",
-      get(playerStore),
+    this.dispatchEvent(
+      new CustomEvent("seek", { detail: { currentTime: time } }),
     );
   };
 
   /**
-   * Sets playback speed.
+   * Sets playback speed (rate).
+   * @param {number} speed - The desired playback speed. 1.0 is normal speed.
    */
   public setSpeed = (speed: number): void => {
     console.log(`[AudioEngineService] setSpeed called with: ${speed}`);
@@ -442,15 +377,11 @@ class AudioEngineService {
         payload: { speed },
       });
     }
-    playerStore.update((s) => ({ ...s, speed }));
-    console.log(
-      "[AudioEngineService] playerStore updated by setSpeed. New state:",
-      get(playerStore),
-    );
   };
 
   /**
-   * Sets playback pitch.
+   * Sets playback pitch shift.
+   * @param {number} pitch - The desired pitch shift in semitones. 0.0 is normal pitch.
    */
   public setPitch = (pitch: number): void => {
     console.log(`[AudioEngineService] setPitch called with: ${pitch}`);
@@ -460,27 +391,22 @@ class AudioEngineService {
         payload: { pitch },
       });
     }
-    playerStore.update((s) => ({ ...s, pitch }));
-    console.log(
-      "[AudioEngineService] playerStore updated by setPitch. New state:",
-      get(playerStore),
-    );
   };
 
   /**
-   * Sets master gain.
+   * Sets master gain (volume).
+   * The gain is applied to the audio signal *before* it's sent to the processing worker.
+   * @param {number} level - The desired gain level. 1.0 is normal volume. Clamped between 0 and 2.
    */
   public setGain = (level: number): void => {
     console.log(`[AudioEngineService] setGain called with: ${level}`);
     // The gain is now applied pre-worker.
     // The actual gain application happens in _performSingleProcessAndPlayIteration.
-    // We still store it in the playerStore for UI and state management.
     const newGain = Math.max(0, Math.min(2, level)); // Assuming gain is clamped 0-2
-    playerStore.update((s) => ({ ...s, gain: newGain }));
-    console.log(
-      "[AudioEngineService] playerStore updated by setGain. New state:",
-      get(playerStore),
-    );
+    if (this.gainNode) {
+      // For tests and immediate effect, directly set value. For smooth changes, setValueAtTime is better.
+      this.gainNode.gain.value = newGain;
+    }
   }; // Ensures this is the end of setGain
 
   /**
@@ -519,6 +445,14 @@ class AudioEngineService {
     return this.audioContext;
   }
 
+  /**
+   * The main loop for processing and playing audio chunks.
+   * This method uses `requestAnimationFrame` to continuously:
+   * 1. Update the playback time via a `timeupdate` event.
+   * 2. Request the next chunk of audio data from the worker if needed.
+   * It stops if `isPlaying` becomes false or the audio ends.
+   * @private
+   */
   private _recursiveProcessAndPlayLoop = (): void => {
     if (
       !this.isPlaying ||
@@ -530,13 +464,10 @@ class AudioEngineService {
       return;
     }
 
-    playerStore.update((s) => ({
-      ...s,
-      currentTime: this.sourcePlaybackOffset,
-    }));
-    console.log(
-      "[AudioEngineService] playerStore updated by _recursiveProcessAndPlayLoop. New state:",
-      get(playerStore),
+    this.dispatchEvent(
+      new CustomEvent("timeupdate", {
+        detail: { currentTime: this.sourcePlaybackOffset },
+      }),
     );
     this._performSingleProcessAndPlayIteration();
 
@@ -585,14 +516,8 @@ class AudioEngineService {
 
         if (actualChunkDuration <= 0) {
           this.pause();
-          playerStore.update((s) => ({
-            ...s,
-            currentTime: this.originalBuffer!.duration,
-          }));
-          console.log(
-            "[AudioEngineService] playerStore updated by _performSingleProcessAndPlayIteration (chunk duration zero). New state:",
-            get(playerStore),
-          );
+          // Dispatch an event or let 'pause' handle state updates
+          this.dispatchEvent(new CustomEvent("ended")); // Or a more specific event
           return;
         }
 
@@ -611,7 +536,7 @@ class AudioEngineService {
           return;
         }
 
-        const currentGain = get(playerStore).gain;
+        const currentGain = this.gainNode?.gain.value ?? 1.0;
         const numberOfChannels = this.originalBuffer.numberOfChannels;
         const inputSamples: Float32Array[] = [];
         const transferableObjects: Transferable[] = [];
@@ -647,15 +572,8 @@ class AudioEngineService {
         this.sourcePlaybackOffset += actualChunkDuration;
       } else {
         this.pause();
-        playerStore.update((s) => ({
-          ...s,
-          currentTime: this.originalBuffer!.duration,
-          status: `Finished: ${s.fileName}`,
-        }));
-        console.log(
-          "[AudioEngineService] playerStore updated by _performSingleProcessAndPlayIteration (finished playing). New state:",
-          get(playerStore),
-        );
+        // Dispatch an event or let 'pause' handle state updates
+        this.dispatchEvent(new CustomEvent("ended")); // Or a more specific event
       }
     }
   };
@@ -729,6 +647,15 @@ class AudioEngineService {
     bufferSource.onended = () => bufferSource.disconnect();
   };
 
+  /**
+   * Handles messages received from the Rubberband Web Worker.
+   * Dispatches events based on worker messages:
+   * - `ready` on `INIT_SUCCESS`.
+   * - `error` on `ERROR`.
+   * Schedules chunk playback on `PROCESS_RESULT`.
+   * @param {MessageEvent<WorkerMessage<RubberbandProcessResultPayload | WorkerErrorPayload>>} event - The message event from the worker.
+   * @private
+   */
   private handleWorkerMessage = (
     event: MessageEvent<
       WorkerMessage<RubberbandProcessResultPayload | WorkerErrorPayload>
@@ -740,15 +667,7 @@ class AudioEngineService {
       case RB_WORKER_MSG_TYPE.INIT_SUCCESS:
         this.isWorkerInitialized = true;
         console.log("[AudioEngineService] Worker initialized successfully.");
-        playerStore.update((s) => ({
-          ...s,
-          isPlayable: true,
-          // Keep status as is, Orchestrator handles "Ready"
-        }));
-        console.log(
-          "[AudioEngineService] playerStore updated by handleWorkerMessage (INIT_SUCCESS). New state:",
-          get(playerStore),
-        );
+        this.dispatchEvent(new CustomEvent("ready"));
         break;
 
       case RB_WORKER_MSG_TYPE.ERROR:
@@ -757,19 +676,13 @@ class AudioEngineService {
           "[AudioEngineService] Worker Error:",
           errorPayload.message,
         );
-        playerStore.update((s) => ({
-          ...s,
-          error: errorPayload.message,
-          isPlaying: false,
-          isPlayable: false,
-          status: "Error",
-        }));
-        console.log(
-          "[AudioEngineService] playerStore updated by handleWorkerMessage (ERROR). New state:",
-          get(playerStore),
+        this.dispatchEvent(
+          new CustomEvent("error", {
+            detail: { message: errorPayload.message },
+          }),
         );
         this.isWorkerInitialized = false;
-        if (this.isPlaying) this.pause();
+        if (this.isPlaying) this.pause(); // Automatically pause on worker error
         break;
 
       case RB_WORKER_MSG_TYPE.PROCESS_RESULT:
