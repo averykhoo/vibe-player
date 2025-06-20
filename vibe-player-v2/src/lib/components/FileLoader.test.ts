@@ -22,6 +22,15 @@ vi.mock("$lib/services/AudioOrchestrator.service", () => ({
   },
 }));
 
+import audioEngineService from "$lib/services/audioEngine.service";
+vi.mock("$lib/services/audioEngine.service", () => ({
+  default: {
+    unlockAudio: vi.fn(),
+    // Add other methods if they are called by FileLoader,
+    // but for this task, only unlockAudio is crucial.
+  },
+}));
+
 // Declare types for store values
 type PlayerStoreValues = {
   fileName: string | null;
@@ -71,6 +80,11 @@ describe("FileLoader.svelte", () => {
     });
 
     vi.clearAllMocks(); // Clear service mocks etc.
+    // Specifically clear the audioEngineService mock if it was used in a previous test run's setup that might affect others.
+    // However, vi.clearAllMocks() should cover it. If not, uncomment:
+    // if (audioEngineService && audioEngineService.unlockAudio) {
+    //   vi.mocked(audioEngineService.unlockAudio).mockClear();
+    // }
 
     // Re-apply store mock implementations after vi.clearAllMocks()
     vi.mocked(playerStoreMocks.playerStore.subscribe).mockImplementation(
@@ -90,7 +104,7 @@ describe("FileLoader.svelte", () => {
     expect(fileInput).toBeInTheDocument();
   });
 
-  it("calls AudioOrchestrator.loadFileAndAnalyze on file selection", async () => {
+  it("calls AudioOrchestrator.loadFileAndAnalyze and audioEngine.unlockAudio on file selection", async () => {
     const { container } = render(FileLoader);
     const fileInput = container.querySelector("#fileInput");
     if (!fileInput) throw new Error("File input with ID 'fileInput' not found");
@@ -106,7 +120,8 @@ describe("FileLoader.svelte", () => {
 
     // expect(audioEngineService.unlockAudio).toHaveBeenCalledTimes(1); // unlockAudio is orchestrator's concern
     // Wait for promises in handleFileSelect to resolve
-    await act(() => Promise.resolve());
+    await act(() => Promise.resolve()); // Flushes microtasks related to async operations in handleFileSelect
+    expect(audioEngineService.unlockAudio).toHaveBeenCalledTimes(1);
     expect(AudioOrchestrator.loadFileAndAnalyze).toHaveBeenCalledWith(mockFile);
   });
 

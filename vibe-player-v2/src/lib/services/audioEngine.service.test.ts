@@ -475,3 +475,157 @@ describe("AudioEngineService", () => {
     });
   });
 });
+
+describe("unlockAudio", () => {
+  // Variable to hold the playerStore instance, similar to how it's done in other tests in this file
+  let playerStoreInstance: Writable<any>;
+  let initialPlayerState: any;
+
+  beforeEach(() => {
+    // Get the handle to our mocked store instance and reset it.
+    playerStoreInstance = __test__getPlayerStoreInstance();
+    initialPlayerState = __test__getInitialPlayerState(); // Get initial state structure
+    playerStoreInstance.set({
+      ...initialPlayerState,
+      audioContextResumed: false,
+    });
+
+    // Reset the mock for AudioContext for each test
+    // vi.mocked(global.AudioContext).mockClear(); // Clears call counts etc.
+    // Ensure AudioContext is reset to a default mock implementation before each test if needed,
+    // or use mockImplementationOnce within each test for specific behaviors.
+    // The global mock might be enough if its default state is 'running' and resume is a simple spy.
+    // For unlockAudio, we often need to control the 'state' and 'resume' behavior specifically.
+    vi.mocked(global.AudioContext).mockReset(); // Resets the mock itself, not just calls.
+
+    // Dispose service to reset its internal state like `this.audioContextResumed`
+    // and to ensure a fresh AudioContext instance is created by _getAudioContext()
+    audioEngineService.dispose();
+  });
+
+  it("should call resume() on a suspended context and set flag after promise resolves", async () => {
+    const resumeSpy = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(global.AudioContext).mockImplementationOnce(
+      () =>
+        ({
+          state: "suspended",
+          resume: resumeSpy,
+          // Minimal required properties for this test path in _getAudioContext and unlockAudio
+          createGain: vi.fn(() => ({
+            connect: vi.fn(),
+            gain: { setValueAtTime: vi.fn() },
+          })),
+          destination: {},
+          currentTime: 0,
+          sampleRate: 48000,
+          close: vi.fn().mockResolvedValue(undefined), // for dispose
+          decodeAudioData: vi.fn(), // for dispose/reset that might happen via loadFile path
+        }) as any,
+    );
+
+    audioEngineService.unlockAudio(); // Call the non-blocking version
+
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+    // Allow microtask queue to flush for the .then() callback in unlockAudio
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(get(playerStoreInstance).audioContextResumed).toBe(true);
+  });
+
+  it("should not call resume() if context is already running but still set flag and update store", () => {
+    const resumeSpy = vi.fn();
+    vi.mocked(global.AudioContext).mockImplementationOnce(
+      () =>
+        ({
+          state: "running",
+          resume: resumeSpy,
+          createGain: vi.fn(() => ({
+            connect: vi.fn(),
+            gain: { setValueAtTime: vi.fn() },
+          })),
+          destination: {},
+          currentTime: 0,
+          sampleRate: 48000,
+          close: vi.fn().mockResolvedValue(undefined),
+          decodeAudioData: vi.fn(),
+        }) as any,
+    );
+
+    // Ensure store is false before call
+    playerStoreInstance.update((s) => ({ ...s, audioContextResumed: false }));
+    expect(get(playerStoreInstance).audioContextResumed).toBe(false);
+
+    audioEngineService.unlockAudio();
+
+    expect(resumeSpy).not.toHaveBeenCalled();
+    expect(get(playerStoreInstance).audioContextResumed).toBe(true);
+  });
+
+  it("should be idempotent, call resume() only once for suspended, and update flag correctly", async () => {
+    const resumeSpy = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(global.AudioContext).mockImplementationOnce(
+      () =>
+        ({
+          state: "suspended",
+          resume: resumeSpy,
+          createGain: vi.fn(() => ({
+            connect: vi.fn(),
+            gain: { setValueAtTime: vi.fn() },
+          })),
+          destination: {},
+          currentTime: 0,
+          sampleRate: 48000,
+          close: vi.fn().mockResolvedValue(undefined),
+          decodeAudioData: vi.fn(),
+        }) as any,
+    );
+
+    // First call
+    audioEngineService.unlockAudio();
+    expect(resumeSpy).toHaveBeenCalledTimes(1);
+    // Allow .then() to complete and set internal audioContextResumed = true
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(get(playerStoreInstance).audioContextResumed).toBe(true);
+
+    // Second call
+    // For the second call, _getAudioContext() might be called again.
+    // If dispose() wasn't called, it might reuse the old context instance from the first call.
+    // If dispose() was called, it needs a new mock.
+    // The beforeEach calls dispose(), so AudioContext mock will be fresh if not for mockImplementationOnce.
+    // To be safe, if the same AudioContext instance is expected to be reused by the service logic
+    // (i.e. service doesn't nullify its context instance), then we should not mockImplementationOnce
+    // or we should provide a more general mock in beforeEach.
+    // Given our dispose in beforeEach, the AudioContext is new.
+    // However, the internal `this.audioContextResumed` flag in the service instance is the key here.
+    // If it's true, it should return early.
+
+    // Let's assume the service's internal `this.audioContextResumed` is now true.
+    // We need to ensure the mock for AudioContext for the *second* call (if it happens)
+    // also has a resumeSpy, though it shouldn't be called.
+    // The critical part is that `audioEngineService.audioContextResumed` is true.
+
+    const resumeSpy2 = vi.fn().mockResolvedValue(undefined); // A new spy for a potentially new context
+    vi.mocked(global.AudioContext).mockImplementationOnce(
+      () =>
+        ({
+          // This mock might not even be hit if the early return works
+          state: "suspended", // or 'running', behavior should be same (no resume call)
+          resume: resumeSpy2,
+          createGain: vi.fn(() => ({
+            connect: vi.fn(),
+            gain: { setValueAtTime: vi.fn() },
+          })),
+          destination: {},
+          currentTime: 0,
+          sampleRate: 48000,
+          close: vi.fn().mockResolvedValue(undefined),
+          decodeAudioData: vi.fn(),
+        }) as any,
+    );
+
+    audioEngineService.unlockAudio(); // Second call
+
+    expect(resumeSpy).toHaveBeenCalledTimes(1); // Original spy still 1
+    expect(resumeSpy2).not.toHaveBeenCalled(); // New spy not called
+    expect(get(playerStoreInstance).audioContextResumed).toBe(true); // Flag remains true
+  });
+});

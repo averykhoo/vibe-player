@@ -9,6 +9,10 @@
     let isLoading = false;
 
     async function handleFileSelect(event: Event) {
+        // The first action in the event handler MUST be the unlock trigger.
+        // It is NOT awaited, allowing it to run in the background.
+        audioEngine.unlockAudio(); // <--- THIS IS THE LINE TO ADD
+
         // Proactively unlock audio context
 
         const input = event.target as HTMLInputElement;
