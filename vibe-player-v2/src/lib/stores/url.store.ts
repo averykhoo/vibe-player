@@ -1,8 +1,9 @@
 // vibe-player-v2/src/lib/stores/url.store.ts
-import { derived } from "svelte/store";
+import { derived, get } from "svelte/store";
 import { playerStore } from "./player.store";
 import { analysisStore } from "./analysis.store";
 import { URL_HASH_KEYS, VAD_CONSTANTS } from "$lib/utils/constants";
+import { updateUrlWithParams } from "$lib/utils";
 
 /**
  * A derived store that computes the URL search parameter object
@@ -46,3 +47,26 @@ export const urlParamsStore = derived(
     return params;
   },
 );
+
+/**
+ * An on-demand function to update the URL with all current settings
+ * PLUS the current playback time. This should be called explicitly
+ * on user interactions like pause or seek.
+ */
+export function updateUrlWithCurrentTime(): void {
+  if (typeof window === "undefined") return;
+
+  const params = get(urlParamsStore);
+  const time = get(playerStore).currentTime;
+
+  const paramsWithTime = { ...params };
+  if (time > 0.1) {
+    // Use a small threshold to avoid writing for near-zero values
+    paramsWithTime[URL_HASH_KEYS.TIME] = time.toFixed(2);
+  } else {
+    // This key might not exist, but calling delete is safe and ensures it's removed.
+    delete paramsWithTime[URL_HASH_KEYS.TIME];
+  }
+
+  updateUrlWithParams(paramsWithTime);
+}

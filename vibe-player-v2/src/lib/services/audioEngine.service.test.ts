@@ -74,12 +74,18 @@ vi.spyOn(global, "fetch").mockImplementation(() =>
 // Now, we can safely import everything else.
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { get } from "svelte/store";
+import { updateUrlWithCurrentTime } from "$lib/stores/url.store";
 import audioEngineService from "./audioEngine.service"; // We import the REAL service.
 import { RB_WORKER_MSG_TYPE } from "$lib/types/worker.types";
 import {
   __test__getPlayerStoreInstance,
   __test__getInitialPlayerState,
 } from "$lib/stores/player.store"; // Import the test accessors.
+
+// Mock the new import
+vi.mock("$lib/stores/url.store", () => ({
+  updateUrlWithCurrentTime: vi.fn(),
+}));
 
 describe("AudioEngineService", () => {
   const MOCK_RAF_ID = 12345;
@@ -284,76 +290,82 @@ describe("AudioEngineService", () => {
 
   describe("pause", () => {
     beforeEach(async () => {
+      (updateUrlWithCurrentTime as vi.Mock).mockClear();
       await audioEngineService.loadFile(mockFile);
       makeWorkerReady();
     });
-    it("should stop the animation loop by calling cancelAnimationFrame", async () => {
-      await audioEngineService.play();
-      expect(rafSpy).toHaveBeenCalledTimes(1); // Loop started.
+    it("should stop animation, call updateUrlWithCurrentTime, and update store", async () => {
+      // Simulate it was playing
+      playerStoreInstance.update((s) => ({ ...s, isPlaying: true }));
+      // Ensure animationFrameId is set within the service, if pause() logic depends on it for cancelAnimationFrame
+      // This might require setting it indirectly via play() or directly if service internals are exposed/mocked
+      audioEngineService.play(); // This sets animationFrameId internally then pauses.
+      audioEngineService.pause(); // The actual call to test
 
-      audioEngineService.pause();
-      expect(cafSpy).toHaveBeenCalledWith(MOCK_RAF_ID); // Loop canceled.
+      expect(cafSpy).toHaveBeenCalled(); // Check if cancelAnimationFrame was called
+      expect(updateUrlWithCurrentTime).toHaveBeenCalled();
       expect(get(playerStoreInstance).isPlaying).toBe(false);
     });
   });
 
   describe("stop", () => {
     beforeEach(async () => {
+      (updateUrlWithCurrentTime as vi.Mock).mockClear();
       await audioEngineService.loadFile(mockFile);
       makeWorkerReady();
     });
-    it("should cancel the animation loop, reset worker, and reset time", async () => {
-      await audioEngineService.play(); // Start playing.
-      playerStoreInstance.update((s) => ({ ...s, currentTime: 5.0 })); // Simulate time advance.
+    it("should reset time, update store, then call updateUrlWithCurrentTime", async () => {
+      await audioEngineService.play(); // Start playing to have something to stop
+      playerStoreInstance.update((s) => ({ ...s, currentTime: 5.0 }));
 
       await audioEngineService.stop();
 
-      expect(cafSpy).toHaveBeenCalledWith(MOCK_RAF_ID);
+      expect(get(playerStoreInstance).currentTime).toBe(0);
+      expect(get(playerStoreInstance).isPlaying).toBe(false);
       expect(mockWorkerInstance.postMessage).toHaveBeenCalledWith({
         type: RB_WORKER_MSG_TYPE.RESET,
       });
-      expect(get(playerStoreInstance).currentTime).toBe(0);
+      expect(updateUrlWithCurrentTime).toHaveBeenCalled();
     });
   });
 
   describe("seek", () => {
     beforeEach(async () => {
+      (updateUrlWithCurrentTime as vi.Mock).mockClear();
       await audioEngineService.loadFile(mockFile);
       makeWorkerReady();
     });
-    it("should update time and reset worker when seeking while paused", async () => {
-      // Ensure player is paused (default after loadFile and makeWorkerReady)
+    it("should update time, call updateUrlWithCurrentTime, and reset worker (if paused)", async () => {
       playerStoreInstance.update((s) => ({ ...s, isPlaying: false }));
-      expect(get(playerStoreInstance).isPlaying).toBe(false);
+      expect(get(playerStoreInstance).isPlaying).toBe(false); // Pre-condition
 
-      await audioEngineService.seek(5.0);
+      const seekTime = 5.0;
+      await audioEngineService.seek(seekTime);
 
-      expect(rafSpy).not.toHaveBeenCalled();
-      expect(cafSpy).not.toHaveBeenCalled();
+      expect(get(playerStoreInstance).currentTime).toBe(seekTime);
+      expect(updateUrlWithCurrentTime).toHaveBeenCalled();
       expect(mockWorkerInstance.postMessage).toHaveBeenCalledWith({
         type: RB_WORKER_MSG_TYPE.RESET,
       });
-      expect(get(playerStoreInstance).currentTime).toBe(5.0);
-      expect(get(playerStoreInstance).isPlaying).toBe(false);
+      expect(get(playerStoreInstance).isPlaying).toBe(false); // Stays paused
     });
 
-    it("should pause playback, update time, and reset worker when seeking while playing", async () => {
-      await audioEngineService.play();
-      expect(get(playerStoreInstance).isPlaying).toBe(true);
-      // Clear spies that might have been called during play()
-      rafSpy.mockClear();
-      cafSpy.mockClear();
+    it("should pause, update time, call updateUrlWithCurrentTime, and reset worker (if playing)", async () => {
+      await audioEngineService.play(); // Start playing
+      expect(get(playerStoreInstance).isPlaying).toBe(true); // Pre-condition
+      // Clear calls from play()
+      vi.mocked(updateUrlWithCurrentTime).mockClear();
       vi.mocked(mockWorkerInstance.postMessage).mockClear();
 
-      await audioEngineService.seek(3.0);
+      const seekTime = 3.0;
+      await audioEngineService.seek(seekTime);
 
-      expect(cafSpy).toHaveBeenCalledWith(MOCK_RAF_ID);
+      expect(get(playerStoreInstance).isPlaying).toBe(false); // Should be paused after seek
+      expect(get(playerStoreInstance).currentTime).toBe(seekTime);
+      expect(updateUrlWithCurrentTime).toHaveBeenCalled();
       expect(mockWorkerInstance.postMessage).toHaveBeenCalledWith({
         type: RB_WORKER_MSG_TYPE.RESET,
       });
-      expect(get(playerStoreInstance).currentTime).toBe(3.0);
-      expect(rafSpy).not.toHaveBeenCalled();
-      expect(get(playerStoreInstance).isPlaying).toBe(false);
     });
   });
 

@@ -14,6 +14,7 @@ import type {
 } from "$lib/types/worker.types";
 import { RB_WORKER_MSG_TYPE } from "$lib/types/worker.types";
 import { playerStore } from "$lib/stores/player.store";
+import { updateUrlWithCurrentTime } from "$lib/stores/url.store";
 import RubberbandWorker from "$lib/workers/rubberband.worker?worker&inline";
 import { assert, AUDIO_ENGINE_CONSTANTS } from "$lib/utils";
 import { analysisStore } from "../stores/analysis.store";
@@ -348,7 +349,7 @@ class AudioEngineService {
       cancelAnimationFrame(this.animationFrameId);
       this.animationFrameId = null;
     }
-
+    updateUrlWithCurrentTime();
     playerStore.update((s) => ({
       ...s,
       isPlaying: false,
@@ -384,6 +385,7 @@ class AudioEngineService {
       isPlaying: false,
       status: `Stopped: ${s.fileName || ""}`,
     }));
+    updateUrlWithCurrentTime();
     console.log(
       "[AudioEngineService] playerStore updated by stop. New state:",
       get(playerStore),
@@ -422,6 +424,7 @@ class AudioEngineService {
     this.sourcePlaybackOffset = time;
     this.nextChunkTime = this.audioContext ? this.audioContext.currentTime : 0;
     playerStore.update((s) => ({ ...s, currentTime: time }));
+    updateUrlWithCurrentTime();
     console.log(
       "[AudioEngineService] playerStore updated by seek. New state:",
       get(playerStore),

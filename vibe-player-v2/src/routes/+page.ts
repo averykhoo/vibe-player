@@ -13,12 +13,14 @@ export const load: PageLoad = ({ url }) => {
   const speedStr = url.searchParams.get(URL_HASH_KEYS.SPEED);
   const pitchStr = url.searchParams.get(URL_HASH_KEYS.PITCH);
   const gainStr = url.searchParams.get(URL_HASH_KEYS.GAIN);
+  const timeStr = url.searchParams.get(URL_HASH_KEYS.TIME);
   // TODO: Add VAD and other params as needed
 
   const initialPlayerData = {
     speed: speedStr ? parseFloat(speedStr) : undefined,
     pitch: pitchStr ? parseFloat(pitchStr) : undefined,
     gain: gainStr ? parseFloat(gainStr) : undefined,
+    currentTime: timeStr ? parseFloat(timeStr) : undefined,
   };
 
   console.log("[+page.ts load] Parsed initial player data:", initialPlayerData);

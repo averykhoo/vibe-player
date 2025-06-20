@@ -86,9 +86,15 @@
 				...s,
 				speed: playerData.speed ?? s.speed,
 				pitch: playerData.pitch ?? s.pitch,
-				gain: playerData.gain ?? s.gain
+				gain: playerData.gain ?? s.gain,
+				currentTime: playerData.currentTime ?? s.currentTime // ADD THIS
 			}));
 			console.log('[+page.svelte onMount] playerStore updated with:', playerData);
+		}
+
+		// Initialize seekTime if currentTime is available from URL
+		if (playerData.currentTime) {
+			seekTime = playerData.currentTime;
 		}
 
 		// A similar block would be needed for analysisStore if VAD params were handled
