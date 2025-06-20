@@ -245,7 +245,14 @@ describe("AudioEngineService", () => {
     });
 
     it("should start the animation loop by calling requestAnimationFrame", async () => {
-      await audioEngineService.play();
+      // audioEngineService.play() is now synchronous and returns void.
+      audioEngineService.play();
+
+      // --- ADD THIS YIELD ---
+      // Give the event loop a chance to process the .then() callback inside play().
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // Now the assertion will correctly find the call.
       expect(rafSpy).toHaveBeenCalledTimes(1);
     });
 

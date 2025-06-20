@@ -262,18 +262,14 @@ class AudioEngineService {
    * Starts or resumes playback. This method also acts as a gatekeeper for audio
    * playback, ensuring the AudioContext is resumed if it's in a suspended state,
    * which is crucial for browsers that require user interaction to start audio.
-   * If the AudioContext is suspended, it will asynchronously attempt to resume it
-   * before proceeding with playback.
+   * Starts or resumes playback. This method is now synchronous to give immediate
+   * UI feedback, while the actual playback loop is started in a non-blocking
+   * promise callback to handle AudioContext resumption gracefully.
    */
-  public play = async (): Promise<void> => {
+  public play = (): void => {
     console.log(
       `[AudioEngineService] PLAY called. State: isPlaying=${this.isPlaying}, isWorkerInitialized=${this.isWorkerInitialized}`,
     );
-    // ADD THIS LOG:
-    console.log(
-      `[AudioEngineService] AudioContext state is: ${this._getAudioContext().state}`,
-    );
-
     if (this.isPlaying || !this.originalBuffer || !this.isWorkerInitialized) {
       console.warn(
         "AudioEngine: Play command ignored. Not ready or already playing.",
@@ -281,12 +277,7 @@ class AudioEngineService {
       return;
     }
 
-    // Redundant animationFrameId check removed as it should be null here.
-    // pause(), stop(), dispose(), and the loop itself ensure animationFrameId is cleared.
-
-    const audioCtx = this._getAudioContext();
-    if (audioCtx.state === "suspended") await audioCtx.resume();
-
+    // Set UI state immediately for responsiveness. This updates the button to "Pause".
     this.isPlaying = true;
     playerStore.update((s) => ({
       ...s,
@@ -298,14 +289,35 @@ class AudioEngineService {
       get(playerStore),
     );
 
-    if (this.nextChunkTime === 0 || this.nextChunkTime < audioCtx.currentTime) {
-      this.nextChunkTime = audioCtx.currentTime;
-    }
+    const audioCtx = this._getAudioContext();
 
-    if (this.isPlaying) {
-      this.animationFrameId = requestAnimationFrame(
-        this._recursiveProcessAndPlayLoop,
+    // Define the function that starts the actual audio processing loop.
+    const startPlaybackLoop = () => {
+      // Re-check isPlaying in case the user paused immediately after playing.
+      if (this.isPlaying) {
+        if (
+          this.nextChunkTime === 0 ||
+          this.nextChunkTime < audioCtx.currentTime
+        ) {
+          this.nextChunkTime = audioCtx.currentTime;
+        }
+        this.animationFrameId = requestAnimationFrame(
+          this._recursiveProcessAndPlayLoop,
+        );
+      }
+    };
+
+    // Check the context state and handle it asynchronously without blocking.
+    if (audioCtx.state === "suspended") {
+      console.log(
+        "[AudioEngineService] Context is suspended. Resuming before starting loop...",
       );
+      audioCtx.resume().then(startPlaybackLoop);
+    } else {
+      console.log(
+        "[AudioEngineService] Context is running. Starting loop immediately.",
+      );
+      startPlaybackLoop();
     }
   };
 
