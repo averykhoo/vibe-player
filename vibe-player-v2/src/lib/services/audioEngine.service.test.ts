@@ -386,7 +386,7 @@ describe("AudioEngineService", () => {
       makeWorkerReady();
     });
 
-    it("should apply gain to audio samples before sending them to the worker", () => {
+    it("should apply gain to audio samples before sending them to the worker", async () => {
       const testGain = 0.5;
       playerStoreInstance.update((s) => ({ ...s, gain: testGain }));
 
@@ -395,6 +395,9 @@ describe("AudioEngineService", () => {
 
       // Call play, which should trigger _recursiveProcessAndPlayLoop via rAF
       audioEngineService.play(); // isPlaying is now true
+
+      // Give the event loop a chance to process the async play method
+      await new Promise((resolve) => setTimeout(resolve, 0));
 
       // Get the callback passed to requestAnimationFrame and execute it once
       // This simulates the browser calling our loop function
@@ -446,6 +449,8 @@ describe("AudioEngineService", () => {
       vi.mocked(mockWorkerInstance.postMessage).mockClear();
 
       audioEngineService.play();
+      // Give the event loop a chance to process the async play method
+      await new Promise((resolve) => setTimeout(resolve, 0));
       const processLoopCallback = rafSpy.mock.calls[0][0];
       processLoopCallback(0);
 

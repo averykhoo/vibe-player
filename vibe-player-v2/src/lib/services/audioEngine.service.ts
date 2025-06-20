@@ -37,6 +37,7 @@ class AudioEngineService {
 
   private worker: Worker | null = null;
   private audioContext: AudioContext | null = null;
+  private audioContextResumed = false;
   private gainNode: GainNode | null = null;
   private originalBuffer: AudioBuffer | null = null;
 
@@ -69,10 +70,16 @@ class AudioEngineService {
 
   /**
    * Ensures the AudioContext is created. It must be called after a user
-   * interaction (e.g., a click) to comply with browser autoplay policies.
+   * [REFACTORED] Ensures the AudioContext is created and resumed. This method is now
+   * idempotent and can be safely called multiple times.
    * @returns {Promise<void>}
    */
   public unlockAudio = async (): Promise<void> => {
+    // If we've already resumed, do nothing.
+    if (this.audioContextResumed) {
+      return;
+    }
+
     const ctx = this._getAudioContext();
     if (ctx.state === "suspended") {
       console.log(
@@ -83,6 +90,10 @@ class AudioEngineService {
         `[AudioEngineService] AudioContext state is now: ${ctx.state}`,
       );
     }
+
+    // Set the flag to true after the first successful check/resume.
+    this.audioContextResumed = true;
+    playerStore.update((s) => ({ ...s, audioContextResumed: true }));
   };
 
   /**
@@ -94,6 +105,10 @@ class AudioEngineService {
    */
   public loadFile = async (file: File): Promise<AudioBuffer> => {
     console.log(`[AudioEngineService] loadFile called for: ${file.name}`);
+
+    // FIRST, ensure the audio context is unlocked.
+    await this.unlockAudio();
+
     const audioFileBuffer = await file.arrayBuffer();
 
     if (!audioFileBuffer || audioFileBuffer.byteLength === 0) {
@@ -263,10 +278,11 @@ class AudioEngineService {
    * playback, ensuring the AudioContext is resumed if it's in a suspended state,
    * which is crucial for browsers that require user interaction to start audio.
    * Starts or resumes playback. This method is now synchronous to give immediate
-   * UI feedback, while the actual playback loop is started in a non-blocking
-   * promise callback to handle AudioContext resumption gracefully.
+  /**
+   * [MODIFIED] Starts or resumes playback. This method is now async to ensure the
+   * audio context is unlocked before proceeding.
    */
-  public play = (): void => {
+  public play = async (): Promise<void> => {
     console.log(
       `[AudioEngineService] PLAY called. State: isPlaying=${this.isPlaying}, isWorkerInitialized=${this.isWorkerInitialized}`,
     );
@@ -277,7 +293,10 @@ class AudioEngineService {
       return;
     }
 
-    // Set UI state immediately for responsiveness. This updates the button to "Pause".
+    // FIRST, ensure the audio context is unlocked.
+    await this.unlockAudio();
+
+    // Set UI state immediately for responsiveness.
     this.isPlaying = true;
     playerStore.update((s) => ({
       ...s,
@@ -307,18 +326,8 @@ class AudioEngineService {
       }
     };
 
-    // Check the context state and handle it asynchronously without blocking.
-    if (audioCtx.state === "suspended") {
-      console.log(
-        "[AudioEngineService] Context is suspended. Resuming before starting loop...",
-      );
-      audioCtx.resume().then(startPlaybackLoop);
-    } else {
-      console.log(
-        "[AudioEngineService] Context is running. Starting loop immediately.",
-      );
-      startPlaybackLoop();
-    }
+    // Directly start the loop. The `unlockAudio` call above handles the context state.
+    startPlaybackLoop();
   };
 
   /**

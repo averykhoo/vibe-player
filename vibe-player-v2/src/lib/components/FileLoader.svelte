@@ -10,7 +10,6 @@
 
     async function handleFileSelect(event: Event) {
         // Proactively unlock audio context
-        audioEngine.unlockAudio(); // Non-blocking
 
         const input = event.target as HTMLInputElement;
         if (input.files?.[0]) {

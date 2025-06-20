@@ -49,7 +49,6 @@ class AudioOrchestrator {
     try {
       // Step 1: Unlock the AudioContext. This is the crucial fix.
       // It must happen as part of the user gesture chain (file selection).
-      // await audioEngine.unlockAudio(); // <--- UNCOMMENT THIS LINE
 
       // Step 2: Decode the audio. We must wait for this to complete.
       // audioEngine.loadFile will be modified to accept a File and return AudioBuffer
