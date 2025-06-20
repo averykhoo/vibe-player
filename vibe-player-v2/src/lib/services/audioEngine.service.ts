@@ -289,8 +289,8 @@ class AudioEngineService {
    * which is crucial for browsers that require user interaction to start audio.
    * Starts or resumes playback. This method is now synchronous to give immediate
   /**
-   * [MODIFIED] Starts or resumes playback. This method is now async to ensure the
-   * audio context is unlocked before proceeding.
+   * [MODIFIED] Starts or resumes playback. This method assumes the audio context
+   * is already unlocked or will be by the time playback needs to produce sound.
    */
   public play = (): void => {
     console.log(
@@ -302,9 +302,6 @@ class AudioEngineService {
       );
       return;
     }
-
-    // Ensure the audio context is unlocked. This is now a synchronous call.
-    this.unlockAudio();
 
     // Set UI state immediately for responsiveness.
     this.isPlaying = true;
@@ -336,7 +333,6 @@ class AudioEngineService {
       }
     };
 
-    // Directly start the loop. The `unlockAudio` call above handles the context state.
     startPlaybackLoop();
   };
 

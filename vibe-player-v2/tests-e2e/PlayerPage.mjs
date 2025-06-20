@@ -115,9 +115,8 @@ export class PlayerPage {
       inputElement.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
     }, valueStr);
 
-    // A small delay for debounced functions or other async updates in Svelte to fire.
-    // Wait must be longer than the 500ms debounce period in UI_CONSTANTS.
-    await this.page.waitForTimeout(600); // Changed from 350ms
+    // REMOVE THIS LINE ENTIRELY.
+    // The test assertion itself will handle waiting.
   }
 
   /**
