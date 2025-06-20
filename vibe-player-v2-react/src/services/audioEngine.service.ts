@@ -5,19 +5,19 @@
 //  SECTION: Imports
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { get } from "svelte/store";
 import type {
   RubberbandInitPayload,
   RubberbandProcessPayload,
   RubberbandProcessResultPayload,
   WorkerErrorPayload,
   WorkerMessage,
-} from "$lib/types/worker.types";
-import { RB_WORKER_MSG_TYPE } from "$lib/types/worker.types";
-import { playerStore } from "$lib/stores/player.store";
-import RubberbandWorker from "$lib/workers/rubberband.worker?worker&inline";
-import { assert, AUDIO_ENGINE_CONSTANTS } from "$lib/utils";
-// import { analysisStore } from "../stores/analysis.store"; // Not used directly in this file after refactor
+  WorkerPayload,
+} from "@/types/worker.types";
+import { RB_WORKER_MSG_TYPE } from "@/types/worker.types";
+import { usePlayerStore } from "../stores/player.store"; // Changed to relative path
+import type { PlayerState } from "@/types/player.types"; // Import PlayerState
+import RubberbandWorker from "@/workers/rubberband.worker?worker";
+import { assert, AUDIO_ENGINE_CONSTANTS } from "@/utils"; // Assuming index.ts in @/utils exports these
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  SECTION: Class Definition
@@ -162,7 +162,7 @@ class AudioEngineService {
       if (!audioBuffer) {
         const errorMsg = "initializeWorker called with no AudioBuffer.";
         console.error(`[AudioEngineService] ${errorMsg}`);
-        playerStore.update((s) => ({
+        usePlayerStore.setState((s: PlayerState) => ({
           ...s,
           error: errorMsg,
           isPlayable: false,
@@ -176,16 +176,19 @@ class AudioEngineService {
 
       if (!this.worker) {
         this.worker = new RubberbandWorker();
-        this.worker.onmessage = this.handleWorkerMessage; // Bound method
-        this.worker.onerror = (err) => {
-          // General worker error, not specific to init
+        this.worker.onmessage = this.handleWorkerMessage;
+        this.worker.onerror = (err: Event | string) => {
           console.error(
             "[AudioEngineService] Unhandled worker error event:",
             err,
           );
           const errorMessage =
-            "Worker crashed or encountered an unrecoverable error.";
-          playerStore.update((s) => ({
+            err instanceof ErrorEvent
+              ? err.message
+              : typeof err === "string"
+                ? err
+                : "Worker crashed or encountered an unrecoverable error.";
+          usePlayerStore.setState((s: PlayerState) => ({
             ...s,
             error: errorMessage,
             isPlayable: false,
@@ -193,21 +196,18 @@ class AudioEngineService {
           }));
           this.isWorkerReady = false;
           if (this.workerInitPromiseCallbacks) {
-            this.workerInitPromiseCallbacks.reject(
-              new Error(err.message || "Unknown worker error"),
-            );
+            this.workerInitPromiseCallbacks.reject(new Error(errorMessage));
             this.workerInitPromiseCallbacks = null;
           }
         };
       } else {
-        // If worker exists, send RESET to clear its state before re-initializing
         console.log(
           "[AudioEngineService] Worker exists. Sending RESET before INIT.",
         );
-        this.worker.postMessage({ type: RB_WORKER_MSG_TYPE.RESET });
+        this.worker.postMessage({ type: RB_WORKER_MSG_TYPE.RESET } as WorkerMessage<never>);
       }
 
-      this.isWorkerReady = false; // Set to false until INIT_SUCCESS is received
+      this.isWorkerReady = false;
 
       Promise.all([
         fetch(AUDIO_ENGINE_CONSTANTS.WASM_BINARY_URL),
@@ -216,22 +216,22 @@ class AudioEngineService {
         .then(async ([wasmResponse, loaderResponse]) => {
           if (!wasmResponse.ok || !loaderResponse.ok) {
             throw new Error(
-              "Failed to fetch worker dependencies (WASM or loader script).",
+              `Failed to fetch worker dependencies. WASM: ${wasmResponse.status}, Loader: ${loaderResponse.status}`,
             );
           }
-          const wasmBinary = await wasmResponse.arrayBuffer();
-          const loaderScriptText = await loaderResponse.text();
+          const wasmBinary: ArrayBuffer = await wasmResponse.arrayBuffer();
+          const loaderScriptText: string = await loaderResponse.text();
 
-          const { playbackSpeed, pitchShift } = get(playerStore);
+          const playerState = usePlayerStore.getState(); // Get the whole state
 
           const initPayload: RubberbandInitPayload = {
             wasmBinary,
             loaderScriptText,
-            origin: location.origin,
+            origin: typeof window !== "undefined" ? window.location.origin : "", // Handle SSR if worker used there
             sampleRate: audioBuffer.sampleRate,
             channels: audioBuffer.numberOfChannels,
-            initialSpeed: playbackSpeed,
-            initialPitch: pitchShift,
+            initialSpeed: playerState.speed, // Use 'speed' from playerState
+            initialPitch: playerState.pitchShift, // Corrected: Use 'pitchShift' from playerState
           };
 
           console.log(
@@ -243,16 +243,15 @@ class AudioEngineService {
             },
           );
           this.worker!.postMessage(
-            { type: RB_WORKER_MSG_TYPE.INIT, payload: initPayload },
+            { type: RB_WORKER_MSG_TYPE.INIT, payload: initPayload } as WorkerMessage<RubberbandInitPayload>,
             [wasmBinary],
           );
-          // Resolution/rejection is handled by `handleWorkerMessage` via `this.workerInitPromiseCallbacks`
         })
-        .catch((e) => {
+        .catch((e: unknown) => {
           const error = e as Error;
           const errorMsg = `Error fetching worker dependencies: ${error.message}`;
           console.error(`[AudioEngineService] ${errorMsg}`);
-          playerStore.update((s) => ({
+          usePlayerStore.setState((s: PlayerState) => ({
             ...s,
             error: errorMsg,
             isPlayable: false,
@@ -338,11 +337,10 @@ class AudioEngineService {
     }
 
     if (this.worker && this.isWorkerReady) {
-      // Only reset if worker is valid and was ready
       console.log(
         "[AudioEngineService] Posting RESET to worker due to stop().",
       );
-      this.worker.postMessage({ type: RB_WORKER_MSG_TYPE.RESET });
+      this.worker.postMessage({ type: RB_WORKER_MSG_TYPE.RESET } as WorkerMessage<never>);
     }
 
     this.sourcePlaybackOffset = 0;
@@ -385,7 +383,7 @@ class AudioEngineService {
       console.log(
         "[AudioEngineService] Posting RESET to worker due to seek().",
       );
-      this.worker.postMessage({ type: RB_WORKER_MSG_TYPE.RESET });
+      this.worker.postMessage({ type: RB_WORKER_MSG_TYPE.RESET } as WorkerMessage<never>);
     }
 
     this.sourcePlaybackOffset = clampedTime;
@@ -406,14 +404,13 @@ class AudioEngineService {
       this.worker.postMessage({
         type: RB_WORKER_MSG_TYPE.SET_SPEED,
         payload: { speed },
-      });
+      } as WorkerMessage<{ speed: number }>);
     }
-    // playerStore.update((s) => ({ ...s, speed })); // UI component handles this store update
   };
 
   /**
    * Sets the playback pitch shift.
-   * @param {number} pitch - The desired pitch shift value.
+   * @param {number} pitch - The desired pitch shift value (semitones).
    * @public
    */
   public setPitch = (pitch: number): void => {
@@ -422,9 +419,8 @@ class AudioEngineService {
       this.worker.postMessage({
         type: RB_WORKER_MSG_TYPE.SET_PITCH,
         payload: { pitch },
-      });
+      } as WorkerMessage<{ pitch: number }>);
     }
-    // playerStore.update((s) => ({ ...s, pitchShift: pitch })); // UI component handles this
   };
 
   /**
@@ -493,8 +489,7 @@ class AudioEngineService {
    */
   public updateSeek = (time: number): void => {
     if (!this.originalBuffer || !this.isWorkerReady) return;
-    // Update the store directly for immediate UI feedback.
-    playerStore.update((s) => ({ ...s, currentTime: time }));
+    usePlayerStore.setState({ currentTime: time });
   };
 
   /**
@@ -560,11 +555,10 @@ class AudioEngineService {
       return;
     }
 
-    // Update current time in store (can be handled by Orchestrator/UI if preferred)
-    playerStore.update((s) => ({
-      ...s,
-      currentTime: this.sourcePlaybackOffset,
-    }));
+    // Update current time in store
+    // Note: Frequent updates directly to Zustand store from RAF loop can be performance intensive.
+    // Consider debouncing or alternative methods if performance issues arise.
+    usePlayerStore.setState({ currentTime: this.sourcePlaybackOffset });
 
     this._performSingleProcessAndPlayIteration();
 
@@ -634,11 +628,14 @@ class AudioEngineService {
         if (chunkDuration <= 0) {
           // Should not happen if previous checks are correct
           this.pause(); // Pause if we somehow have no duration left to process
-          playerStore.update((s) => ({
-            ...s,
-            currentTime: this.originalBuffer!.duration,
-            isPlaying: false,
-          }));
+          if (this.originalBuffer) { // Check if originalBuffer is not null
+            usePlayerStore.setState({
+              currentTime: this.originalBuffer.duration,
+              isPlaying: false,
+            });
+          } else {
+             usePlayerStore.setState({ isPlaying: false });
+          }
           return;
         }
 
@@ -673,19 +670,22 @@ class AudioEngineService {
         // );
 
         const processPayload: RubberbandProcessPayload = {
-          inputBuffer: [segment], // Assuming mono processing for now based on `getChannelData(0)`
+          inputBuffer: [segment], // Assuming mono processing based on `getChannelData(0)`
           isFinalChunk,
         };
         this.worker!.postMessage(
-          { type: RB_WORKER_MSG_TYPE.PROCESS, payload: processPayload },
+          { type: RB_WORKER_MSG_TYPE.PROCESS, payload: processPayload } as WorkerMessage<RubberbandProcessPayload>,
           [segment.buffer], // Transferable object
         );
         this.sourcePlaybackOffset += chunkDuration;
       } else {
         // Reached end of buffer
         this.pause();
-        // Orchestrator can set 'Finished' status
-        // playerStore.update((s) => ({ ...s, currentTime: this.originalBuffer!.duration, isPlaying: false }));
+        if (this.originalBuffer) { // Check if originalBuffer is not null
+            usePlayerStore.setState({ currentTime: this.originalBuffer.duration, isPlaying: false });
+        } else {
+            usePlayerStore.setState({ isPlaying: false });
+        }
       }
     }
   };
@@ -796,11 +796,28 @@ class AudioEngineService {
    */
   private handleWorkerMessage = (
     // Defined as an arrow function to preserve `this` context if passed as callback directly
-    event: MessageEvent<
-      WorkerMessage<RubberbandProcessResultPayload | WorkerErrorPayload>
-    >,
+    event: MessageEvent<WorkerMessage<WorkerPayload>>, // More generic payload type
   ): void => {
-    const { type, payload } = event.data;
+    const { type, payload, error } = event.data; // Removed messageId as it's unused here
+
+    if (error) {
+      // Handle generic worker errors if your worker might send them this way
+      const errorMsg = typeof error === 'string' ? error : (error as Error).message || "Unknown worker error";
+      console.error("[AudioEngineService] Worker reported an error:", errorMsg);
+      usePlayerStore.setState((s: PlayerState) => ({ // Added PlayerState type
+        ...s,
+        error: errorMsg,
+        isPlaying: false,
+        isPlayable: false,
+      }));
+      this.isWorkerReady = false;
+      if (this.isPlaying) this.pause();
+      if (this.workerInitPromiseCallbacks) {
+        this.workerInitPromiseCallbacks.reject(new Error(errorMsg));
+        this.workerInitPromiseCallbacks = null;
+      }
+      return;
+    }
 
     switch (type) {
       case RB_WORKER_MSG_TYPE.INIT_SUCCESS:
@@ -808,27 +825,27 @@ class AudioEngineService {
         console.log(
           "[AudioEngineService] Worker initialized successfully (INIT_SUCCESS received).",
         );
-        playerStore.update((s) => ({ ...s, isPlayable: true, error: null })); // Update store on successful init
+        usePlayerStore.setState((s: PlayerState) => ({ ...s, isPlayable: true, error: null })); // Added PlayerState type
         if (this.workerInitPromiseCallbacks) {
           this.workerInitPromiseCallbacks.resolve();
           this.workerInitPromiseCallbacks = null;
         }
         break;
 
-      case RB_WORKER_MSG_TYPE.ERROR:
+      case RB_WORKER_MSG_TYPE.ERROR: // Specific error message type from worker
         const errorPayload = payload as WorkerErrorPayload;
         console.error(
           "[AudioEngineService] Worker Error Message:",
           errorPayload.message,
         );
-        playerStore.update((s) => ({
+        usePlayerStore.setState((s: PlayerState) => ({
           ...s,
           error: errorPayload.message,
-          isPlaying: false, // Stop playback on worker error
-          isPlayable: false, // Worker is not in a playable state
+          isPlaying: false,
+          isPlayable: false,
         }));
         this.isWorkerReady = false;
-        if (this.isPlaying) this.pause(); // Ensure playback stops
+        if (this.isPlaying) this.pause();
 
         if (this.workerInitPromiseCallbacks) {
           this.workerInitPromiseCallbacks.reject(
@@ -840,7 +857,6 @@ class AudioEngineService {
 
       case RB_WORKER_MSG_TYPE.PROCESS_RESULT:
         if (this.isStopping) {
-          // If stopping, discard any late-arriving processed data
           console.log(
             "[AudioEngineService] PROCESS_RESULT received while stopping, discarding.",
           );
@@ -848,7 +864,6 @@ class AudioEngineService {
         }
         const { outputBuffer } = payload as RubberbandProcessResultPayload;
         if (outputBuffer && this.isPlaying && this.isWorkerReady) {
-          // Ensure still playing and worker is ready
           this.scheduleChunkPlayback(outputBuffer, this.nextChunkTime);
         }
         break;

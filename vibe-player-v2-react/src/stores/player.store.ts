@@ -1,11 +1,14 @@
 // vibe-player-v2-react/src/stores/player.store.ts
 import { create } from 'zustand';
-import type { PlayerState } from '@/types/player.types';
+import type { PlayerState as PlayerStateType } from '@/types/player.types'; // Import with an alias
+
+// Re-export the type
+export type { PlayerStateType as PlayerState };
 
 // The PlayerState interface (as confirmed from player.types.ts) does not include an 'actions' property.
 // Thus, Omit<PlayerState, 'actions'> is equivalent to PlayerState here.
 // This initialState is based on the structure of PlayerState.
-const initialState: PlayerState = {
+const initialState: PlayerStateType = {
   status: 'idle', // Default status
   fileName: null,
   duration: 0,
@@ -24,7 +27,7 @@ const initialState: PlayerState = {
   lastProcessedChunk: undefined, // Optional, and type is 'any'
 };
 
-export const usePlayerStore = create<PlayerState>((set) => ({
+export const usePlayerStore = create<PlayerStateType>((set) => ({
   ...initialState,
   // Services will use usePlayerStore.setState() for updates.
   // If specific actions are needed on the store itself later, they can be added here.

@@ -38,39 +38,53 @@ export const DTMF_CHARACTERS: { [key: string]: string } = {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Implements the Goertzel algorithm to detect the magnitude of a specific frequency.
- * This is the corrected version ported from the original, working V1 implementation.
+ * @class GoertzelFilter
+ * @description Implements the Goertzel algorithm to detect the magnitude of a specific frequency
+ * within a block of samples. This version is corrected and ported from an original V1 implementation.
+ * It is used to efficiently detect the presence of specific frequencies, such as those in DTMF tones.
  */
 class GoertzelFilter {
   private q1: number = 0;
   private q2: number = 0;
   private N: number;
   private cosine: number;
-  private sine: number; // Correctly includes the sine component
+  private sine: number;
   private coeff: number;
 
+  /**
+   * Creates an instance of GoertzelFilter.
+   * @param {number} targetFrequency - The specific frequency to detect.
+   * @param {number} sampleRate - The sample rate of the audio signal.
+   * @param {number} N - The block size (number of samples) over which to calculate the Goertzel magnitude.
+   */
   constructor(
     public targetFrequency: number,
     public sampleRate: number,
     N: number,
   ) {
     this.N = N;
-    const k = Math.floor(
-      0.5 + (this.N * this.targetFrequency) / this.sampleRate,
-    );
+    // Calculate k, the normalized frequency
+    const k = Math.floor(0.5 + (this.N * this.targetFrequency) / this.sampleRate);
     const omega = (2 * Math.PI * k) / this.N;
     this.cosine = Math.cos(omega);
-    this.sine = Math.sin(omega); // Sine is required for the correct magnitude calculation
+    this.sine = Math.sin(omega); // Sine is crucial for correct magnitude calculation
     this.coeff = 2 * this.cosine;
   }
 
-  /** Resets the internal state of the filter. */
+  /**
+   * Resets the internal state (q1, q2) of the filter.
+   * This should be called before processing a new block of samples if the blocks are independent.
+   */
   public reset(): void {
     this.q1 = 0;
     this.q2 = 0;
   }
 
-  /** Processes a block of audio samples. */
+  /**
+   * Processes a block of audio samples through the filter.
+   * Updates the internal state (q1, q2) based on the input samples.
+   * @param {Float32Array} samples - The block of audio samples to process.
+   */
   public processBlock(samples: Float32Array): void {
     for (let i = 0; i < samples.length; i++) {
       const q0 = samples[i] + this.coeff * this.q1 - this.q2;
@@ -80,11 +94,14 @@ class GoertzelFilter {
   }
 
   /**
-   * Calculates the squared magnitude of the target frequency.
-   * This is the mathematically correct formula.
-   * @returns {number} The squared magnitude (power) of the signal at the target frequency.
+   * Calculates the squared magnitude of the target frequency component in the processed block.
+   * The formula used is `q1^2 + q2^2 - q1 * q2 * coeff` which simplifies from the complex representation.
+   * @returns {number} The squared magnitude (effectively, power) of the signal at the target frequency.
    */
   public getMagnitudeSquared(): number {
+    // Correct magnitude calculation: realPart^2 + imagPart^2
+    // realPart = q1 - q2 * cos(omega)
+    // imagPart = q2 * sin(omega)
     const realPart = this.q1 - this.q2 * this.cosine;
     const imagPart = this.q2 * this.sine;
     return realPart * realPart + imagPart * imagPart;
@@ -92,12 +109,19 @@ class GoertzelFilter {
 }
 
 /**
- * Parses DTMF tones from audio blocks using a collection of Goertzel filters.
+ * @class DTMFParser
+ * @description Parses DTMF tones from audio blocks using a collection of Goertzel filters.
+ * It identifies dominant frequencies in the low and high DTMF bands to determine the character.
  */
 class DTMFParser {
   private lowGroupFilters: GoertzelFilter[];
   private highGroupFilters: GoertzelFilter[];
 
+  /**
+   * Creates an instance of DTMFParser.
+   * @param {number} sampleRate - The sample rate of the audio to be processed.
+   * @param {number} blockSize - The size of audio blocks to process at a time.
+   */
   constructor(
     private sampleRate: number,
     private blockSize: number,
@@ -110,9 +134,15 @@ class DTMFParser {
     );
   }
 
+  /**
+   * Processes a single block of audio data to detect a DTMF tone.
+   * @param {Float32Array} audioBlock - The audio block to analyze.
+   * @param {number} timestamp - The timestamp of the beginning of this audio block (for potential future use).
+   * @returns {string | null} The detected DTMF character ('0'-'9', '*', '#', 'A'-'D'), or null if no valid tone is detected.
+   */
   public processAudioBlock(
     audioBlock: Float32Array,
-    timestamp: number,
+    timestamp: number, // Added timestamp though not directly used in current DTMF logic here
   ): string | null {
     let maxLowMag = -1,
       detectedLowFreq = -1;
@@ -175,42 +205,59 @@ class DTMFParser {
 //  SECTION: Worker Logic
 // ─────────────────────────────────────────────────────────────────────────────
 
+import type { DtmfWorkerMessageDataIn, DtmfWorkerMessageDataOut, DtmfInitPayload, DtmfProcessPayload } from "@/types/worker.types"; // Reverted to import type
+
 let dtmfParser: DTMFParser | null = null;
 
 /**
  * Main message handler for the DTMF Web Worker.
- * Responds to 'init' and 'process' messages from the main thread.
+ * Responds to 'INIT' and 'PROCESS' messages from the main thread.
+ * - 'INIT': Initializes the DTMFParser with the provided sample rate.
+ * - 'PROCESS': Processes PCM audio data to detect DTMF tones.
+ *
+ * Messages to main thread:
+ * - { type: "INIT_COMPLETE" }
+ * - { type: "RESULT", payload: { dtmf: string[], cpt: string[] } }
+ * - { type: "ERROR", payload: string }
+ * @param {MessageEvent<DtmfWorkerMessageDataIn>} event - The message event from the main thread.
  */
-self.onmessage = (event: MessageEvent) => {
+self.onmessage = (event: MessageEvent<DtmfWorkerMessageDataIn>): void => {
   const { type, payload } = event.data;
 
   try {
-    if (type === "init") {
-      dtmfParser = new DTMFParser(payload.sampleRate, DTMF_BLOCK_SIZE);
-      self.postMessage({ type: "init_complete" });
-    } else if (type === "process") {
-      if (!dtmfParser) throw new Error("DTMF worker has not been initialized.");
+    if (type === "INIT") {
+      const initPayload = payload as DtmfInitPayload;
+      if (!initPayload || typeof initPayload.sampleRate !== 'number') {
+        throw new Error("Initialization payload is invalid or missing sampleRate.");
+      }
+      // Ensure DTMF_SAMPLE_RATE is used if the worker's internal logic is fixed to it,
+      // otherwise, use initPayload.sampleRate if the parser should adapt.
+      // For this implementation, DTMF_SAMPLE_RATE is a fixed constant for the Goertzel filters.
+      dtmfParser = new DTMFParser(DTMF_SAMPLE_RATE, DTMF_BLOCK_SIZE);
+      self.postMessage({ type: "INIT_COMPLETE" } as DtmfWorkerMessageDataOut);
+    } else if (type === "PROCESS") {
+      if (!dtmfParser) {
+        throw new Error("DTMF worker has not been initialized. Send 'INIT' message first.");
+      }
 
-      const { pcmData } = payload;
+      const processPayload = payload as DtmfProcessPayload;
+      if (!processPayload || !processPayload.pcmData || !(processPayload.pcmData instanceof Float32Array)) {
+        throw new Error("Processing payload is invalid or missing pcmData.");
+      }
+      const { pcmData } = processPayload;
       const detectedDtmf: string[] = [];
 
-      // --- START: CORRECTED V1 PROCESSING LOGIC ---
       let lastDetectedDtmf: string | null = null;
       let consecutiveDtmfDetections = 0;
-      const minConsecutiveDtmf = 2; // A tone must be stable for 2 blocks to be registered
-      // --- END: CORRECTED V1 PROCESSING LOGIC ---
+      const minConsecutiveDtmf = 2; // A tone must be stable for this many blocks to be registered
 
-      // Ported processing loop from V1's app.js (simplified for DTMF only)
-      for (
-        let i = 0;
-        i + DTMF_BLOCK_SIZE <= pcmData.length;
-        i += DTMF_BLOCK_SIZE
-      ) {
+      // Process audio in blocks
+      for (let i = 0; (i + DTMF_BLOCK_SIZE) <= pcmData.length; i += DTMF_BLOCK_SIZE) {
         const audioBlock = pcmData.subarray(i, i + DTMF_BLOCK_SIZE);
-        const timestamp = i / DTMF_SAMPLE_RATE;
+        const timestamp = i / DTMF_SAMPLE_RATE; // Timestamp for this block
         const tone = dtmfParser.processAudioBlock(audioBlock, timestamp);
 
-        // --- START: CORRECTED V1 CONFIRMATION LOGIC ---
+        // Confirmation logic: tone must be stable for minConsecutiveDtmf blocks
         if (tone) {
           if (tone === lastDetectedDtmf) {
             consecutiveDtmfDetections++;
@@ -219,11 +266,8 @@ self.onmessage = (event: MessageEvent) => {
             consecutiveDtmfDetections = 1;
           }
 
-          if (
-            consecutiveDtmfDetections === minConsecutiveDtmf &&
-            (detectedDtmf.length === 0 ||
-              detectedDtmf[detectedDtmf.length - 1] !== tone)
-          ) {
+          if (consecutiveDtmfDetections === minConsecutiveDtmf &&
+              (detectedDtmf.length === 0 || detectedDtmf[detectedDtmf.length - 1] !== tone)) {
             detectedDtmf.push(tone);
           }
         } else {
@@ -232,14 +276,24 @@ self.onmessage = (event: MessageEvent) => {
         }
       }
 
-      // For now, CPT is not implemented, so we send an empty array.
+      // CPT (Call Progress Tones) detection is not implemented in this version.
       self.postMessage({
-        type: "result",
+        type: "RESULT",
         payload: { dtmf: detectedDtmf, cpt: [] },
-      });
+      } as DtmfWorkerMessageDataOut);
+    } else {
+      // Handle unknown message types
+      console.warn(`DTMF Worker: Received unknown message type: ${type}`);
     }
-  } catch (e) {
+  } catch (e: unknown) {
     const error = e as Error;
-    self.postMessage({ type: "error", payload: error.message });
+    console.error("DTMF Worker error:", error.message, error.stack);
+    self.postMessage({ type: "ERROR", error: error.message } as DtmfWorkerMessageDataOut);
   }
 };
+
+// Optional: Add an unhandled rejection handler for promises within the worker
+self.addEventListener('unhandledrejection', event => {
+  console.error('DTMF Worker: Unhandled promise rejection:', event.reason);
+  self.postMessage({ type: "ERROR", error: event.reason?.message || "Unhandled promise rejection" } as DtmfWorkerMessageDataOut);
+});

@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
+import path from 'path'; // Added import
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -35,8 +36,8 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': '/src'
-    }
+      '@': path.resolve(__dirname, './src'),
+    },
   },
   worker: {
     format: 'es'

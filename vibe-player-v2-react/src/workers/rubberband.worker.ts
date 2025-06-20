@@ -4,14 +4,24 @@ import type {
   RubberbandInitPayload,
   RubberbandProcessPayload,
   RubberbandProcessResultPayload,
+  RubberbandSetPitchPayload,
+  RubberbandSetSpeedPayload,
   WorkerMessage,
+  WorkerPayload,
 } from "@/types/worker.types";
 import { RB_WORKER_MSG_TYPE } from "@/types/worker.types";
 
 // --- Type definitions for the Emscripten/WASM Module ---
+
+/**
+ * @interface RubberbandModule
+ * @description Defines the expected interface of the compiled Rubberband WASM module.
+ * This includes memory management functions (_malloc, _free), RubberbandStretcher API functions,
+ * and heap accessors (HEAPU32, HEAPF32).
+ */
 interface RubberbandModule {
-  _malloc: (size: number) => number;
-  _free: (ptr: number) => void;
+  _malloc: (size: number) => number; // Allocates memory in the WASM heap
+  _free: (ptr: number) => void; // Frees previously allocated memory
   _rubberband_new: (
     sampleRate: number,
     channels: number,
@@ -35,138 +45,204 @@ interface RubberbandModule {
     outputPtrs: number,
     samples: number,
   ) => number;
-  HEAPU32: Uint32Array;
-  HEAPF32: Float32Array;
-  RubberBandOptionFlag?: { [key: string]: number };
+  HEAPU32: Uint32Array; // View into the WASM heap as unsigned 32-bit integers
+  HEAPF32: Float32Array; // View into the WASM heap as 32-bit floats
+  RubberBandOptionFlag?: { [key: string]: number }; // Optional: Flags for RubberbandStretcher options
 }
 
+/**
+ * @function Rubberband
+ * @description Declaration for the Rubberband factory function, which is typically
+ * produced by the Emscripten glue code (loader script). This function initializes
+ * and returns a Promise that resolves with the RubberbandModule instance.
+ * @param moduleArg - An object containing `instantiateWasm` function for WASM instantiation.
+ * @returns {Promise<RubberbandModule>} A promise resolving to the initialized WASM module.
+ */
 declare function Rubberband(moduleArg: {
-  instantiateWasm: Function;
+  instantiateWasm: (
+    imports: WebAssembly.Imports,
+    cb: (instance: WebAssembly.Instance) => void,
+  ) => WebAssembly.WebAssemblyInstantiatedSource | Record<string, never>; // Adjusted return for flexibility
 }): Promise<RubberbandModule>;
 
 // --- Worker State ---
-let wasmModule: RubberbandModule | null = null;
-let stretcher: number = 0; // Opaque pointer to the C++ RubberbandStretcher object
+let wasmModule: RubberbandModule | null = null; // Holds the instantiated WASM module
+let stretcher: number = 0; // Opaque pointer (integer handle) to the C++ RubberbandStretcher object
 
 // --- Main Worker Logic ---
-self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
+
+/**
+ * @global self
+ * @description Handles incoming messages for the Rubberband worker.
+ * Dispatches actions based on the message `type`.
+ * @param {MessageEvent<WorkerMessage<WorkerPayload>>} event - The incoming message event.
+ */
+self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Promise<void> => {
   const { type, payload, messageId } = event.data;
 
   try {
     switch (type) {
       case RB_WORKER_MSG_TYPE.INIT:
         await handleInit(payload as RubberbandInitPayload);
-        self.postMessage({ type: RB_WORKER_MSG_TYPE.INIT_SUCCESS, messageId });
+        self.postMessage({ type: RB_WORKER_MSG_TYPE.INIT_SUCCESS, messageId } as WorkerMessage<null>);
         break;
 
       case RB_WORKER_MSG_TYPE.SET_SPEED:
-        if (stretcher && wasmModule && payload?.speed) {
-          wasmModule._rubberband_set_time_ratio(stretcher, 1.0 / payload.speed);
+        const speedPayload = payload as RubberbandSetSpeedPayload;
+        if (stretcher && wasmModule && typeof speedPayload?.speed === 'number') {
+          wasmModule._rubberband_set_time_ratio(stretcher, 1.0 / speedPayload.speed);
+        } else {
+          console.warn("RubberbandWorker: SET_SPEED called with invalid payload or uninitialized state.");
         }
         break;
 
       case RB_WORKER_MSG_TYPE.SET_PITCH:
-        if (stretcher && wasmModule && payload?.pitch !== undefined) {
-          const pitchScale = Math.pow(2, payload.pitch / 12.0);
+        const pitchPayload = payload as RubberbandSetPitchPayload;
+        if (stretcher && wasmModule && typeof pitchPayload?.pitch === 'number') {
+          const pitchScale = Math.pow(2, pitchPayload.pitch / 12.0);
           wasmModule._rubberband_set_pitch_scale(stretcher, pitchScale);
+        } else {
+          console.warn("RubberbandWorker: SET_PITCH called with invalid payload or uninitialized state.");
         }
         break;
 
       case RB_WORKER_MSG_TYPE.RESET:
         if (stretcher && wasmModule) {
           wasmModule._rubberband_reset(stretcher);
+        } else {
+          console.warn("RubberbandWorker: RESET called on uninitialized stretcher.");
         }
         break;
 
       case RB_WORKER_MSG_TYPE.PROCESS:
-        const result = handleProcess(payload as RubberbandProcessPayload);
-        self.postMessage(
-          {
+        const processResult = handleProcess(payload as RubberbandProcessPayload);
+        const responseMsg: WorkerMessage<RubberbandProcessResultPayload> = {
             type: RB_WORKER_MSG_TYPE.PROCESS_RESULT,
-            payload: result,
+            payload: processResult,
             messageId,
-          },
-          result.outputBuffer.map((b) => b.buffer),
+          };
+        self.postMessage(
+          responseMsg,
+          processResult.outputBuffer.map((b: Float32Array) => b.buffer) // Added type for b
         );
         break;
 
       case RB_WORKER_MSG_TYPE.FLUSH:
-        // This would be used to get the last remaining samples from the stretcher.
-        // For simplicity in this fix, we are not fully implementing a separate flush logic.
-        // The main loop stops when it runs out of source samples.
+        // FLUSH is intended to retrieve any remaining processed samples from the stretcher.
+        // This simplified version sends back an empty buffer, assuming PROCESS handles final chunks.
+        // A full implementation might involve calling _rubberband_available and _rubberband_retrieve.
+        console.log("RubberbandWorker: FLUSH received. Sending empty result.");
         self.postMessage({
           type: RB_WORKER_MSG_TYPE.PROCESS_RESULT,
-          payload: { outputBuffer: [] },
+          payload: { outputBuffer: [] }, // Empty buffer for flush in this simplified version
           messageId,
-        });
+        } as WorkerMessage<RubberbandProcessResultPayload>);
         break;
+
+      default:
+        console.warn(`RubberbandWorker: Received unknown message type: ${type}`);
     }
-  } catch (e) {
+  } catch (e: unknown) {
     const error = e as Error;
+    console.error(`RubberbandWorker: Error processing message type ${type}:`, error.message, error.stack);
     self.postMessage({
-      type: `${type}_ERROR`,
+      type: RB_WORKER_MSG_TYPE.ERROR, // Use a generic ERROR type for broader error reporting
       error: error.message,
       messageId,
-    });
+    } as WorkerMessage<null>); // Payload might be null for generic errors
   }
 };
 
-async function handleInit(payload: RubberbandInitPayload) {
+/**
+ * @async
+ * @function handleInit
+ * @description Initializes the Rubberband WASM module and stretcher instance.
+ * This involves fetching and evaluating the loader script, instantiating the WASM,
+ * and creating a new RubberbandStretcher.
+ * @param {RubberbandInitPayload} payload - The initialization payload containing WASM binary,
+ * loader script text, and initial stretcher parameters.
+ * @throws {Error} If initialization fails at any step.
+ */
+async function handleInit(payload: RubberbandInitPayload): Promise<void> {
+  console.log("RubberbandWorker: Initializing...");
   if (stretcher && wasmModule) {
+    console.log("RubberbandWorker: Deleting existing stretcher instance.");
     wasmModule._rubberband_delete(stretcher);
+    stretcher = 0; // Reset stretcher handle
   }
 
-  // --- START of CHANGE ---
-  const { wasmBinary, loaderScriptText } = payload;
+  const { wasmBinary, loaderScriptText, sampleRate, channels, initialSpeed, initialPitch } = payload; // Removed 'origin'
   if (!wasmBinary || !loaderScriptText) {
-    throw new Error(
-      "Worker handleInit: Missing wasmBinary or loaderScriptText in payload.",
-    );
+    throw new Error("RubberbandWorker handleInit: Missing wasmBinary or loaderScriptText in payload.");
   }
 
-  // The loader script is designed to be executed to produce a factory function.
-  // We use new Function() to safely evaluate the text we received and get the factory.
-  const getRubberbandFactory = new Function(
-    loaderScriptText + "\nreturn Rubberband;",
-  )(); // MODIFIED LINE
-  const Rubberband = getRubberbandFactory; // Ensure Rubberband is the factory itself
-  // --- END of CHANGE ---
+  // Dynamically evaluate the loader script text to get the Rubberband factory function.
+  // This is a common pattern for Emscripten-generated loader scripts.
+  // `self` might be needed in the scope if the loader script uses it.
+  const getRubberbandFactory = new Function('self', loaderScriptText + "\nreturn Rubberband;")(self);
+  const RubberbandFactory = getRubberbandFactory;
 
-  // The loader script expects an `instantiateWasm` function to be provided.
+  // Define `instantiateWasm` as expected by the Emscripten loader.
+  // This function is called by the loader to perform the actual WASM instantiation.
   const instantiateWasm = (
     imports: WebAssembly.Imports,
-    cb: (instance: WebAssembly.Instance) => void,
-  ) => {
-    WebAssembly.instantiate(wasmBinary, imports).then((output) =>
-      cb(output.instance),
-    );
-    return {};
+    callback: (instance: WebAssembly.Instance) => void,
+  ): WebAssembly.WebAssemblyInstantiatedSource | Record<string, never> => { // Adjusted return type
+    WebAssembly.instantiate(wasmBinary, imports)
+      .then((output: WebAssembly.WebAssemblyInstantiatedSource) => {
+        callback(output.instance);
+      })
+      .catch((err: Error) => {
+        console.error("RubberbandWorker: WASM instantiation failed:", err);
+        throw err; // Propagate error to stop initialization
+      });
+    return {}; // Emscripten glue code might expect an empty object or specific structure.
   };
 
-  wasmModule = await Rubberband({ instantiateWasm });
+  wasmModule = await RubberbandFactory({ instantiateWasm });
+  if (!wasmModule) {
+    throw new Error("RubberbandWorker: Failed to instantiate WASM module.");
+  }
+  console.log("RubberbandWorker: WASM module instantiated.");
 
-  const RBOptions = wasmModule.RubberBandOptionFlag || {};
-  const options =
-    (RBOptions.ProcessRealTime ?? 0) | (RBOptions.PitchHighQuality ?? 0);
+  // Default options: RealTime for responsiveness, PitchHighQuality for better audio.
+  // These might need to be configurable via payload if more flexibility is needed.
+  const rubberbandOptions = wasmModule.RubberBandOptionFlag || {};
+  const selectedOptions =
+    (rubberbandOptions.ProcessRealTime || 0) | // Favor responsiveness
+    (rubberbandOptions.PitchHighQuality || 0);   // Favor quality for pitch shifting
 
   stretcher = wasmModule._rubberband_new(
-    payload.sampleRate,
-    payload.channels,
-    options,
-    1.0 / payload.initialSpeed,
-    Math.pow(2, payload.initialPitch / 12.0),
+    sampleRate,
+    channels,
+    selectedOptions,
+    1.0 / initialSpeed, // Time ratio is inverse of speed
+    Math.pow(2, initialPitch / 12.0), // Pitch scale from semitones
   );
-  if (!stretcher)
-    throw new Error("Failed to create Rubberband stretcher instance.");
+
+  if (!stretcher) {
+    throw new Error("RubberbandWorker: Failed to create Rubberband stretcher instance.");
+  }
+  console.log("RubberbandWorker: Stretcher instance created successfully.");
 }
 
+/**
+ * @function handleProcess
+ * @description Processes a chunk of audio data using the Rubberband stretcher.
+ * This involves allocating memory in the WASM heap, copying input data,
+ * calling `rubberband_process`, retrieving processed data, and freeing memory.
+ * @param {RubberbandProcessPayload} payload - The payload containing input audio buffer.
+ * @returns {RubberbandProcessResultPayload} The payload containing processed audio buffer.
+ * @throws {Error} If the worker is not initialized or if processing fails.
+ */
 function handleProcess(
   payload: RubberbandProcessPayload,
 ): RubberbandProcessResultPayload {
-  if (!wasmModule || !stretcher)
-    throw new Error("Worker not initialized for processing.");
+  if (!wasmModule || !stretcher) {
+    throw new Error("RubberbandWorker: PROCESS called but worker or stretcher not initialized.");
+  }
 
-  const { inputBuffer } = payload;
+  const { inputBuffer /*, isFinalChunk */ } = payload; // isFinalChunk might be used with _rubberband_study if needed
   const channels = inputBuffer.length;
   if (channels === 0) return { outputBuffer: [] };
 

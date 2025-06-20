@@ -1,8 +1,12 @@
 // vibe-player-v2-react/src/stores/transcript.store.ts
 import { create } from 'zustand';
-import type { TranscriptState, TranscriptSegment } from '@/types/transcript.types';
+import type { TranscriptState as TranscriptStateType, TranscriptSegment as TranscriptSegmentType } from '@/types/transcript.types';
 
-const initialState: TranscriptState = {
+// Re-export types
+export type { TranscriptStateType as TranscriptState };
+export type { TranscriptSegmentType as TranscriptSegment };
+
+const initialState: TranscriptStateType = {
   segments: [],
   isLoading: false,
   error: null,
@@ -10,16 +14,16 @@ const initialState: TranscriptState = {
   // editMode: false,        // Example from prompt, not in TranscriptState by default
 };
 
-export const useTranscriptStore = create<TranscriptState>((set) => ({
+export const useTranscriptStore = create<TranscriptStateType>((set) => ({
   ...initialState,
 
   // Actions to manage transcript state
-  setSegments: (segments: TranscriptSegment[]) => set({ segments, isLoading: false, error: null }),
+  setSegments: (segments: TranscriptSegmentType[]) => set({ segments, isLoading: false, error: null }),
 
-  addSegment: (segment: TranscriptSegment) =>
+  addSegment: (segment: TranscriptSegmentType) =>
     set((state) => ({ segments: [...state.segments, segment] })),
 
-  updateSegment: (updatedSegment: TranscriptSegment) =>
+  updateSegment: (updatedSegment: TranscriptSegmentType) =>
     set((state) => ({
       segments: state.segments.map((segment) =>
         segment.id === updatedSegment.id ? { ...segment, ...updatedSegment } : segment // Ensure full update

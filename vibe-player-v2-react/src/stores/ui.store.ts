@@ -1,8 +1,12 @@
 // vibe-player-v2-react/src/stores/ui.store.ts
 import { create } from 'zustand';
-import type { UiState, Theme } from '@/types/ui.types'; // Corrected import path extension
+import type { UiState as UiStateType, Theme as ThemeType } from '@/types/ui.types'; // Corrected import path extension
 
-const initialState: UiState = {
+// Re-export types
+export type { UiStateType as UiState };
+export type { ThemeType as Theme };
+
+const initialState: UiStateType = {
   theme: 'system', // Default theme
   isHelpModalOpen: false,
   isSettingsModalOpen: false,
@@ -10,10 +14,10 @@ const initialState: UiState = {
   // isSidebarOpen: false,  // Example if added to UiState
 };
 
-export const useUiStore = create<UiState>((set) => ({
+export const useUiStore = create<UiStateType>((set) => ({
   ...initialState,
   // Actions
-  setTheme: (theme: Theme) => set({ theme }),
+  setTheme: (theme: ThemeType) => set({ theme }),
   toggleHelpModal: (isOpen?: boolean) =>
     set((state) => ({ isHelpModalOpen: isOpen === undefined ? !state.isHelpModalOpen : isOpen })),
   toggleSettingsModal: (isOpen?: boolean) =>
@@ -27,10 +31,10 @@ export const useUiStore = create<UiState>((set) => ({
 // Optional: Persist parts of the UI store, like the theme preference
 // import { persist, createJSONStorage } from 'zustand/middleware';
 // export const useUiStore = create(
-//   persist<UiState>(
+//   persist<UiStateType>(
 //     (set, get) => ({
 //       ...initialState,
-//       setTheme: (theme: Theme) => set({ theme }),
+//       setTheme: (theme: ThemeType) => set({ theme }),
 //       toggleHelpModal: (isOpen?: boolean) =>
 //         set((state) => ({ isHelpModalOpen: isOpen === undefined ? !state.isHelpModalOpen : isOpen })),
 //       toggleSettingsModal: (isOpen?: boolean) =>
