@@ -1,11 +1,11 @@
-import { defineConfig as defineViteConfig } from 'vite';
-import { defineConfig as defineVitestConfig } from 'vitest/config';
+/// <reference types="vitest" />
+import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import path from 'path'; // Added import
 
 // https://vite.dev/config/
-export default defineViteConfig({
+export default defineConfig({
   plugins: [
     react(),
     viteStaticCopy({
@@ -43,10 +43,9 @@ export default defineViteConfig({
   worker: {
     format: 'es'
   },
-  // @ts-ignore
-  test: defineVitestConfig({
+  test: {
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/setupTests.ts'],
-  }).test,
+  },
 });
