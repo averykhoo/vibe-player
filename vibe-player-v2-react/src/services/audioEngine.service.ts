@@ -58,7 +58,7 @@ class AudioEngineService {
   /** Used to resolve/reject the promise returned by initializeWorker */
   private workerInitPromiseCallbacks: {
     resolve: () => void;
-    reject: (reason?: any) => void;
+    reject: (reason?: unknown) => void;
   } | null = null;
 
   private wasPlayingBeforeSeek = false;
@@ -820,7 +820,7 @@ class AudioEngineService {
     }
 
     switch (type) {
-      case RB_WORKER_MSG_TYPE.INIT_SUCCESS:
+      case RB_WORKER_MSG_TYPE.INIT_SUCCESS: {
         this.isWorkerReady = true;
         console.log(
           "[AudioEngineService] Worker initialized successfully (INIT_SUCCESS received).",
@@ -831,8 +831,8 @@ class AudioEngineService {
           this.workerInitPromiseCallbacks = null;
         }
         break;
-
-      case RB_WORKER_MSG_TYPE.ERROR: // Specific error message type from worker
+      }
+      case RB_WORKER_MSG_TYPE.ERROR: { // Specific error message type from worker
         const errorPayload = payload as WorkerErrorPayload;
         console.error(
           "[AudioEngineService] Worker Error Message:",
@@ -854,8 +854,8 @@ class AudioEngineService {
           this.workerInitPromiseCallbacks = null;
         }
         break;
-
-      case RB_WORKER_MSG_TYPE.PROCESS_RESULT:
+      }
+      case RB_WORKER_MSG_TYPE.PROCESS_RESULT: {
         if (this.isStopping) {
           console.log(
             "[AudioEngineService] PROCESS_RESULT received while stopping, discarding.",
@@ -867,11 +867,12 @@ class AudioEngineService {
           this.scheduleChunkPlayback(outputBuffer, this.nextChunkTime);
         }
         break;
-
-      default:
+      }
+      default: {
         console.warn(
           `[AudioEngineService] Received unknown message type from worker: ${type}`,
         );
+      }
     }
   };
 }

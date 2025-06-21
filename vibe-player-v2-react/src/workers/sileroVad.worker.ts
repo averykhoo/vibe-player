@@ -21,7 +21,7 @@ let modelFrameSamples: number;
 /** Threshold for considering a frame as speech (0-1). Set during INIT. */
 let vadPositiveThreshold: number;
 /** Threshold for considering a frame as non-speech (hysteresis, 0-1). Set during INIT. */
-let vadNegativeThreshold: number;
+// let vadNegativeThreshold: number; // Unused
 /** Hidden state tensor for the VAD model's RNN. */
 let _h: ort.Tensor | null = null;
 /** Cell state tensor for the VAD model's RNN. */
@@ -44,7 +44,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
 
   try {
     switch (type) {
-      case VAD_WORKER_MSG_TYPE.INIT:
+      case VAD_WORKER_MSG_TYPE.INIT: {
         const initPayload = unknownPayload as SileroVadInitPayload;
 
         // --- ADD THESE ASSERTIONS ---
@@ -67,7 +67,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
         modelSampleRate = initPayload.sampleRate;
         modelFrameSamples = initPayload.frameSamples;
         vadPositiveThreshold = initPayload.positiveThreshold || 0.5; // Default if not provided
-        vadNegativeThreshold = initPayload.negativeThreshold || 0.35; // Default if not provided
+        // vadNegativeThreshold = initPayload.negativeThreshold || 0.35; // Default if not provided // Unused
 
         // --- THE FIX ---
         if (!initPayload.origin) {
@@ -113,8 +113,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
 
         self.postMessage({ type: VAD_WORKER_MSG_TYPE.INIT_SUCCESS, messageId } as WorkerMessage<null>);
         break;
-
-      case VAD_WORKER_MSG_TYPE.PROCESS:
+      }
+      case VAD_WORKER_MSG_TYPE.PROCESS: {
         if (!vadSession || !_h || !_c || !srTensor) {
           throw new Error("VAD worker not initialized or tensors not ready.");
         }
@@ -165,8 +165,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
           messageId,
         });
         break;
-
-      case VAD_WORKER_MSG_TYPE.RESET:
+      }
+      case VAD_WORKER_MSG_TYPE.RESET: {
         if (_h && _c) {
           _h.data.fill(0);
           _c.data.fill(0);
@@ -176,13 +176,14 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
           messageId,
         });
         break;
-
-      default:
+      }
+      default: {
         self.postMessage({
           type: "unknown_message",
           error: `Unknown message type: ${type}`,
           messageId,
         });
+      }
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

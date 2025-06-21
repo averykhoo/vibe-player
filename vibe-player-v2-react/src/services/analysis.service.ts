@@ -20,7 +20,7 @@ import SileroVadWorker from "@/workers/sileroVad.worker?worker";
  */
 interface PendingRequest {
   resolve: (value: unknown) => void;
-  reject: (reason?: any) => void;
+  reject: (reason?: unknown) => void;
 }
 
 /**
@@ -140,7 +140,7 @@ class AnalysisService {
         }
       } else {
         switch (type) {
-          case VAD_WORKER_MSG_TYPE.INIT_SUCCESS:
+          case VAD_WORKER_MSG_TYPE.INIT_SUCCESS: {
             this.isInitialized = true;
             this.isInitializing = false;
             useAnalysisStore.setState((s: AnalysisState) => ({
@@ -151,7 +151,8 @@ class AnalysisService {
             }));
             if (request) request.resolve(payload);
             break;
-          case VAD_WORKER_MSG_TYPE.PROCESS_RESULT:
+          }
+          case VAD_WORKER_MSG_TYPE.PROCESS_RESULT: {
             const resultPayload = payload as SileroVadProcessResultPayload;
             useAnalysisStore.setState((s: AnalysisState) => ({
               ...s,
@@ -160,7 +161,8 @@ class AnalysisService {
             }));
             if (request) request.resolve(resultPayload);
             break;
-          case `${VAD_WORKER_MSG_TYPE.RESET}_SUCCESS`: // Note: Template literal types might not work as expected for switch cases
+          }
+          case `${VAD_WORKER_MSG_TYPE.RESET}_SUCCESS`: { // Note: Template literal types might not work as expected for switch cases
             useAnalysisStore.setState((s: AnalysisState) => ({
               ...s,
               vadStateResetted: true, // Ensure this state property exists in your Zustand store
@@ -169,9 +171,11 @@ class AnalysisService {
             }));
             if (request) request.resolve(payload);
             break;
-          default:
+          }
+          default: {
             console.warn(`VAD Service: Received unhandled message type ${type}`);
             if (request) request.resolve(payload); // Resolve to avoid hanging promises
+          }
         }
       }
       if (messageId && request) this.pendingRequests.delete(messageId);

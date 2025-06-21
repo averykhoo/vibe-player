@@ -19,7 +19,7 @@ import SpectrogramWorker from "@/workers/spectrogram.worker?worker";
  */
 interface PendingRequest {
   resolve: (value: unknown) => void;
-  reject: (reason?: any) => void;
+  reject: (reason?: unknown) => void;
 }
 
 /**
@@ -120,7 +120,7 @@ class SpectrogramService {
         if (request) request.reject(new Error(errorMsg));
       } else {
         switch (type) {
-          case SPEC_WORKER_MSG_TYPE.INIT_SUCCESS:
+          case SPEC_WORKER_MSG_TYPE.INIT_SUCCESS: {
             this.isInitialized = true;
             useAnalysisStore.setState((s: AnalysisState) => ({
               ...s,
@@ -130,7 +130,8 @@ class SpectrogramService {
             }));
             if (request) request.resolve(payload);
             break;
-          case SPEC_WORKER_MSG_TYPE.PROCESS_RESULT:
+          }
+          case SPEC_WORKER_MSG_TYPE.PROCESS_RESULT: {
             const specResult = payload as SpectrogramResultPayload;
             useAnalysisStore.setState((s: AnalysisState) => ({
               ...s,
@@ -139,9 +140,11 @@ class SpectrogramService {
             }));
             if (request) request.resolve(specResult);
             break;
-          default:
+          }
+          default: {
             console.warn(`Spectrogram Service: Received unhandled message type ${type}`);
             if (request) request.resolve(payload); // Resolve to avoid hanging promises
+          }
         }
       }
       if (messageId && request) this.pendingRequests.delete(messageId);

@@ -35,7 +35,7 @@ interface FFTInstance {
  * after loading the FFT script text.
  * @type {FFTClass | undefined}
  */
-declare var FFT: FFTClass | undefined; // Make it potentially undefined initially
+// declare var FFT: FFTClass | undefined; // Make it potentially undefined initially // Unused
 
 /**
  * Generates a Hann window array.
@@ -63,7 +63,7 @@ function generateHannWindow(length: number): number[] | null {
 
 // Worker state variables
 let fftInstance: FFTInstance | null = null;
-let currentSampleRate: number; // Renamed for clarity
+// let currentSampleRate: number; // Renamed for clarity // Unused
 let currentFftSize: number; // Renamed for clarity
 let currentHopLength: number; // Renamed for clarity
 let currentHannWindow: number[] | null = null; // Renamed for clarity
@@ -86,7 +86,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
 
   try {
     switch (type) {
-      case SPEC_WORKER_MSG_TYPE.INIT:
+      case SPEC_WORKER_MSG_TYPE.INIT: {
         const initPayload = payload as SpectrogramInitPayload;
         if (!initPayload || typeof initPayload.sampleRate !== 'number' ||
             typeof initPayload.fftSize !== 'number' || typeof initPayload.hopLength !== 'number' ||
@@ -94,7 +94,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
           throw new Error("SpectrogramWorker INIT: Invalid or incomplete payload.");
         }
 
-        currentSampleRate = initPayload.sampleRate;
+        // currentSampleRate = initPayload.sampleRate; // Unused
         currentFftSize = initPayload.fftSize;
         currentHopLength = initPayload.hopLength;
 
@@ -122,8 +122,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
 
         self.postMessage({ type: SPEC_WORKER_MSG_TYPE.INIT_SUCCESS, messageId } as WorkerMessage<null>);
         break;
-
-      case SPEC_WORKER_MSG_TYPE.PROCESS:
+      }
+      case SPEC_WORKER_MSG_TYPE.PROCESS: {
         if (!fftInstance) {
           throw new Error("Spectrogram worker not initialized. Send 'INIT' message first.");
         }
@@ -136,7 +136,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
 
         for (let i = 0; (i + currentFftSize) <= audioData.length; i += currentHopLength) {
           const frame = audioData.subarray(i, i + currentFftSize);
-          let windowedFrame = new Float32Array(currentFftSize);
+          const windowedFrame = new Float32Array(currentFftSize); // Changed from let to const
 
           if (currentHannWindow && currentHannWindow.length === currentFftSize) {
             for (let j = 0; j < currentFftSize; j++) {
@@ -166,8 +166,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
           messageId,
         } as WorkerMessage<SpectrogramResultPayload>);
         break;
-
-      default:
+      }
+      default: {
         console.warn(`SpectrogramWorker: Received unknown message type: ${type}`);
         // Optionally, send an error message back for unknown types
         self.postMessage({
@@ -175,6 +175,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
           error: `Unknown message type received: ${type}`,
           messageId,
         } as WorkerMessage<null>);
+      }
     }
   } catch (e: unknown) {
     const error = e as Error;

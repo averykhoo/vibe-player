@@ -2,7 +2,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import StatusMessages from './StatusMessages';
-import { useStatusStore, StatusState } from '../stores/status.store'; // Import type
+import { useStatusStore } from '../stores/status.store'; // Import type
 
 // Get initial state once
 const initialStatusState = useStatusStore.getState();

@@ -1,7 +1,7 @@
 // vibe-player-v2-react/src/components/visualizers/WaveformVisualizer.test.tsx
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import WaveformVisualizer from './WaveformVisualizer';
+import WaveformVisualizer from '../WaveformVisualizer';
 import { usePlayerStore, PlayerState } from '../../stores/player.store';
 
 // Mock ResizeObserver
@@ -35,13 +35,13 @@ const initialPlayerState: PlayerState = {
 };
 
 // Mock getContext for canvas
-let mockClearRect = vi.fn();
-let mockFillRect = vi.fn(); // For background
-let mockFillText = vi.fn(); // For "no data" message
-let mockBeginPath = vi.fn();
-let mockMoveTo = vi.fn();
-let mockLineTo = vi.fn();
-let mockStroke = vi.fn();
+const mockClearRect = vi.fn();
+const mockFillRect = vi.fn(); // For background
+const mockFillText = vi.fn(); // For "no data" message
+const mockBeginPath = vi.fn();
+const mockMoveTo = vi.fn();
+const mockLineTo = vi.fn();
+const mockStroke = vi.fn();
 
 const mockGetContext = vi.fn(() => ({
   clearRect: mockClearRect,
@@ -63,11 +63,12 @@ describe('WaveformVisualizer', () => {
     usePlayerStore.setState(initialPlayerState, true); // Reset store
     vi.clearAllMocks(); // Clear all Vitest mocks
 
-    // Setup canvas getContext mock for each test
-    HTMLCanvasElement.prototype.getContext = mockGetContext;
-    // Mock offsetWidth and offsetHeight for canvas dimension calculations
-    Object.defineProperty(HTMLCanvasElement.prototype, 'offsetWidth', { configurable: true, value: 300 });
-    Object.defineProperty(HTMLCanvasElement.prototype, 'offsetHeight', { configurable: true, value: 150 });
+    // HTMLCanvasElement and its properties (getContext, offsetWidth, offsetHeight)
+    // are now globally mocked via src/setupTests.ts.
+    // Similar to SpectrogramVisualizer.test.tsx, relying on global mock.
+    // HTMLCanvasElement.prototype.getContext = mockGetContext; // No longer needed
+    // Object.defineProperty(HTMLCanvasElement.prototype, 'offsetWidth', { configurable: true, value: 300 }); // No longer needed
+    // Object.defineProperty(HTMLCanvasElement.prototype, 'offsetHeight', { configurable: true, value: 150 }); // No longer needed
   });
 
   it('renders a canvas element with ARIA label and role', () => {

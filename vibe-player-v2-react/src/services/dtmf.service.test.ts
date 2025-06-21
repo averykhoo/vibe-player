@@ -55,6 +55,7 @@ describe("DtmfService", () => {
     useDtmfStore.setState({ ...initialDtmfState }, true);
 
     // Mock global OfflineAudioContext
+    /* eslint-disable @typescript-eslint/no-explicit-any */
     global.OfflineAudioContext = vi.fn().mockImplementation(() => ({
         createBufferSource: vi.fn(() => ({
             buffer: null,
@@ -64,6 +65,7 @@ describe("DtmfService", () => {
         startRendering: mockStartRendering,
         destination: {} // Mock destination property
     })) as any;
+    /* eslint-enable @typescript-eslint/no-explicit-any */
 
 
     // Dispose before each test to ensure worker is re-initialized if needed by test logic

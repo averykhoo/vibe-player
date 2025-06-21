@@ -81,14 +81,9 @@ describe("AudioEngineService", () => {
   let cafSpy: vi.SpyInstance;
   let mockAudioBuffer: AudioBuffer;
 
-  const simulateWorkerMessage = (message: any) => {
+  const simulateWorkerMessage = (message: WorkerMessage<WorkerPayload>) => {
     if (mockWorkerInstance.onmessage) {
       mockWorkerInstance.onmessage({ data: message } as MessageEvent);
-    }
-  };
-  const simulateWorkerError = (errorEvent: ErrorEvent) => {
-    if (mockWorkerInstance.onerror) {
-      mockWorkerInstance.onerror!(errorEvent);
     }
   };
 
@@ -114,8 +109,8 @@ describe("AudioEngineService", () => {
       } as Response),
     );
 
-    rafSpy = vi.spyOn(window, "requestAnimationFrame").mockReturnValue(MOCK_RAF_ID);
-    cafSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {});
+    // rafSpy = vi.spyOn(window, "requestAnimationFrame").mockReturnValue(MOCK_RAF_ID); // Moved to specific describe block
+    // cafSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => {}); // Moved to specific describe block
 
 
     mockAudioBuffer = {
@@ -140,6 +135,7 @@ describe("AudioEngineService", () => {
 
     beforeEach(() => {
       mockFile = new File(["dummy content"], "test.mp3", { type: "audio/mpeg" });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (mockFile as any).arrayBuffer = vi.fn().mockResolvedValue(new ArrayBuffer(1024));
       (mockAudioContextInstance.decodeAudioData as vi.Mock).mockResolvedValue(mockAudioBuffer);
     });
@@ -148,16 +144,16 @@ describe("AudioEngineService", () => {
       const buffer = await audioEngineService.loadFile(mockFile);
       expect(mockAudioContextInstance.decodeAudioData).toHaveBeenCalledOnce();
       expect(buffer).toBe(mockAudioBuffer);
-      // @ts-ignore access private member for test
+      // @ts-expect-error Accessing private member for testing.
       expect(audioEngineService.originalBuffer).toBe(mockAudioBuffer);
-      // @ts-ignore
+      // @ts-expect-error Accessing private member for testing.
       expect(audioEngineService.isWorkerReady).toBe(false);
     });
 
     it("should throw for an invalid file", async () => {
       const emptyFile = new File([], "empty.mp3", { type: "audio/mpeg" });
       await expect(audioEngineService.loadFile(emptyFile)).rejects.toThrow(/invalid or empty File object/i);
-      // @ts-ignore
+      // @ts-expect-error Accessing private member for testing.
       expect(audioEngineService.originalBuffer).toBeNull();
     });
 
@@ -165,7 +161,7 @@ describe("AudioEngineService", () => {
       const decodeError = new DOMException("Decoding failed", "EncodingError");
       (mockAudioContextInstance.decodeAudioData as vi.Mock).mockRejectedValue(decodeError);
       await expect(audioEngineService.loadFile(mockFile)).rejects.toThrow(`Error decoding audio data: ${decodeError.message}`);
-      // @ts-ignore
+      // @ts-expect-error Accessing private member for testing.
       expect(audioEngineService.originalBuffer).toBeNull();
     });
   });
@@ -173,7 +169,7 @@ describe("AudioEngineService", () => {
   describe("initializeWorker", () => {
     beforeEach(() => {
       usePlayerStore.setState({ ...initialPlayerState, speed: 1.2, pitchShift: -2.0 }, true);
-      // @ts-ignore // Ensure originalBuffer is set for initializeWorker to proceed
+      // @ts-expect-error Accessing private member for testing. // Ensure originalBuffer is set for initializeWorker to proceed
       audioEngineService.originalBuffer = mockAudioBuffer;
     });
 
@@ -189,7 +185,7 @@ describe("AudioEngineService", () => {
       );
       expect(usePlayerStore.getState().isPlayable).toBe(true);
       expect(usePlayerStore.getState().error).toBeNull();
-      // @ts-ignore
+      // @ts-expect-error Accessing private member for testing.
       expect(audioEngineService.isWorkerReady).toBe(true);
     });
 
@@ -204,7 +200,7 @@ describe("AudioEngineService", () => {
 
   describe("Playback Controls (after successful setup)", () => {
     beforeEach(async () => {
-      // @ts-ignore
+      // @ts-expect-error Accessing private member for testing.
       audioEngineService.originalBuffer = mockAudioBuffer; // Make sure buffer is "loaded"
       const initPromise = audioEngineService.initializeWorker(mockAudioBuffer);
       simulateWorkerMessage({ type: RB_WORKER_MSG_TYPE.INIT_SUCCESS, messageId: "rb_msg_0" });
@@ -217,7 +213,7 @@ describe("AudioEngineService", () => {
     it("play: should start animation loop if ready", async () => {
       await audioEngineService.play();
       expect(rafSpy).toHaveBeenCalledTimes(1);
-      // @ts-ignore
+      // @ts-expect-error Accessing private member for testing.
       expect(audioEngineService.isPlaying).toBe(true);
     });
 
@@ -225,31 +221,31 @@ describe("AudioEngineService", () => {
       await audioEngineService.play(); // Start
       audioEngineService.pause();
       expect(cafSpy).toHaveBeenCalledWith(MOCK_RAF_ID);
-      // @ts-ignore
+      // @ts-expect-error Accessing private member for testing.
       expect(audioEngineService.isPlaying).toBe(false);
     });
 
     it("stop: should cancel loop, reset worker and time", async () => {
       await audioEngineService.play();
-      // @ts-ignore
+      // @ts-expect-error Accessing private member for testing.
       audioEngineService.sourcePlaybackOffset = 5.0;
       await audioEngineService.stop();
       expect(cafSpy).toHaveBeenCalled();
       expect(mockWorkerInstance.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: RB_WORKER_MSG_TYPE.RESET }));
-      // @ts-ignore
+      // @ts-expect-error Accessing private member for testing.
       expect(audioEngineService.isPlaying).toBe(false);
-      // @ts-ignore
+      // @ts-expect-error Accessing private member for testing.
       expect(audioEngineService.sourcePlaybackOffset).toBe(0);
     });
 
     it("seek: should update time, reset worker, remain paused if paused", async () => {
-      // @ts-ignore
+      // @ts-expect-error Accessing private member for testing.
       audioEngineService.isPlaying = false;
       await audioEngineService.seek(5.0);
       expect(mockWorkerInstance.postMessage).toHaveBeenCalledWith(expect.objectContaining({ type: RB_WORKER_MSG_TYPE.RESET }));
-      // @ts-ignore
+      // @ts-expect-error Accessing private member for testing.
       expect(audioEngineService.sourcePlaybackOffset).toBe(5.0);
-      // @ts-ignore
+      // @ts-expect-error Accessing private member for testing.
       expect(audioEngineService.isPlaying).toBe(false);
     });
 

@@ -58,12 +58,7 @@ interface RubberbandModule {
  * @param moduleArg - An object containing `instantiateWasm` function for WASM instantiation.
  * @returns {Promise<RubberbandModule>} A promise resolving to the initialized WASM module.
  */
-declare function Rubberband(moduleArg: {
-  instantiateWasm: (
-    imports: WebAssembly.Imports,
-    cb: (instance: WebAssembly.Instance) => void,
-  ) => WebAssembly.WebAssemblyInstantiatedSource | Record<string, never>; // Adjusted return for flexibility
-}): Promise<RubberbandModule>;
+// Removed unused Rubberband declaration
 
 // --- Worker State ---
 let wasmModule: RubberbandModule | null = null; // Holds the instantiated WASM module
@@ -82,12 +77,12 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
 
   try {
     switch (type) {
-      case RB_WORKER_MSG_TYPE.INIT:
+      case RB_WORKER_MSG_TYPE.INIT: {
         await handleInit(payload as RubberbandInitPayload);
         self.postMessage({ type: RB_WORKER_MSG_TYPE.INIT_SUCCESS, messageId } as WorkerMessage<null>);
         break;
-
-      case RB_WORKER_MSG_TYPE.SET_SPEED:
+      }
+      case RB_WORKER_MSG_TYPE.SET_SPEED: {
         const speedPayload = payload as RubberbandSetSpeedPayload;
         if (stretcher && wasmModule && typeof speedPayload?.speed === 'number') {
           wasmModule._rubberband_set_time_ratio(stretcher, 1.0 / speedPayload.speed);
@@ -95,8 +90,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
           console.warn("RubberbandWorker: SET_SPEED called with invalid payload or uninitialized state.");
         }
         break;
-
-      case RB_WORKER_MSG_TYPE.SET_PITCH:
+      }
+      case RB_WORKER_MSG_TYPE.SET_PITCH: {
         const pitchPayload = payload as RubberbandSetPitchPayload;
         if (stretcher && wasmModule && typeof pitchPayload?.pitch === 'number') {
           const pitchScale = Math.pow(2, pitchPayload.pitch / 12.0);
@@ -105,16 +100,16 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
           console.warn("RubberbandWorker: SET_PITCH called with invalid payload or uninitialized state.");
         }
         break;
-
-      case RB_WORKER_MSG_TYPE.RESET:
+      }
+      case RB_WORKER_MSG_TYPE.RESET: {
         if (stretcher && wasmModule) {
           wasmModule._rubberband_reset(stretcher);
         } else {
           console.warn("RubberbandWorker: RESET called on uninitialized stretcher.");
         }
         break;
-
-      case RB_WORKER_MSG_TYPE.PROCESS:
+      }
+      case RB_WORKER_MSG_TYPE.PROCESS: {
         const processResult = handleProcess(payload as RubberbandProcessPayload);
         const responseMsg: WorkerMessage<RubberbandProcessResultPayload> = {
             type: RB_WORKER_MSG_TYPE.PROCESS_RESULT,
@@ -126,8 +121,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
           processResult.outputBuffer.map((b: Float32Array) => b.buffer) // Added type for b
         );
         break;
-
-      case RB_WORKER_MSG_TYPE.FLUSH:
+      }
+      case RB_WORKER_MSG_TYPE.FLUSH: {
         // FLUSH is intended to retrieve any remaining processed samples from the stretcher.
         // This simplified version sends back an empty buffer, assuming PROCESS handles final chunks.
         // A full implementation might involve calling _rubberband_available and _rubberband_retrieve.
@@ -138,9 +133,10 @@ self.onmessage = async (event: MessageEvent<WorkerMessage<WorkerPayload>>): Prom
           messageId,
         } as WorkerMessage<RubberbandProcessResultPayload>);
         break;
-
-      default:
+      }
+      default: {
         console.warn(`RubberbandWorker: Received unknown message type: ${type}`);
+      }
     }
   } catch (e: unknown) {
     const error = e as Error;

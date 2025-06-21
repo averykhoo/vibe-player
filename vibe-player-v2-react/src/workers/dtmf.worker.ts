@@ -142,7 +142,7 @@ class DTMFParser {
    */
   public processAudioBlock(
     audioBlock: Float32Array,
-    timestamp: number, // Added timestamp though not directly used in current DTMF logic here
+    // timestamp: number, // Added timestamp though not directly used in current DTMF logic here
   ): string | null {
     let maxLowMag = -1,
       detectedLowFreq = -1;
@@ -254,8 +254,8 @@ self.onmessage = (event: MessageEvent<DtmfWorkerMessageDataIn>): void => {
       // Process audio in blocks
       for (let i = 0; (i + DTMF_BLOCK_SIZE) <= pcmData.length; i += DTMF_BLOCK_SIZE) {
         const audioBlock = pcmData.subarray(i, i + DTMF_BLOCK_SIZE);
-        const timestamp = i / DTMF_SAMPLE_RATE; // Timestamp for this block
-        const tone = dtmfParser.processAudioBlock(audioBlock, timestamp);
+        // const timestamp = i / DTMF_SAMPLE_RATE; // Timestamp for this block
+        const tone = dtmfParser.processAudioBlock(audioBlock);
 
         // Confirmation logic: tone must be stable for minConsecutiveDtmf blocks
         if (tone) {

@@ -1,7 +1,7 @@
 // vibe-player-v2-react/src/components/visualizers/SpectrogramVisualizer.test.tsx
-import { render, screen, act } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import SpectrogramVisualizer from './SpectrogramVisualizer';
+import SpectrogramVisualizer from '../SpectrogramVisualizer';
 import { useAnalysisStore, AnalysisState } from '../../stores/analysis.store';
 import { usePlayerStore, PlayerState } from '../../stores/player.store';
 // Import the actual getViridisColor or mock its module if it's complex.
@@ -22,9 +22,9 @@ const initialAnalysisState: AnalysisState = useAnalysisStore.getState();
 const initialPlayerState: PlayerState = usePlayerStore.getState();
 
 // Mock getContext for canvas
-let mockFillRect = vi.fn();
-let mockClearRect = vi.fn();
-let mockFillText = vi.fn();
+const mockFillRect = vi.fn();
+const mockClearRect = vi.fn();
+const mockFillText = vi.fn();
 
 const mockGetContext = vi.fn(() => ({
   fillRect: mockFillRect,
@@ -52,11 +52,17 @@ describe('SpectrogramVisualizer', () => {
 
     vi.clearAllMocks(); // Clears all mocks
 
-    // Setup canvas getContext mock for each test
-    HTMLCanvasElement.prototype.getContext = mockGetContext;
-    // Mock offsetWidth and offsetHeight for canvas dimension calculations
-    Object.defineProperty(HTMLCanvasElement.prototype, 'offsetWidth', { configurable: true, value: 300 });
-    Object.defineProperty(HTMLCanvasElement.prototype, 'offsetHeight', { configurable: true, value: 150 });
+    // HTMLCanvasElement and its properties (getContext, offsetWidth, offsetHeight)
+    // are now globally mocked via src/setupTests.ts.
+    // Individual tests can still override getContext if needed by re-mocking on the specific canvas instance.
+    // For a generic '2d' context, the global mock should suffice.
+    // If tests rely on specific return values from getContext calls that differ from the global mock,
+    // those specific canvas instances might need more targeted mocking if the global one isn't enough.
+    // For now, relying on global mock. The specific mockGetContext variable can be used if needed later
+    // to provide custom mock implementations to specific canvas instances if tests become more granular.
+    // HTMLCanvasElement.prototype.getContext = mockGetContext; // No longer needed if global mock is sufficient
+    // Object.defineProperty(HTMLCanvasElement.prototype, 'offsetWidth', { configurable: true, value: 300 }); // No longer needed
+    // Object.defineProperty(HTMLCanvasElement.prototype, 'offsetHeight', { configurable: true, value: 150 }); // No longer needed
 
   });
 

@@ -27,7 +27,7 @@ const initialState: PlayerStateType = {
   lastProcessedChunk: undefined, // Optional, and type is 'any'
 };
 
-export const usePlayerStore = create<PlayerStateType>((set) => ({
+export const usePlayerStore = create<PlayerStateType>(() => ({
   ...initialState,
   // Services will use usePlayerStore.setState() for updates.
   // If specific actions are needed on the store itself later, they can be added here.

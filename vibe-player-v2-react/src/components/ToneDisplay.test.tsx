@@ -4,9 +4,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import ToneDisplay from './ToneDisplay';
 import { useDtmfStore, DtmfState } from '../stores/dtmf.store'; // Import type
 
-// Get initial state once to ensure we have the correct structure including actions
-const initialDtmfStoreState = useDtmfStore.getState();
-
 // Prepare a clean initial state for dtmf data properties only
 const initialDtmfDataState: Pick<DtmfState, 'dtmf' | 'cpt' | 'status' | 'error'> = {
   dtmf: [],
