@@ -1,3 +1,4 @@
+
 // vibe-player-v2-react/src/components/visualizers/SpectrogramVisualizer.test.tsx
 import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -7,62 +8,39 @@ import { usePlayerStore, PlayerState } from '../../stores/player.store';
 // Import the actual getViridisColor or mock its module if it's complex.
 // For this test, we can spy on it if it's simple or just test canvas output.
 
-// Mock ResizeObserver
-const mockObserve = vi.fn();
-const mockUnobserve = vi.fn();
-const mockDisconnect = vi.fn();
-
-vi.stubGlobal('ResizeObserver', vi.fn(() => ({
-  observe: mockObserve,
-  unobserve: mockUnobserve,
-  disconnect: mockDisconnect,
-})));
+// Global ResizeObserver and canvas mocks are now in setupTests.ts
 
 const initialAnalysisState: AnalysisState = useAnalysisStore.getState();
 const initialPlayerState: PlayerState = usePlayerStore.getState();
 
-// Mock getContext for canvas
-const mockFillRect = vi.fn();
-const mockClearRect = vi.fn();
-const mockFillText = vi.fn();
-
-const mockGetContext = vi.fn(() => ({
-  fillRect: mockFillRect,
-  clearRect: mockClearRect,
-  fillText: mockFillText,
-  beginPath: vi.fn(),
-  moveTo: vi.fn(),
-  lineTo: vi.fn(),
-  stroke: vi.fn(),
-  // Mock other properties and methods as needed by the drawing logic
-  fillStyle: '',
-  strokeStyle: '',
-  lineWidth: 0,
-  textAlign: '', // Add if fillText is used with textAlign
-  // Add other properties that might be set by the component
-  // e.g., font if fillText is used
-  font: '',
-}));
-
+// Retrieve mocks from the global scope (setupTests.ts) if needed for assertions
+// e.g. const mockClearRect = (HTMLCanvasElement.prototype.getContext('2d') as any).clearRect;
+// For most cases, asserting against component behavior (e.g., "No data" text) is preferred.
 
 describe('SpectrogramVisualizer', () => {
+  let mockClearRect: ReturnType<typeof vi.fn>;
+  let mockFillText: ReturnType<typeof vi.fn>;
+  let mockFillRect: ReturnType<typeof vi.fn>;
+  let mockObserve: ReturnType<typeof vi.fn>;
+  let mockDisconnect: ReturnType<typeof vi.fn>;
+
+
   beforeEach(() => {
     useAnalysisStore.setState(initialAnalysisState, true); // Reset analysis store
     usePlayerStore.setState(initialPlayerState, true);   // Reset player store
 
-    vi.clearAllMocks(); // Clears all mocks
+    // vi.clearAllMocks() is called in afterEach in setupTests.ts
 
-    // HTMLCanvasElement and its properties (getContext, offsetWidth, offsetHeight)
-    // are now globally mocked via src/setupTests.ts.
-    // Individual tests can still override getContext if needed by re-mocking on the specific canvas instance.
-    // For a generic '2d' context, the global mock should suffice.
-    // If tests rely on specific return values from getContext calls that differ from the global mock,
-    // those specific canvas instances might need more targeted mocking if the global one isn't enough.
-    // For now, relying on global mock. The specific mockGetContext variable can be used if needed later
-    // to provide custom mock implementations to specific canvas instances if tests become more granular.
-    // HTMLCanvasElement.prototype.getContext = mockGetContext; // No longer needed if global mock is sufficient
-    // Object.defineProperty(HTMLCanvasElement.prototype, 'offsetWidth', { configurable: true, value: 300 }); // No longer needed
-    // Object.defineProperty(HTMLCanvasElement.prototype, 'offsetHeight', { configurable: true, value: 150 }); // No longer needed
+    // Access the globally mocked functions for assertions if necessary
+    // This ensures we are checking the same mock instances used by the component
+    const contextMock = HTMLCanvasElement.prototype.getContext('2d') as any;
+    mockClearRect = contextMock.clearRect;
+    mockFillText = contextMock.fillText;
+    mockFillRect = contextMock.fillRect;
+
+    const resizeObserverMock = new (vi.getVmSystemGlobal().ResizeObserver as any)();
+    mockObserve = resizeObserverMock.observe;
+    mockDisconnect = resizeObserverMock.disconnect;
 
   });
 
