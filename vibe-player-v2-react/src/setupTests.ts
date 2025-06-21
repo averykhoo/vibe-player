@@ -1,6 +1,7 @@
-// src/setupTests.ts
 import { afterEach, vi } from 'vitest';
-import '@testing-library/jest-dom/vitest'; // Extends expect with DOM matchers
+import '@testing-library/jest-dom/vitest';
+// Import the new shared mocks
+import { getMockContext, mockCanvasContext } from './test-utils/canvas.mock';
 
 // Mock ResizeObserver globally
 const MockResizeObserver = vi.fn(() => ({
@@ -8,27 +9,12 @@ const MockResizeObserver = vi.fn(() => ({
   unobserve: vi.fn(),
   disconnect: vi.fn(),
 }));
-
 vi.stubGlobal('ResizeObserver', MockResizeObserver);
 
-// Mock HTMLCanvasElement.prototype.getContext globally
+// Configure the global canvas mock to return our singleton
 Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
   configurable: true,
-  value: vi.fn((): Partial<CanvasRenderingContext2D> => ({ // Return a well-typed partial mock
-    fillRect: vi.fn(),
-    clearRect: vi.fn(),
-    fillText: vi.fn(),
-    beginPath: vi.fn(),
-    moveTo: vi.fn(),
-    lineTo: vi.fn(),
-    stroke: vi.fn(),
-    // Mock other context properties as needed by components
-    fillStyle: '',
-    strokeStyle: '',
-    lineWidth: 0,
-    textAlign: 'start',
-    font: '10px sans-serif',
-  })),
+  value: getMockContext,
 });
 
 // Mock canvas dimensions
@@ -37,7 +23,12 @@ Object.defineProperty(HTMLCanvasElement.prototype, 'offsetHeight', { configurabl
 
 
 // --- Global Test Cleanup ---
-// Runs after each test to ensure mocks are cleared
 afterEach(() => {
   vi.clearAllMocks();
+  // Reset the history of our singleton mock's methods
+  Object.values(mockCanvasContext).forEach((mockFn) => {
+    if (typeof mockFn === 'function' && 'mockClear' in mockFn) {
+      (mockFn as ReturnType<typeof vi.fn>).mockClear();
+    }
+  });
 });

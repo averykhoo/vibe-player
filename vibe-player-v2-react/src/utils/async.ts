@@ -19,19 +19,17 @@ export async function yieldToMainThread(): Promise<void> {
  * @param {boolean} [immediate=false] - If true, trigger the function on the leading edge instead of the trailing.
  * @returns {(...args: Parameters<T>) => void} A new debounced function.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function debounce<T extends (...args: any[]) => any>(
+export function debounce<T extends (...args: never[]) => void>(
   func: T,
   wait: number,
   immediate: boolean = false,
 ): (...args: Parameters<T>) => void {
   let timeout: ReturnType<typeof setTimeout> | null;
   return function executedFunction(this: ThisParameterType<T>, ...args: Parameters<T>) {
-    // const context = this; // No longer needed due to ThisParameterType and apply(this, args)
     const later = () => {
       timeout = null;
       if (!immediate) {
-        func.apply(this, args); // Use 'this' directly
+        func.apply(this, args);
       }
     };
     const callNow = immediate && !timeout;

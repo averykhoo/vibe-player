@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import WaveformVisualizer from '../WaveformVisualizer';
 import { usePlayerStore, PlayerState } from '../../stores/player.store';
+import { mockCanvasContext } from '../../test-utils/canvas.mock'; // Import the shared mock
 
 // Global ResizeObserver and canvas mocks are now in setupTests.ts
 
@@ -28,33 +29,18 @@ const initialPlayerState: PlayerState = {
 // Retrieve mocks from the global scope (setupTests.ts) if needed for assertions
 
 describe('WaveformVisualizer', () => {
-  let mockClearRect: ReturnType<typeof vi.fn>;
-  let mockFillRect: ReturnType<typeof vi.fn>;
-  let mockFillText: ReturnType<typeof vi.fn>;
-  let mockBeginPath: ReturnType<typeof vi.fn>;
-  let mockMoveTo: ReturnType<typeof vi.fn>;
-  let mockLineTo: ReturnType<typeof vi.fn>;
-  let mockStroke: ReturnType<typeof vi.fn>;
   let mockObserve: ReturnType<typeof vi.fn>;
   let mockDisconnect: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     usePlayerStore.setState(initialPlayerState, true); // Reset store
-    // vi.clearAllMocks() is called in afterEach in setupTests.ts
+    // vi.clearAllMocks() and mockCanvasContext cleanup is called in afterEach in setupTests.ts
 
-    // Access the globally mocked functions for assertions
-    const contextMock = HTMLCanvasElement.prototype.getContext('2d') as any;
-    mockClearRect = contextMock.clearRect;
-    mockFillRect = contextMock.fillRect;
-    mockFillText = contextMock.fillText;
-    mockBeginPath = contextMock.beginPath;
-    mockMoveTo = contextMock.moveTo;
-    mockLineTo = contextMock.lineTo;
-    mockStroke = contextMock.stroke;
-
-    const resizeObserverMock = new (vi.getVmSystemGlobal().ResizeObserver as any)();
-    mockObserve = resizeObserverMock.observe;
-    mockDisconnect = resizeObserverMock.disconnect;
+    // ResizeObserver mocks are still accessed if needed for specific assertions not related to canvas
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const resizeObserverMockInstance = new (vi.getVmSystemGlobal().ResizeObserver as any)();
+    mockObserve = resizeObserverMockInstance.observe;
+    mockDisconnect = resizeObserverMockInstance.disconnect;
   });
 
   it('renders a canvas element with ARIA label and role', () => {
@@ -74,16 +60,16 @@ describe('WaveformVisualizer', () => {
   it('clears canvas and shows "No waveform data available" if playable but no data', () => {
     usePlayerStore.setState({ isPlayable: true, waveformData: undefined });
     render(<WaveformVisualizer />);
-    expect(mockClearRect).toHaveBeenCalled(); // For initial clear or background
-    expect(mockFillRect).toHaveBeenCalled(); // For background fill
-    expect(mockFillText).toHaveBeenCalledWith('No waveform data available', 150, 75); // Assumes canvas 300x150
+    expect(mockCanvasContext.clearRect).toHaveBeenCalled(); // For initial clear or background
+    expect(mockCanvasContext.fillRect).toHaveBeenCalled(); // For background fill
+    expect(mockCanvasContext.fillText).toHaveBeenCalledWith('No waveform data available', 150, 75); // Assumes canvas 300x150
   });
 
   it('clears canvas if not playable', () => {
     usePlayerStore.setState({ isPlayable: false, waveformData: new Float32Array([0.1, 0.2]) });
     render(<WaveformVisualizer />);
-    expect(mockClearRect).toHaveBeenCalledTimes(1); // Only the initial clear
-    expect(mockFillText).not.toHaveBeenCalledWith('No waveform data available', expect.anything(), expect.anything());
+    expect(mockCanvasContext.clearRect).toHaveBeenCalledTimes(1); // Only the initial clear
+    expect(mockCanvasContext.fillText).not.toHaveBeenCalledWith('No waveform data available', expect.anything(), expect.anything());
   });
 
   it('draws waveform and cursor when data is present and playable', () => {
@@ -98,22 +84,24 @@ describe('WaveformVisualizer', () => {
     });
     render(<WaveformVisualizer />);
 
-    expect(mockFillRect).toHaveBeenCalled(); // Background
-    expect(mockBeginPath).toHaveBeenCalledTimes(2); // Once for waveform, once for cursor
-    expect(mockStroke).toHaveBeenCalledTimes(2);   // Once for waveform, once for cursor
+    expect(mockCanvasContext.fillRect).toHaveBeenCalled(); // Background
+    expect(mockCanvasContext.beginPath).toHaveBeenCalledTimes(2); // Once for waveform, once for cursor
+    expect(mockCanvasContext.stroke).toHaveBeenCalledTimes(2);   // Once for waveform, once for cursor
 
     // Check if cursor drawing methods were called
     // (cursorPosition = (25 / 100) * 300 = 75)
-    expect(mockMoveTo).toHaveBeenCalledWith(75, 0);
-    expect(mockLineTo).toHaveBeenCalledWith(75, 150);
+    expect(mockCanvasContext.moveTo).toHaveBeenCalledWith(75, 0);
+    expect(mockCanvasContext.lineTo).toHaveBeenCalledWith(75, 150);
   });
 
   it('does not attempt to draw if canvas context cannot be obtained', () => {
+    const originalGetContext = HTMLCanvasElement.prototype.getContext;
     HTMLCanvasElement.prototype.getContext = vi.fn(() => null); // Simulate context failure
     usePlayerStore.setState({ isPlayable: true, waveformData: new Float32Array([0.5]) });
     render(<WaveformVisualizer />);
-    expect(mockClearRect).not.toHaveBeenCalled();
-    expect(mockFillRect).not.toHaveBeenCalled();
-    expect(mockBeginPath).not.toHaveBeenCalled();
+    expect(mockCanvasContext.clearRect).not.toHaveBeenCalled();
+    expect(mockCanvasContext.fillRect).not.toHaveBeenCalled();
+    expect(mockCanvasContext.beginPath).not.toHaveBeenCalled();
+    HTMLCanvasElement.prototype.getContext = originalGetContext; // Restore original getContext
   });
 });
