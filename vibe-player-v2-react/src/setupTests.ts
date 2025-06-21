@@ -1,59 +1,43 @@
 // src/setupTests.ts
-import { vi } from 'vitest';
+import { afterEach, vi } from 'vitest';
+import '@testing-library/jest-dom/vitest'; // Extends expect with DOM matchers
 
-// Mock Vite's import.meta.env for all tests
-// This tells services/components that they are running in a non-SSR (i.e., browser-like) context
-// during the test suite execution.
-Object.defineProperty(globalThis, 'import.meta.env', {
-  value: {
-    ...((globalThis as any).importMetaEnv || {}), // Preserve other potential env vars if any test sets them
-    SSR: false, // Explicitly set SSR to false for client-side logic testing
-  },
-  writable: true, // Allow tests to override if necessary, though generally not recommended
-});
-
-
-// Global mock for ResizeObserver
+// Mock ResizeObserver globally
 const MockResizeObserver = vi.fn(() => ({
   observe: vi.fn(),
   unobserve: vi.fn(),
   disconnect: vi.fn(),
 }));
+
 vi.stubGlobal('ResizeObserver', MockResizeObserver);
 
-// Global mock for HTMLCanvasElement for visualizer tests
-if (typeof globalThis.HTMLCanvasElement === 'undefined') {
-  // @ts-ignore
-  globalThis.HTMLCanvasElement = class HTMLCanvasElementMock {
-    getContext(contextId: string) {
-      if (contextId === '2d') {
-        // Return a basic 2D context mock. Tests can override prototype.getContext for specific needs.
-        return {
-          fillRect: vi.fn(),
-          clearRect: vi.fn(),
-          fillText: vi.fn(),
-          beginPath: vi.fn(),
-          moveTo: vi.fn(),
-          lineTo: vi.fn(),
-          stroke: vi.fn(),
-          // Default properties that might be accessed
-          fillStyle: '',
-          strokeStyle: '',
-          lineWidth: 0,
-          textAlign: '',
-          font: '',
-        };
-      }
-      return null;
-    }
-    // Mock properties often accessed by visualizers
-    get offsetWidth() { return 300; }
-    get offsetHeight() { return 150; }
-    // Add other necessary properties or methods if tests require them
-    // e.g., toDataURL, addEventListener, etc., if needed.
-  };
-}
+// Mock HTMLCanvasElement.prototype.getContext globally
+Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+  configurable: true,
+  value: vi.fn((): Partial<CanvasRenderingContext2D> => ({ // Return a well-typed partial mock
+    fillRect: vi.fn(),
+    clearRect: vi.fn(),
+    fillText: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    stroke: vi.fn(),
+    // Mock other context properties as needed by components
+    fillStyle: '',
+    strokeStyle: '',
+    lineWidth: 0,
+    textAlign: 'start',
+    font: '10px sans-serif',
+  })),
+});
+
+// Mock canvas dimensions
+Object.defineProperty(HTMLCanvasElement.prototype, 'offsetWidth', { configurable: true, value: 300 });
+Object.defineProperty(HTMLCanvasElement.prototype, 'offsetHeight', { configurable: true, value: 150 });
 
 
-// If you were using jest-dom matchers, you'd import them here:
-// import '@testing-library/jest-dom';
+// --- Global Test Cleanup ---
+// Runs after each test to ensure mocks are cleared
+afterEach(() => {
+  vi.clearAllMocks();
+});
