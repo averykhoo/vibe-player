@@ -34,7 +34,7 @@ jobs:
 
       - name: Run V2 unit and component tests
         working-directory: ./vibe-player-v2-react
-        run: npm run test:unit
+        run: npm test
 
       - name: Build Vibe Player V2
         working-directory: ./vibe-player-v2-react
