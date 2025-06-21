@@ -4,16 +4,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import WaveformVisualizer from '../WaveformVisualizer';
 import { usePlayerStore, PlayerState } from '../../stores/player.store';
 
-// Mock ResizeObserver
-const mockObserve = vi.fn();
-const mockUnobserve = vi.fn(); // Not used by current WaveformVisualizer, but good to have for completeness
-const mockDisconnect = vi.fn();
-
-vi.stubGlobal('ResizeObserver', vi.fn(() => ({
-  observe: mockObserve,
-  unobserve: mockUnobserve,
-  disconnect: mockDisconnect,
-})));
+// Global ResizeObserver and canvas mocks are now in setupTests.ts
 
 const initialPlayerState: PlayerState = {
     status: 'idle',
@@ -34,41 +25,36 @@ const initialPlayerState: PlayerState = {
     lastProcessedChunk: undefined,
 };
 
-// Mock getContext for canvas
-const mockClearRect = vi.fn();
-const mockFillRect = vi.fn(); // For background
-const mockFillText = vi.fn(); // For "no data" message
-const mockBeginPath = vi.fn();
-const mockMoveTo = vi.fn();
-const mockLineTo = vi.fn();
-const mockStroke = vi.fn();
-
-const mockGetContext = vi.fn(() => ({
-  clearRect: mockClearRect,
-  fillRect: mockFillRect,
-  fillText: mockFillText,
-  beginPath: mockBeginPath,
-  moveTo: mockMoveTo,
-  lineTo: mockLineTo,
-  stroke: mockStroke,
-  fillStyle: '',
-  strokeStyle: '',
-  lineWidth: 0,
-  textAlign: '',
-  font: '',
-}));
+// Retrieve mocks from the global scope (setupTests.ts) if needed for assertions
 
 describe('WaveformVisualizer', () => {
+  let mockClearRect: ReturnType<typeof vi.fn>;
+  let mockFillRect: ReturnType<typeof vi.fn>;
+  let mockFillText: ReturnType<typeof vi.fn>;
+  let mockBeginPath: ReturnType<typeof vi.fn>;
+  let mockMoveTo: ReturnType<typeof vi.fn>;
+  let mockLineTo: ReturnType<typeof vi.fn>;
+  let mockStroke: ReturnType<typeof vi.fn>;
+  let mockObserve: ReturnType<typeof vi.fn>;
+  let mockDisconnect: ReturnType<typeof vi.fn>;
+
   beforeEach(() => {
     usePlayerStore.setState(initialPlayerState, true); // Reset store
-    vi.clearAllMocks(); // Clear all Vitest mocks
+    // vi.clearAllMocks() is called in afterEach in setupTests.ts
 
-    // HTMLCanvasElement and its properties (getContext, offsetWidth, offsetHeight)
-    // are now globally mocked via src/setupTests.ts.
-    // Similar to SpectrogramVisualizer.test.tsx, relying on global mock.
-    // HTMLCanvasElement.prototype.getContext = mockGetContext; // No longer needed
-    // Object.defineProperty(HTMLCanvasElement.prototype, 'offsetWidth', { configurable: true, value: 300 }); // No longer needed
-    // Object.defineProperty(HTMLCanvasElement.prototype, 'offsetHeight', { configurable: true, value: 150 }); // No longer needed
+    // Access the globally mocked functions for assertions
+    const contextMock = HTMLCanvasElement.prototype.getContext('2d') as any;
+    mockClearRect = contextMock.clearRect;
+    mockFillRect = contextMock.fillRect;
+    mockFillText = contextMock.fillText;
+    mockBeginPath = contextMock.beginPath;
+    mockMoveTo = contextMock.moveTo;
+    mockLineTo = contextMock.lineTo;
+    mockStroke = contextMock.stroke;
+
+    const resizeObserverMock = new (vi.getVmSystemGlobal().ResizeObserver as any)();
+    mockObserve = resizeObserverMock.observe;
+    mockDisconnect = resizeObserverMock.disconnect;
   });
 
   it('renders a canvas element with ARIA label and role', () => {
