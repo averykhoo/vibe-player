@@ -1,10 +1,12 @@
+# .github/workflows/ci.yml
+
 name: Vibe Player CI
 
 on:
   push:
-    branches: [ "**" ] # Run on pushes to all branches
+    branches: [ "**" ]
   pull_request:
-    branches: [ "main", "master" ] # Run on PRs targeting main or master
+    branches: [ "main" ]
 
 jobs:
   test:
@@ -15,48 +17,55 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Use Node.js 18.x
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '18.x'
+          cache: 'npm'
+          cache-dependency-path: 'vibe-player-v2/package-lock.json'
 
-      - name: Cache npm dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.npm
-          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-
-
-      - name: Install dependencies
+      - name: Install V2 dependencies
+        working-directory: ./vibe-player-v2
         run: npm ci
 
-      - name: List Playwright directory contents
-        run: |
-          ls -la node_modules/.bin/
-          ls -la node_modules/@playwright/
-          if [ -f node_modules/playwright/cli.js ]; then echo "node_modules/playwright/cli.js exists"; else echo "node_modules/playwright/cli.js DOES NOT EXIST"; fi
-          if [ -d node_modules/@playwright/test ]; then echo "node_modules/@playwright/test directory exists"; else echo "node_modules/@playwright/test DOES NOT EXIST"; fi
+      - name: Lint V2
+        working-directory: ./vibe-player-v2
+        run: npm run lint
 
-      - name: Run unit tests
+      - name: Run V2 unit and component tests
+        working-directory: ./vibe-player-v2
         run: npm run test:unit
 
-      - name: Install Playwright Browsers and dependencies
+      - name: Build Vibe Player V2
+        working-directory: ./vibe-player-v2
+        run: npm run build
+
+      - name: Restore Playwright cache
+        id: cache-playwright-restore # <-- Important ID
+        uses: actions/cache/restore@v4
+        with:
+          path: /home/runner/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ hashFiles('vibe-player-v2/package-lock.json') }}
+
+      - name: Install Playwright and OS dependencies
+        if: steps.cache-playwright-restore.outputs.cache-hit != 'true'
+        working-directory: ./vibe-player-v2
         run: npx playwright install --with-deps
 
-      - name: Start test server
-        run: npm run serve-for-test &
-        # Add a small delay to ensure server starts before tests
-        # Note: In a real-world scenario, a more robust wait strategy might be needed
-        # e.g., using wait-on or a custom script to check if the server is responsive.
+      - name: Save Playwright cache
+        if: always() && steps.cache-playwright-restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          # Use the exact key from the restore step to ensure consistency.
+          key: ${{ steps.cache-playwright-restore.outputs.cache-primary-key }}
+          path: /home/runner/.cache/ms-playwright
 
-      - name: Run E2E tests
-        run: |
-          sleep 5 # Wait for server to start
-          ./node_modules/.bin/playwright test # Changed command
+      - name: Run Playwright E2E tests
+        working-directory: ./vibe-player-v2
+        run: npx playwright test
 
       - name: Upload Playwright report
-        if: always() # Run this step even if previous steps fail, to get reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
