@@ -50,8 +50,8 @@ class Constants {
             SPEC_MEL_BINS: 1024,      // High vertical resolution for harmonics
             SPEC_TARGET_WIDTH: 2048,   // Fixed texture width
             SPEC_RESOLUTIONS: [16384, 8192, 4096, 2048, 1024, 512, 256, 128],
-            SPEC_DB_FLOOR: -128,        // Lowered from -90 to capture quiet room tone
-            SPEC_GAMMA: 1,            // Gamma factor to "lift" background noise (0.5 is a good lift)
+            SPEC_DB_FLOOR: -90,        // Lowered from -90 to capture quiet room tone
+            SPEC_GAMMA: 0.85,            // Gamma factor to "lift" background noise (0.5 is a good lift)
             SPEC_PRE_EMPHASIS: 0.97,   // High-pass coefficient for visual clarity
 
             SPEC_DRAFT_COLS: 250,
