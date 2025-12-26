@@ -107,28 +107,29 @@ AudioApp.spectrogramVisualizer = (function () {
      */
     function renderDataToCanvas(data, dataWidth, dataHeight, interpolate) {
         const C = Constants.Visualizer;
-
-        // --- FIX: Ensure these are valid integers (longs) ---
         const width = Math.floor(dataWidth || 2048);
         const height = Math.floor(dataHeight || 1024);
+        const dbFloor = C.SPEC_DB_FLOOR;
+        const gamma = C.SPEC_GAMMA; // Controls the "brightness" of the noise
 
         const tempCanvas = (width === C.SPEC_TARGET_WIDTH) ? spectrogramCanvas : draftCanvas;
         const tempCtx = tempCanvas.getContext('2d');
 
-        tempCanvas.width = width;
-        tempCanvas.height = height;
-
-        // Use the validated integers here
         const imgData = tempCtx.createImageData(width, height);
         const pixels = imgData.data;
-        const dbFloor = C.SPEC_DB_FLOOR;
 
         for (let i = 0; i < data.length; i++) {
             const db = data[i];
-            const normalized = Math.max(0, (db - dbFloor) / Math.abs(dbFloor));
+
+            // 1. Linear normalization (0 to 1)
+            let normalized = Math.max(0, (db - dbFloor) / Math.abs(dbFloor));
+
+            // 2. GAMMA CORRECTION (The "Lift")
+            // Math.pow(n, < 1.0) stretches the dark values into the visible range
+            normalized = Math.pow(normalized, gamma);
+
             const [r, g, b] = Utils.viridisColor(normalized);
 
-            // Map flat data to vertical pixels (Time is X, Frequency is Y)
             const x = Math.floor(i / height);
             const y = height - 1 - (i % height);
             const pixelIdx = (y * width + x) * 4;
@@ -141,51 +142,54 @@ AudioApp.spectrogramVisualizer = (function () {
             }
         }
 
-        tempCtx.putImageData(imgData, 0, 0);
+            tempCtx.putImageData(imgData, 0, 0);
 
-        if (tempCanvas !== spectrogramCanvas) {
-            spectrogramCtx.imageSmoothingEnabled = true;
-            spectrogramCtx.drawImage(tempCanvas, 0, 0, width, height, 0, 0, spectrogramCanvas.width, spectrogramCanvas.height);
+            if (tempCanvas !== spectrogramCanvas) {
+                spectrogramCtx.imageSmoothingEnabled = true;
+                spectrogramCtx.drawImage(tempCanvas, 0, 0, width, height, 0, 0, spectrogramCanvas.width, spectrogramCanvas.height);
+            }
         }
-    }
 
-    function handleCanvasClick(e) {
-        const rect = spectrogramCanvas.getBoundingClientRect();
-        const fraction = (e.clientX - rect.left) / rect.width;
-        document.dispatchEvent(new CustomEvent('audioapp:seekRequested', {detail: {fraction}}));
-    }
-
-    function updateProgressIndicator(currentTime, duration) {
-        if (!spectrogramCanvas || !spectrogramProgressIndicator) return;
-        const fraction = isNaN(duration) || duration <= 0 ? 0 : Math.max(0, Math.min(1, currentTime / duration));
-        // Use clientWidth for the indicator position (UI space), not internal canvas width (texture space)
-        spectrogramProgressIndicator.style.left = `${fraction * spectrogramCanvas.clientWidth}px`;
-    }
-
-    function clearVisuals() {
-        if (spectrogramCtx) {
-            spectrogramCtx.fillStyle = '#000';
-            spectrogramCtx.fillRect(0, 0, spectrogramCanvas.width, spectrogramCanvas.height);
+        function handleCanvasClick(e) {
+            const rect = spectrogramCanvas.getBoundingClientRect();
+            const fraction = (e.clientX - rect.left) / rect.width;
+            document.dispatchEvent(new CustomEvent('audioapp:seekRequested', {detail: {fraction}}));
         }
-        updateProgressIndicator(0, 1);
+
+        function updateProgressIndicator(currentTime, duration) {
+            if (!spectrogramCanvas || !spectrogramProgressIndicator) return;
+            const fraction = isNaN(duration) || duration <= 0 ? 0 : Math.max(0, Math.min(1, currentTime / duration));
+            // Use clientWidth for the indicator position (UI space), not internal canvas width (texture space)
+            spectrogramProgressIndicator.style.left = `${fraction * spectrogramCanvas.clientWidth}px`;
+        }
+
+        function clearVisuals() {
+            if (spectrogramCtx) {
+                spectrogramCtx.fillStyle = '#000';
+                spectrogramCtx.fillRect(0, 0, spectrogramCanvas.width, spectrogramCanvas.height);
+            }
+            updateProgressIndicator(0, 1);
+        }
+
+        function showSpinner(show) {
+            if (spectrogramSpinner) spectrogramSpinner.style.display = show ? 'inline' : 'none';
+        }
+
+        function resizeAndRedraw(audioBuffer) {
+            // GPU handles scaling; we only need to update the progress line position
+            const {currentTime = 0, duration = 0} = AudioApp.audioEngine?.getCurrentTime() || {};
+            updateProgressIndicator(currentTime, duration || (audioBuffer ? audioBuffer.duration : 0));
+        }
+
+        return {
+            init,
+            computeAndDrawSpectrogram,
+            resizeAndRedraw,
+            updateProgressIndicator,
+            clearVisuals,
+            showSpinner
+        };
     }
 
-    function showSpinner(show) {
-        if (spectrogramSpinner) spectrogramSpinner.style.display = show ? 'inline' : 'none';
-    }
-
-    function resizeAndRedraw(audioBuffer) {
-        // GPU handles scaling; we only need to update the progress line position
-        const {currentTime = 0, duration = 0} = AudioApp.audioEngine?.getCurrentTime() || {};
-        updateProgressIndicator(currentTime, duration || (audioBuffer ? audioBuffer.duration : 0));
-    }
-
-    return {
-        init,
-        computeAndDrawSpectrogram,
-        resizeAndRedraw,
-        updateProgressIndicator,
-        clearVisuals,
-        showSpinner
-    };
-})();
+)
+    ();

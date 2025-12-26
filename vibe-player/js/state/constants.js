@@ -41,23 +41,21 @@ class Constants {
      */
     static get Visualizer() {
         return {
-            // Waveform configuration
-            WAVEFORM_HEIGHT_SCALE: 0.8,
-            WAVEFORM_COLOR_LOADING: '#888888',
+            WAVEFORM_HEIGHT_SCALE: 0.9,
             WAVEFORM_COLOR_DEFAULT: '#26828E',
             WAVEFORM_COLOR_SPEECH: '#FDE725',
-            WAVEFORM_PROBES_PER_PIXEL: 64,
+            WAVEFORM_PROBES_PER_PIXEL: 128,
 
-            // Spectrogram Engine (Forensic Pass)
-            SPEC_ERB_BINS: 512,
-            SPEC_TARGET_WIDTH: 2048,
+            // Spectrogram Engine (Forensic Sharpness)
+            SPEC_MEL_BINS: 1024,      // High vertical resolution for harmonics
+            SPEC_TARGET_WIDTH: 2048,   // Fixed texture width
             SPEC_RESOLUTIONS: [16384, 8192, 4096, 2048, 1024, 512, 256, 128],
-            SPEC_GAMMATONE_ORDER: 4,
-            SPEC_DB_FLOOR: -80, // Dynamic range floor in Decibels
+            SPEC_DB_FLOOR: -128,        // Lowered from -90 to capture quiet room tone
+            SPEC_GAMMA: 1,            // Gamma factor to "lift" background noise (0.5 is a good lift)
+            SPEC_PRE_EMPHASIS: 0.97,   // High-pass coefficient for visual clarity
 
-            // Spectrogram Draft (Flash Pass)
-            SPEC_DRAFT_COLS: 200,
-            SPEC_DRAFT_BINS: 64,
+            SPEC_DRAFT_COLS: 250,
+            SPEC_DRAFT_BINS: 128,
             SPEC_DRAFT_FFT_SIZE: 1024
         };
     }
