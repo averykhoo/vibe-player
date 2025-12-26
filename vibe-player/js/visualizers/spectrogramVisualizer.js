@@ -50,13 +50,13 @@ AudioApp.spectrogramVisualizer = (function () {
         if (spectrogramCanvas) {
             spectrogramCtx = spectrogramCanvas.getContext('2d');
             // Lock internal buffer resolution to Forensic Target
-            spectrogramCanvas.width = Constants.Visualizer.SPEC_TARGET_WIDTH;
-            spectrogramCanvas.height = Constants.Visualizer.SPEC_ERB_BINS;
+            spectrogramCanvas.width = Constants.Visualizer.SPEC_TARGET_WIDTH; // 2048
+            spectrogramCanvas.height = Constants.Visualizer.SPEC_MEL_BINS;    // 1024
         }
     }
 
     function handleWorkerMessage(event) {
-        const { type, payload } = event.data;
+        const {type, payload} = event.data;
         if (!lastAudioBuffer) return;
 
         if (type === 'preview') {
@@ -107,46 +107,52 @@ AudioApp.spectrogramVisualizer = (function () {
      */
     function renderDataToCanvas(data, dataWidth, dataHeight, interpolate) {
         const C = Constants.Visualizer;
-        const tempCanvas = (dataWidth === C.SPEC_TARGET_WIDTH) ? spectrogramCanvas : draftCanvas;
+
+        // --- FIX: Ensure these are valid integers (longs) ---
+        const width = Math.floor(dataWidth || 2048);
+        const height = Math.floor(dataHeight || 1024);
+
+        const tempCanvas = (width === C.SPEC_TARGET_WIDTH) ? spectrogramCanvas : draftCanvas;
         const tempCtx = tempCanvas.getContext('2d');
 
-        tempCanvas.width = dataWidth;
-        tempCanvas.height = dataHeight;
+        tempCanvas.width = width;
+        tempCanvas.height = height;
 
-        const imgData = tempCtx.createImageData(dataWidth, dataHeight);
+        // Use the validated integers here
+        const imgData = tempCtx.createImageData(width, height);
         const pixels = imgData.data;
         const dbFloor = C.SPEC_DB_FLOOR;
 
         for (let i = 0; i < data.length; i++) {
             const db = data[i];
-            // Normalize dB (-80 to 0) to 0.0 - 1.0
             const normalized = Math.max(0, (db - dbFloor) / Math.abs(dbFloor));
             const [r, g, b] = Utils.viridisColor(normalized);
 
-            // Note: Spectrograms are usually drawn bottom-to-top
-            const x = Math.floor(i / dataHeight);
-            const y = dataHeight - 1 - (i % dataHeight);
-            const pixelIdx = (y * dataWidth + x) * 4;
+            // Map flat data to vertical pixels (Time is X, Frequency is Y)
+            const x = Math.floor(i / height);
+            const y = height - 1 - (i % height);
+            const pixelIdx = (y * width + x) * 4;
 
-            pixels[pixelIdx] = r;
-            pixels[pixelIdx + 1] = g;
-            pixels[pixelIdx + 2] = b;
-            pixels[pixelIdx + 3] = 255;
+            if (pixelIdx >= 0 && pixelIdx < pixels.length) {
+                pixels[pixelIdx] = r;
+                pixels[pixelIdx + 1] = g;
+                pixels[pixelIdx + 2] = b;
+                pixels[pixelIdx + 3] = 255;
+            }
         }
 
         tempCtx.putImageData(imgData, 0, 0);
 
-        // If this was a draft, stretch it onto the main canvas with smoothing
         if (tempCanvas !== spectrogramCanvas) {
             spectrogramCtx.imageSmoothingEnabled = true;
-            spectrogramCtx.drawImage(tempCanvas, 0, 0, dataWidth, dataHeight, 0, 0, spectrogramCanvas.width, spectrogramCanvas.height);
+            spectrogramCtx.drawImage(tempCanvas, 0, 0, width, height, 0, 0, spectrogramCanvas.width, spectrogramCanvas.height);
         }
     }
 
     function handleCanvasClick(e) {
         const rect = spectrogramCanvas.getBoundingClientRect();
         const fraction = (e.clientX - rect.left) / rect.width;
-        document.dispatchEvent(new CustomEvent('audioapp:seekRequested', { detail: { fraction } }));
+        document.dispatchEvent(new CustomEvent('audioapp:seekRequested', {detail: {fraction}}));
     }
 
     function updateProgressIndicator(currentTime, duration) {
@@ -170,7 +176,7 @@ AudioApp.spectrogramVisualizer = (function () {
 
     function resizeAndRedraw(audioBuffer) {
         // GPU handles scaling; we only need to update the progress line position
-        const { currentTime = 0, duration = 0 } = AudioApp.audioEngine?.getCurrentTime() || {};
+        const {currentTime = 0, duration = 0} = AudioApp.audioEngine?.getCurrentTime() || {};
         updateProgressIndicator(currentTime, duration || (audioBuffer ? audioBuffer.duration : 0));
     }
 

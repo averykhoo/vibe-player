@@ -4,7 +4,7 @@ var AudioApp = AudioApp || {};
 
 /**
  * @namespace AudioApp.waveformVisualizer
- * @description Manages the rendering of an optimized waveform. 
+ * @description Manages the rendering of an optimized waveform.
  * Uses a constant-time 64-probe-per-pixel scan to highlight vocal density.
  */
 AudioApp.waveformVisualizer = (function () {
@@ -35,7 +35,7 @@ AudioApp.waveformVisualizer = (function () {
             waveformCtx = waveformCanvas.getContext('2d');
             // Lock internal texture resolution (matches spectrogram for symmetry)
             waveformCanvas.width = Constants.Visualizer.SPEC_TARGET_WIDTH;
-            waveformCanvas.height = 400; 
+            waveformCanvas.height = 400;
         }
     }
 
@@ -53,29 +53,25 @@ AudioApp.waveformVisualizer = (function () {
         const data = buffer.getChannelData(0); // Use Mono for viz
         const numProbes = Constants.Visualizer.WAVEFORM_PROBES_PER_PIXEL || 64;
         const totalSamples = data.length;
-        
+
         const waveform = [];
         const samplesPerPixel = totalSamples / targetWidth;
         const probeStep = samplesPerPixel / numProbes;
 
         for (let x = 0; x < targetWidth; x++) {
             const pixelStart = x * samplesPerPixel;
-            let peak = 0;
-            let absSum = 0;
+            let min = 0, max = 0, absSum = 0;
 
             for (let p = 0; p < numProbes; p++) {
                 const sampleIdx = Math.floor(pixelStart + p * probeStep);
                 if (sampleIdx >= totalSamples) break;
-                
-                const val = Math.abs(data[sampleIdx]);
-                if (val > peak) peak = val;
-                absSum += val;
-            }
 
-            waveform.push({
-                peak: peak,
-                body: absSum / numProbes
-            });
+                const val = data[sampleIdx]; // SIGNED value
+                if (val < min) min = val;
+                if (val > max) max = val;
+                absSum += Math.abs(val);
+            }
+            waveform.push({min, max, body: absSum / numProbes});
         }
         return waveform;
     }
@@ -85,10 +81,10 @@ AudioApp.waveformVisualizer = (function () {
 
         const width = waveformCanvas.width;
         const waveformData = computeWaveformData(audioBuffer, width);
-        
+
         // Cache the math so we can redraw highlights/colors without re-scanning samples
-        cachedData = { waveformData, duration: audioBuffer.duration };
-        
+        cachedData = {waveformData, duration: audioBuffer.duration};
+
         drawWaveform(waveformData, speechRegions, audioBuffer.duration);
         updateProgressIndicator(0, audioBuffer.duration);
     }
@@ -99,7 +95,7 @@ AudioApp.waveformVisualizer = (function () {
     function drawWaveform(waveformData, speechRegions, duration) {
         const ctx = waveformCtx;
         const C = Constants.Visualizer;
-        const { width, height } = waveformCanvas;
+        const {width, height} = waveformCanvas;
         const halfH = height / 2;
         const scale = halfH * C.WAVEFORM_HEIGHT_SCALE;
 
@@ -117,12 +113,13 @@ AudioApp.waveformVisualizer = (function () {
         // Drawn as thin vertical lines for a crisp look
         ctx.lineWidth = 1;
         for (let x = 0; x < width; x++) {
-            const { peak } = waveformData[x];
-            ctx.strokeStyle = isSpeech(x) ? C.WAVEFORM_COLOR_SPEECH : C.WAVEFORM_COLOR_DEFAULT;
-            ctx.globalAlpha = 0.4; // Peak is subtle background
+            const {min, max} = waveformData[x];
+            ctx.strokeStyle = C.WAVEFORM_COLOR_DEFAULT;
+            ctx.globalAlpha = 0.4;
             ctx.beginPath();
-            ctx.moveTo(x, halfH - peak * scale);
-            ctx.lineTo(x, halfH + peak * scale);
+            // Map -1.0 to 1.0 range to canvas height
+            ctx.moveTo(x, halfH - (max * scale));
+            ctx.lineTo(x, halfH - (min * scale));
             ctx.stroke();
         }
 
@@ -130,7 +127,7 @@ AudioApp.waveformVisualizer = (function () {
         // Drawn as a solid filled path to highlight the "weight" of speech
         ctx.globalAlpha = 1.0;
         const bodyPath = new Path2D();
-        
+
         // Upper half
         bodyPath.moveTo(0, halfH);
         for (let x = 0; x < width; x++) {
@@ -168,7 +165,7 @@ AudioApp.waveformVisualizer = (function () {
     function handleCanvasClick(e) {
         const rect = waveformCanvas.getBoundingClientRect();
         const fraction = (e.clientX - rect.left) / rect.width;
-        document.dispatchEvent(new CustomEvent('audioapp:seekRequested', { detail: { fraction } }));
+        document.dispatchEvent(new CustomEvent('audioapp:seekRequested', {detail: {fraction}}));
     }
 
     function updateProgressIndicator(currentTime, duration) {
@@ -187,7 +184,7 @@ AudioApp.waveformVisualizer = (function () {
     }
 
     function resizeAndRedraw(audioBuffer, speechRegions) {
-        const { currentTime = 0, duration = 0 } = AudioApp.audioEngine?.getCurrentTime() || {};
+        const {currentTime = 0, duration = 0} = AudioApp.audioEngine?.getCurrentTime() || {};
         updateProgressIndicator(currentTime, duration || (audioBuffer ? audioBuffer.duration : 0));
     }
 
