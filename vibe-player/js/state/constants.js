@@ -35,32 +35,35 @@ class Constants {
         };
     }
 
+    /**
+     * @description Configuration for high-fidelity auditory visualizers.
+     * Implements an 8-layer MRSTFT stack mapped to 512 ERB bins.
+     */
     static get Visualizer() {
         return {
+            // Waveform configuration
             WAVEFORM_HEIGHT_SCALE: 0.8,
             WAVEFORM_COLOR_LOADING: '#888888',
             WAVEFORM_COLOR_DEFAULT: '#26828E',
             WAVEFORM_COLOR_SPEECH: '#FDE725',
-            SPEC_NORMAL_FFT_SIZE: 8192,
-            SPEC_SHORT_FFT_SIZE: 2048,
-            SPEC_SHORT_FILE_FFT_THRESHOLD_S: 10.0,
-            SPEC_MAX_FREQS: [5000, 16000],
-            SPEC_DEFAULT_MAX_FREQ_INDEX: 0,
-            SPEC_FIXED_WIDTH: 2048,
-            SPEC_SHORT_FILE_HOP_THRESHOLD_S: 5.0,
-            SPEC_NORMAL_HOP_DIVISOR: 4,
-            SPEC_SHORT_HOP_DIVISOR: 8,
-            SPEC_CENTER_WINDOWS: true
+            WAVEFORM_PROBES_PER_PIXEL: 64,
+
+            // Spectrogram Engine (Forensic Pass)
+            SPEC_ERB_BINS: 512,
+            SPEC_TARGET_WIDTH: 2048,
+            SPEC_RESOLUTIONS: [16384, 8192, 4096, 2048, 1024, 512, 256, 128],
+            SPEC_GAMMATONE_ORDER: 4,
+            SPEC_DB_FLOOR: -80, // Dynamic range floor in Decibels
+
+            // Spectrogram Draft (Flash Pass)
+            SPEC_DRAFT_COLS: 200,
+            SPEC_DRAFT_BINS: 64,
+            SPEC_DRAFT_FFT_SIZE: 1024
         };
     }
 
     static get URLHashKeys() {
         return {
-            // Old keys for reference during transition if needed, though new ones are primary
-            // OLD_SPEED: 's',
-            // OLD_PITCH: 'p',
-            // ...
-            // New keys
             SPEED: 'speed',
             PITCH: 'pitch',
             GAIN: 'gain', // Assuming 'v' (volume) becomes 'gain'
@@ -73,8 +76,8 @@ class Constants {
 
     static get DTMF() {
         return {
-            SAMPLE_RATE: 16000, // Or whatever AudioApp.DTMFParser.DTMF_SAMPLE_RATE was
-            BLOCK_SIZE: 410     // Or whatever AudioApp.DTMFParser.DTMF_BLOCK_SIZE was
+            SAMPLE_RATE: 16000,
+            BLOCK_SIZE: 410
         };
     }
 }
@@ -83,8 +86,6 @@ class Constants {
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = Constants;
 } else if (typeof self !== 'undefined' && (typeof self.importScripts === 'function' || typeof self.postMessage === 'function')) {
-    // ADDED: Explicit check for a Worker-like environment ('self' exists and has worker functions).
-    // This will make the Constants class available globally inside the worker.
     self.Constants = Constants;
 } else if (typeof window !== 'undefined') {
     window.Constants = Constants;

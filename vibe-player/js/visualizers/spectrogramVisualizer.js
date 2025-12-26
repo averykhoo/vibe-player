@@ -1,117 +1,47 @@
-// --- /vibe-player/js/visualizers/spectrogramVisualizer.js --- (CORRECTED)
-// Handles orchestrating the Spectrogram worker and rendering the results to a canvas.
+// --- /vibe-player/js/visualizers/spectrogramVisualizer.js ---
+/** @namespace AudioApp */
+var AudioApp = AudioApp || {};
 
-AudioApp.spectrogramVisualizer = (function (globalFFT) {
+/**
+ * @namespace AudioApp.spectrogramVisualizer
+ * @description Renders a high-fidelity auditory spectrogram using a two-pass
+ * refinement strategy (Flash Pass -> Forensic Pass).
+ */
+AudioApp.spectrogramVisualizer = (function () {
     'use strict';
 
-    // Constants is now a global class, AudioApp.Constants is no longer used.
     const Utils = AudioApp.Utils;
 
     // DOM Elements
-    let spectrogramCanvas = null, spectrogramCtx = null, spectrogramSpinner = null,
-        spectrogramProgressIndicator = null, cachedSpectrogramCanvas = null;
+    let spectrogramCanvas = null;
+    let spectrogramCtx = null;
+    let spectrogramSpinner = null;
+    let spectrogramProgressIndicator = null;
 
-    let getSharedAudioBuffer = null;
-    let currentMaxFreqIndex = Constants.Visualizer.SPEC_DEFAULT_MAX_FREQ_INDEX;
+    /** @type {Worker|null} */
     let worker = null;
-    let lastAudioBuffer = null; // Cache the audio buffer for the current job
+    /** @type {AudioBuffer|null} Cache for current buffer */
+    let lastAudioBuffer = null;
+    /** @type {HTMLCanvasElement|null} Hidden canvas for the blurry draft pass */
+    let draftCanvas = document.createElement('canvas');
 
-    function init(getAudioBufferCallback) {
-        console.log("SpectrogramVisualizer: Initializing...");
+    function init() {
+        console.log("SpectrogramVisualizer: Initializing Forensic Engine...");
         assignDOMElements();
-        getSharedAudioBuffer = getAudioBufferCallback;
 
         try {
             worker = new Worker('js/visualizers/spectrogram.worker.js');
             worker.onmessage = handleWorkerMessage;
-            worker.onerror = handleWorkerError;
+            worker.onerror = (e) => console.error("Spectrogram Worker Error:", e);
         } catch (e) {
-            console.error("SpectrogramVisualizer: Failed to create Web Worker.", e);
-            worker = null;
+            console.error("SpectrogramVisualizer: Failed to create Worker.", e);
         }
 
         if (spectrogramCanvas) {
             spectrogramCanvas.addEventListener('click', handleCanvasClick);
-            spectrogramCanvas.addEventListener('dblclick', handleCanvasDoubleClick);
+            // NOTE: Double-click frequency switching removed for Mel/ERB consistency.
         }
     }
-
-    function handleWorkerError(e) {
-        console.error("SpectrogramVisualizer: Received error from worker:", e);
-        showSpinner(false);
-        if (spectrogramCtx && spectrogramCanvas) {
-            spectrogramCtx.fillStyle = '#D32F2F';
-            spectrogramCtx.textAlign = 'center';
-            spectrogramCtx.font = '14px sans-serif';
-            spectrogramCtx.fillText(`Worker Error: ${e.message}`, spectrogramCanvas.width / 2, spectrogramCanvas.height / 2);
-        }
-    }
-
-    function handleWorkerMessage(event) {
-        const {type, payload, detail} = event.data;
-        if (type === 'result') {
-            const {spectrogramData} = payload;
-            const audioBuffer = lastAudioBuffer;
-
-            if (!audioBuffer) {
-                console.warn("SpectrogramVisualizer: Worker returned a result, but there is no longer an active audio buffer. Ignoring.");
-                showSpinner(false);
-                return;
-            }
-
-            if (spectrogramData && spectrogramData.length > 0) {
-                const actualFftSize = audioBuffer.duration < Constants.Visualizer.SPEC_SHORT_FILE_FFT_THRESHOLD_S ? Constants.Visualizer.SPEC_SHORT_FFT_SIZE : Constants.Visualizer.SPEC_NORMAL_FFT_SIZE;
-                drawSpectrogramAsync(spectrogramData, spectrogramCanvas, audioBuffer.sampleRate, actualFftSize)
-                    .catch(error => console.error("SpectrogramVisualizer: Error during async drawing.", error))
-                    .finally(() => showSpinner(false));
-            } else {
-                console.warn("SpectrogramVisualizer: Worker returned empty or null data.");
-                showSpinner(false);
-            }
-        } else if (type === 'error') {
-            handleWorkerError({message: detail});
-        }
-    }
-
-    async function computeAndDrawSpectrogram(audioBufferFromParam) {
-        lastAudioBuffer = audioBufferFromParam || (getSharedAudioBuffer ? getSharedAudioBuffer() : null);
-
-        if (!lastAudioBuffer) {
-            console.warn("SpectrogramVisualizer: No AudioBuffer available.");
-            return;
-        }
-        if (!spectrogramCtx || !spectrogramCanvas) {
-            console.warn("SpectrogramVisualizer: Canvas context/element missing.");
-            return;
-        }
-        if (!worker) {
-            handleWorkerError({message: "Worker not available or failed to load."});
-            return;
-        }
-
-        console.log("SpectrogramVisualizer: Offloading spectrogram computation to worker...");
-        clearVisualsInternal();
-        resizeCanvasInternal();
-        cachedSpectrogramCanvas = null;
-        showSpinner(true);
-
-        const actualFftSize = lastAudioBuffer.duration < Constants.Visualizer.SPEC_SHORT_FILE_FFT_THRESHOLD_S ? Constants.Visualizer.SPEC_SHORT_FFT_SIZE : Constants.Visualizer.SPEC_NORMAL_FFT_SIZE;
-        // IMPORTANT: We must copy the data for transfer, as the original buffer might be needed elsewhere (e.g., VAD)
-        const channelData = lastAudioBuffer.getChannelData(0).slice();
-
-        worker.postMessage({
-            type: 'compute',
-            payload: {
-                channelData: channelData,
-                sampleRate: lastAudioBuffer.sampleRate,
-                duration: lastAudioBuffer.duration,
-                fftSize: actualFftSize,
-                targetSlices: Constants.Visualizer.SPEC_FIXED_WIDTH
-            }
-        }, [channelData.buffer]);
-    }
-
-    // --- HELPER FUNCTIONS THAT WERE MISSING ---
 
     function assignDOMElements() {
         spectrogramCanvas = document.getElementById('spectrogramCanvas');
@@ -119,181 +49,137 @@ AudioApp.spectrogramVisualizer = (function (globalFFT) {
         spectrogramProgressIndicator = document.getElementById('spectrogramProgressIndicator');
         if (spectrogramCanvas) {
             spectrogramCtx = spectrogramCanvas.getContext('2d');
-        } else {
-            console.error("SpectrogramVisualizer: Could not find 'spectrogramCanvas' element.");
+            // Lock internal buffer resolution to Forensic Target
+            spectrogramCanvas.width = Constants.Visualizer.SPEC_TARGET_WIDTH;
+            spectrogramCanvas.height = Constants.Visualizer.SPEC_ERB_BINS;
+        }
+    }
+
+    function handleWorkerMessage(event) {
+        const { type, payload } = event.data;
+        if (!lastAudioBuffer) return;
+
+        if (type === 'preview') {
+            // PASS 1: The "Flash Pass" Heatmap
+            // Render the 200x64 data and let the GPU blur/stretch it
+            renderDataToCanvas(
+                payload.spectrogramData,
+                Constants.Visualizer.SPEC_DRAFT_COLS,
+                Constants.Visualizer.SPEC_DRAFT_BINS,
+                true // Interpolate/Blur
+            );
+        } else if (type === 'result') {
+            // PASS 2: The "Forensic Pass" Final
+            // Snap to the sharp 2048x512 pixels
+            renderDataToCanvas(
+                payload.spectrogramData,
+                Constants.Visualizer.SPEC_TARGET_WIDTH,
+                Constants.Visualizer.SPEC_ERB_BINS,
+                false // Pixel-perfect
+            );
+            showSpinner(false);
+        }
+    }
+
+    /**
+     * Orchestrates the worker computation.
+     */
+    async function computeAndDrawSpectrogram(audioBuffer) {
+        lastAudioBuffer = audioBuffer;
+        if (!worker || !spectrogramCanvas) return;
+
+        clearVisuals();
+        showSpinner(true);
+
+        const channelData = audioBuffer.getChannelData(0).slice();
+        worker.postMessage({
+            type: 'compute',
+            payload: {
+                channelData,
+                sampleRate: audioBuffer.sampleRate,
+                targetWidth: Constants.Visualizer.SPEC_TARGET_WIDTH
+            }
+        }, [channelData.buffer]);
+    }
+
+    /**
+     * Logic for rendering flat Float32 data to the canvas.
+     */
+    function renderDataToCanvas(data, dataWidth, dataHeight, interpolate) {
+        const C = Constants.Visualizer;
+        const tempCanvas = (dataWidth === C.SPEC_TARGET_WIDTH) ? spectrogramCanvas : draftCanvas;
+        const tempCtx = tempCanvas.getContext('2d');
+
+        tempCanvas.width = dataWidth;
+        tempCanvas.height = dataHeight;
+
+        const imgData = tempCtx.createImageData(dataWidth, dataHeight);
+        const pixels = imgData.data;
+        const dbFloor = C.SPEC_DB_FLOOR;
+
+        for (let i = 0; i < data.length; i++) {
+            const db = data[i];
+            // Normalize dB (-80 to 0) to 0.0 - 1.0
+            const normalized = Math.max(0, (db - dbFloor) / Math.abs(dbFloor));
+            const [r, g, b] = Utils.viridisColor(normalized);
+
+            // Note: Spectrograms are usually drawn bottom-to-top
+            const x = Math.floor(i / dataHeight);
+            const y = dataHeight - 1 - (i % dataHeight);
+            const pixelIdx = (y * dataWidth + x) * 4;
+
+            pixels[pixelIdx] = r;
+            pixels[pixelIdx + 1] = g;
+            pixels[pixelIdx + 2] = b;
+            pixels[pixelIdx + 3] = 255;
+        }
+
+        tempCtx.putImageData(imgData, 0, 0);
+
+        // If this was a draft, stretch it onto the main canvas with smoothing
+        if (tempCanvas !== spectrogramCanvas) {
+            spectrogramCtx.imageSmoothingEnabled = true;
+            spectrogramCtx.drawImage(tempCanvas, 0, 0, dataWidth, dataHeight, 0, 0, spectrogramCanvas.width, spectrogramCanvas.height);
         }
     }
 
     function handleCanvasClick(e) {
-        if (!spectrogramCanvas) return;
         const rect = spectrogramCanvas.getBoundingClientRect();
-        if (!rect || rect.width <= 0) return;
-        const clickXRelative = e.clientX - rect.left;
-        const fraction = Math.max(0, Math.min(1, clickXRelative / rect.width));
-        document.dispatchEvent(new CustomEvent('audioapp:seekRequested', {detail: {fraction: fraction}}));
-    }
-
-    function handleCanvasDoubleClick(e) {
-        e.preventDefault();
-        if (!spectrogramCanvas || !Constants.Visualizer.SPEC_MAX_FREQS?.length) return;
-
-        currentMaxFreqIndex = (currentMaxFreqIndex + 1) % Constants.Visualizer.SPEC_MAX_FREQS.length;
-        const audioBufferForRedraw = lastAudioBuffer || (getSharedAudioBuffer ? getSharedAudioBuffer() : null);
-        if (audioBufferForRedraw) {
-            computeAndDrawSpectrogram(audioBufferForRedraw);
-        }
-    }
-
-    function drawSpectrogramAsync(spectrogramData, canvas, sampleRate, actualFftSize) {
-        return new Promise((resolve, reject) => {
-            if (!canvas || !spectrogramData?.[0] || typeof Constants === 'undefined' || !Utils) {
-                return reject(new Error("SpectrogramVisualizer: Missing dependencies for async draw."));
-            }
-            const displayCtx = canvas.getContext('2d');
-            if (!displayCtx) return reject(new Error("SpectrogramVisualizer: Could not get 2D context from display canvas."));
-
-            displayCtx.clearRect(0, 0, canvas.width, canvas.height);
-            displayCtx.fillStyle = '#000';
-            displayCtx.fillRect(0, 0, canvas.width, canvas.height);
-
-            const dataWidth = spectrogramData.length;
-            const displayHeight = canvas.height;
-            if (!cachedSpectrogramCanvas || cachedSpectrogramCanvas.width !== dataWidth || cachedSpectrogramCanvas.height !== displayHeight) {
-                cachedSpectrogramCanvas = document.createElement('canvas');
-                cachedSpectrogramCanvas.width = dataWidth;
-                cachedSpectrogramCanvas.height = displayHeight;
-            }
-            const offCtx = cachedSpectrogramCanvas.getContext('2d');
-            if (!offCtx) return reject(new Error("SpectrogramVisualizer: Could not get context from offscreen canvas."));
-
-            const numBins = actualFftSize / 2;
-            const nyquist = sampleRate / 2;
-            const currentSpecMaxFreq = Constants.Visualizer.SPEC_MAX_FREQS[currentMaxFreqIndex];
-            const maxBinIndex = Math.min(numBins - 1, Math.floor((currentSpecMaxFreq / nyquist) * (numBins - 1)));
-
-            const dbThreshold = -60;
-            let maxDb = -Infinity;
-            const sliceStep = Math.max(1, Math.floor(dataWidth / 100));
-            const binStep = Math.max(1, Math.floor(maxBinIndex / 50));
-            for (let i = 0; i < dataWidth; i += sliceStep) {
-                const magnitudes = spectrogramData[i];
-                if (!magnitudes) continue;
-                for (let j = 0; j <= maxBinIndex; j += binStep) {
-                    if (j >= magnitudes.length) break;
-                    const db = 20 * Math.log10(Math.max(1e-9, magnitudes[j]));
-                    maxDb = Math.max(maxDb, Math.max(dbThreshold, db));
-                }
-            }
-            maxDb = Math.max(maxDb, dbThreshold + 1);
-            const minDb = dbThreshold;
-            const dbRange = maxDb - minDb;
-
-            const fullImageData = offCtx.createImageData(dataWidth, displayHeight);
-            const imgData = fullImageData.data;
-            let currentSlice = 0;
-            const chunkSize = 32;
-
-            function drawChunk() {
-                try {
-                    const startSlice = currentSlice;
-                    const endSlice = Math.min(startSlice + chunkSize, dataWidth);
-                    for (let i = startSlice; i < endSlice; i++) {
-                        const magnitudes = spectrogramData[i];
-                        if (!magnitudes) continue;
-                        for (let y = 0; y < displayHeight; y++) {
-                            const freqRatio = (displayHeight - 1 - y) / (displayHeight - 1);
-                            const logFreqRatio = Math.pow(freqRatio, 2.0);
-                            const binIndex = Math.min(maxBinIndex, Math.floor(logFreqRatio * maxBinIndex));
-                            const magnitude = magnitudes[binIndex] || 0;
-                            const db = 20 * Math.log10(Math.max(1e-9, magnitude));
-                            const normValue = dbRange > 0 ? (Math.max(minDb, db) - minDb) / dbRange : 0;
-                            const [r, g, b] = Utils.viridisColor(normValue);
-                            const idx = (i + y * dataWidth) * 4;
-                            imgData[idx] = r;
-                            imgData[idx + 1] = g;
-                            imgData[idx + 2] = b;
-                            imgData[idx + 3] = 255;
-                        }
-                    }
-                    offCtx.putImageData(fullImageData, 0, 0, startSlice, 0, endSlice - startSlice, displayHeight);
-                    currentSlice = endSlice;
-                    if (currentSlice < dataWidth) {
-                        requestAnimationFrame(drawChunk);
-                    } else {
-                        displayCtx.drawImage(cachedSpectrogramCanvas, 0, 0, canvas.width, canvas.height);
-                        resolve();
-                    }
-                } catch (error) {
-                    reject(error);
-                }
-            }
-
-            requestAnimationFrame(drawChunk);
-        });
+        const fraction = (e.clientX - rect.left) / rect.width;
+        document.dispatchEvent(new CustomEvent('audioapp:seekRequested', { detail: { fraction } }));
     }
 
     function updateProgressIndicator(currentTime, duration) {
         if (!spectrogramCanvas || !spectrogramProgressIndicator) return;
-        if (isNaN(duration) || duration <= 0) {
-            spectrogramProgressIndicator.style.left = "0px";
-            return;
-        }
-        const fraction = Math.max(0, Math.min(1, currentTime / duration));
+        const fraction = isNaN(duration) || duration <= 0 ? 0 : Math.max(0, Math.min(1, currentTime / duration));
+        // Use clientWidth for the indicator position (UI space), not internal canvas width (texture space)
         spectrogramProgressIndicator.style.left = `${fraction * spectrogramCanvas.clientWidth}px`;
     }
 
-    function clearVisualsInternal() {
-        if (spectrogramCtx && spectrogramCanvas) {
-            spectrogramCtx.clearRect(0, 0, spectrogramCanvas.width, spectrogramCanvas.height);
+    function clearVisuals() {
+        if (spectrogramCtx) {
             spectrogramCtx.fillStyle = '#000';
             spectrogramCtx.fillRect(0, 0, spectrogramCanvas.width, spectrogramCanvas.height);
         }
         updateProgressIndicator(0, 1);
     }
 
-    function clearVisuals() {
-        clearVisualsInternal();
-        cachedSpectrogramCanvas = null;
-    }
-
     function showSpinner(show) {
-        if (spectrogramSpinner) {
-            spectrogramSpinner.style.display = show ? 'inline' : 'none';
-        }
-    }
-
-    function resizeCanvasInternal() {
-        if (!spectrogramCanvas) return false;
-        const {width, height} = spectrogramCanvas.getBoundingClientRect();
-        const roundedWidth = Math.round(width);
-        const roundedHeight = Math.round(height);
-        if (spectrogramCanvas.width !== roundedWidth || spectrogramCanvas.height !== roundedHeight) {
-            spectrogramCanvas.width = roundedWidth;
-            spectrogramCanvas.height = roundedHeight;
-            if (spectrogramCtx) {
-                spectrogramCtx.fillStyle = '#000';
-                spectrogramCtx.fillRect(0, 0, roundedWidth, roundedHeight);
-            }
-            return true;
-        }
-        return false;
+        if (spectrogramSpinner) spectrogramSpinner.style.display = show ? 'inline' : 'none';
     }
 
     function resizeAndRedraw(audioBuffer) {
-        const wasResized = resizeCanvasInternal();
-        if (wasResized && cachedSpectrogramCanvas && spectrogramCtx && spectrogramCanvas) {
-            spectrogramCtx.drawImage(cachedSpectrogramCanvas, 0, 0, spectrogramCanvas.width, spectrogramCanvas.height);
-        }
-        const {currentTime = 0, duration = 0} = AudioApp.audioEngine?.getCurrentTime() || {};
+        // GPU handles scaling; we only need to update the progress line position
+        const { currentTime = 0, duration = 0 } = AudioApp.audioEngine?.getCurrentTime() || {};
         updateProgressIndicator(currentTime, duration || (audioBuffer ? audioBuffer.duration : 0));
     }
 
     return {
-        init: init,
-        computeAndDrawSpectrogram: computeAndDrawSpectrogram,
-        resizeAndRedraw: resizeAndRedraw,
-        updateProgressIndicator: updateProgressIndicator,
-        clearVisuals: clearVisuals,
-        showSpinner: showSpinner
+        init,
+        computeAndDrawSpectrogram,
+        resizeAndRedraw,
+        updateProgressIndicator,
+        clearVisuals,
+        showSpinner
     };
-})(window.FFT);
+})();

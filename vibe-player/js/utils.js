@@ -6,7 +6,7 @@ var AudioApp = AudioApp || {}; // Ensure main namespace exists
 
 /**
  * @namespace AudioApp.Utils
- * @description Provides utility functions for the Vibe Player application.
+ * @description Provides utility functions for auditory scales, windowing, and rendering.
  */
 AudioApp.Utils = (function () {
     'use strict';
@@ -46,7 +46,7 @@ AudioApp.Utils = (function () {
             return null;
         }
         /** @type {number[]} */
-        let windowArr = new Array(length);
+        let windowArr = new Float32Array(length);
         if (length === 1) {
             windowArr[0] = 1; // Single point window is 1
             return windowArr;
@@ -56,6 +56,51 @@ AudioApp.Utils = (function () {
             windowArr[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / denom));
         }
         return windowArr;
+    }
+
+    /**
+     * Calculates the Coherent Gain (sum of coefficients) of a window.
+     * Used to normalize energy across different FFT window sizes.
+     */
+    function getWindowSum(windowArr) {
+        let sum = 0;
+        for (let i = 0; i < windowArr.length; i++) sum += windowArr[i];
+        return sum;
+    }
+
+    /**
+     * Glasberg & Moore: Frequency (Hz) to Auditory Scale (Cams).
+     */
+    function freqToCam(freq) {
+        return 21.4 * Math.log10(0.00437 * freq + 1);
+    }
+
+    /**
+     * Glasberg & Moore: Auditory Scale (Cams) to Frequency (Hz).
+     */
+    function camToFreq(cam) {
+        return (Math.pow(10, cam / 21.4) - 1) / 0.00437;
+    }
+
+    /**
+     * Calculates the ERB (Equivalent Rectangular Bandwidth) in Hz for a given frequency.
+     */
+    function getERBWidth(fc) {
+        return 24.7 * (0.00437 * fc + 1);
+    }
+
+    /**
+     * Calculates the magnitude response of a 4th-order Gammatone filter.
+     * @param {number} f - The frequency to evaluate.
+     * @param {number} fc - Center frequency of the filter.
+     * @param {number} erbWidth - The ERB width at fc.
+     * @param {number} n - The filter order (default 4).
+     */
+    function gammatoneMagnitude(f, fc, erbWidth, n = 4) {
+        // Slaney's correction factor for 4th order Gammatone filter
+        const b = erbWidth / 1.019;
+        const diff = f - fc;
+        return Math.pow(1 + (diff * diff) / (b * b), -n / 2);
     }
 
     /**
@@ -69,7 +114,7 @@ AudioApp.Utils = (function () {
         const colors = [ // [normalized_value, R, G, B]
             [0.0, 68, 1, 84], [0.1, 72, 40, 120], [0.2, 62, 74, 137], [0.3, 49, 104, 142],
             [0.4, 38, 130, 142], [0.5, 31, 155, 137], [0.6, 53, 178, 126], [0.7, 109, 199, 104],
-            [0.8, 170, 217, 70], [0.9, 235, 231, 35], [1.0, 253, 231, 37] // Last point
+            [0.8, 170, 217, 70], [0.9, 235, 231, 35], [1.0, 253, 231, 37]
         ];
         t = Math.max(0, Math.min(1, t)); // Clamp t to [0, 1]
 
@@ -111,7 +156,6 @@ AudioApp.Utils = (function () {
         let timeout;
         // Using 'function' syntax for 'this' and 'arguments'
         return function executedFunction() {
-            // @ts-ignore
             const context = this;
             const args = arguments; // arguments is not typed with ...args in JSDoc well
 
@@ -132,20 +176,15 @@ AudioApp.Utils = (function () {
         };
     }
 
-    /**
-     * @typedef {Object} UtilsPublicInterface
-     * @property {function(number): string} formatTime - Formats time in seconds to mm:ss.
-     * @property {function(): Promise<void>} yieldToMainThread - Yields control to the main event loop.
-     * @property {function(number): (number[]|null)} hannWindow - Generates a Hann window array.
-     * @property {function(number): number[]} viridisColor - Viridis colormap function.
-     * @property {function(Function, number, boolean=): Function} debounce - Debounces a function.
-     */
-
-    /** @type {UtilsPublicInterface} */
     return {
         formatTime,
         yieldToMainThread,
         hannWindow,
+        getWindowSum,
+        freqToCam,
+        camToFreq,
+        getERBWidth,
+        gammatoneMagnitude,
         viridisColor,
         debounce
     };
