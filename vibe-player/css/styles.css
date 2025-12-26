@@ -1,196 +1,39 @@
-/* --- /vibe-player/styles.css --- */
+/* --- /vibe-player/css/styles.css --- */
 
-/* --- Global Styles --- */
+/* --- 1. Global & Typography --- */
 body {
-    font-family: "Pixelated MS Sans Serif", Arial;
+    font-family: "Pixelated MS Sans Serif", Arial, sans-serif;
     font-size: 15px;
     margin: 8px;
     background-color: silver;
     color: #222;
     -webkit-font-smoothing: none;
-    -moz-osx-font-smoothing: grayscale;
-    font-smooth: never;
-    text-rendering: optimizeSpeed;
     image-rendering: pixelated;
-    image-rendering: -moz-crisp-edges;
-    image-rendering: crisp-edges;
 }
 
-/* Style H2 and H3 */
 h2, h3 {
-    border-bottom: 1px solid grey;
-    padding-bottom: 1px;
-    margin-top: 0.8em;
-    margin-bottom: 0.4em;
     font-weight: bold;
     font-size: 15px;
+    margin-top: 0.8em;
+    margin-bottom: 0.4em;
 }
 
-/* --- Layout Sections --- */
+/* --- 2. Generic Layout Sections --- */
 section {
     margin-bottom: 8px;
     background: silver;
+    padding: 8px;
+    /* Sunken panel effect */
     box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #dfdfdf, inset -2px -2px grey, inset 2px 2px #fff;
-    padding: 8px 8px;
 }
 
-section h2, section h3 {
+section h2 {
     margin-top: 0;
-    margin-bottom: 0.4em;
+    border-bottom: 1px solid grey;
+    padding-bottom: 2px;
 }
 
-/* --- File Input --- */
-#hiddenAudioFile {
-    display: none;
-}
-
-#file-loader .field-row {
-    align-items: baseline;
-}
-
-#file-loader .field-row button {
-    flex-shrink: 0;
-    font-size: 15px;
-    min-height: 26px;
-    padding: 1px 10px;
-}
-
-#file-loader .field-row span#fileNameDisplay {
-    margin-left: 6px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    flex-shrink: 1;
-    min-width: 80px;
-    font-size: 15px;
-    line-height: 1.4;
-}
-
-#file-loader p#fileInfo {
-    margin: 0 0 0 10px;
-    flex-grow: 1;
-    font-size: 15px;
-    color: grey;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* --- URL Input Styling --- */
-#audioUrlInput.url-style-default {
-    color: black;
-    background-color: white;
-}
-
-#audioUrlInput.url-style-success {
-    color: blue;
-    background-color: white;
-}
-
-#audioUrlInput.url-style-error {
-    color: red;
-    background-color: white;
-}
-
-#audioUrlInput.url-style-file {
-    color: dimgray;
-    background-color: white;
-}
-
-.url-input.url-style-modified {
-    color: black;
-    background-color: #ffffff; /* Assuming a white background like default */
-}
-
-/* --- REMOVED Old VAD Progress Bar Styles --- */
-/* (No rules here anymore) */
-
-/* --- NEW: Style for 98.css VAD progress bar container --- */
-#vadProgressContainer {
-    margin-top: 5px; /* Add space above the progress bar */
-    display: block; /* Ensure it's always visible */
-    /* Height is determined by 98.css */
-}
-
-
-/* --- Seek Bar Section --- */
-#playback-progress {
-    display: flex;
-    align-items: center;
-    padding: 2px 0px;
-    margin-bottom: 4px;
-    background: none;
-    box-shadow: none;
-    border-image: none;
-    border: none;
-}
-
-#playback-progress input[type=range]#seekBar {
-    flex-grow: 1;
-    margin: 0 8px;
-    height: auto;
-    vertical-align: middle;
-}
-
-#playback-progress #timeDisplay {
-    margin: 0;
-    flex-shrink: 0;
-    font-size: 15px;
-    font-weight: normal;
-}
-
-.visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-}
-
-
-/* --- Controls Section --- */
-#controls button, #controls input[type=number] {
-    margin: 0 4px;
-    cursor: pointer;
-    vertical-align: middle;
-    font-size: 15px;
-}
-
-#controls button {
-    min-height: 26px;
-    padding: 1px 10px;
-}
-
-#controls .control-group {
-    margin-bottom: 5px;
-}
-
-#controls .control-group:last-child {
-    margin-bottom: 0;
-}
-
-#controls .jump-controls {
-    margin-bottom: 8px;
-    margin-top: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-#controls .jump-controls input[type=number] {
-    width: 50px;
-    height: 26px;
-    padding: 2px 3px;
-    box-shadow: inset -1px -1px #fff, inset 1px 1px grey, inset -2px -2px #dfdfdf, inset 2px 2px #0a0a0a;
-    border: none;
-    text-align: center; /* Center the number */
-}
-
-/* Horizontal Slider Layout (Applies to Controls and VAD) */
+/* --- 3. Controls & Sliders (The Screenshot Fix) --- */
 .horizontal-sliders {
     display: flex;
     flex-wrap: wrap;
@@ -199,55 +42,39 @@ section h2, section h3 {
     align-items: flex-start;
 }
 
-.horizontal-sliders .slider-unit {
-    flex: 1;
-    min-width: 180px;
-    margin-bottom: 0;
-    padding: 6px 15px 1.0em 15px;
-}
-
-
-/* --- Slider Units Styling (General) --- */
 .slider-unit {
-    position: relative;
+    flex: 1;
+    min-width: 220px;
+    padding: 8px 12px 14px 12px;
+    background-color: silver;
+    /* Win98 Sunken Panel */
     border: 2px groove transparent;
     border-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='5' height='5' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='gray' d='M0 0h4v1H0z'/%3E%3Cpath fill='gray' d='M0 0h1v4H0z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h2v1H1z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h1v2H1z'/%3E%3Cpath fill='%23fff' d='M0 4h5v1H0z'/%3E%3Cpath fill='%23fff' d='M4 0h1v5H4z'/%3E%3Cpath fill='%23dfdfdf' d='M3 1h1v3H3z'/%3E%3Cpath fill='%23dfdfdf' d='M1 3h3v1H1z'/%3E%3C/svg%3E") 2;
-    box-sizing: border-box;
-    background-color: silver;
 }
 
 .slider-label-value {
-    margin-bottom: 2px;
-    font-size: 15px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
 }
 
 .slider-label-value label {
-    margin-right: 4px;
     font-weight: bold;
-    display: inline;
-    font-size: 15px;
-}
-
-.slider-label-value span {
-    display: inline;
-    margin-left: 3px;
-    font-size: 15px;
 }
 
 input[type=range] {
     width: 100%;
-    box-sizing: border-box;
-    margin: 4px 0 4px 0;
-    height: 21px;
+    margin: 8px 0;
     cursor: pointer;
     display: block;
-    vertical-align: middle;
 }
 
+/* Fix marker positioning */
 .slider-markers {
     position: relative;
     width: 100%;
-    height: 1.3em;
+    height: 14px;
     margin-top: 2px;
 }
 
@@ -258,230 +85,146 @@ input[type=range] {
     cursor: pointer;
     transform: translateX(-50%);
     white-space: nowrap;
-    font-size: 15px;
+    font-size: 11px;
 }
 
-.slider-markers span:hover {
-    color: #00f;
-}
-
-
-/* --- VAD Tuning Section --- */
-#vad-tuning .horizontal-sliders {
-    margin-top: 0;
-}
-
-#vad-tuning .slider-unit {
-    padding: 6px 15px 6px 15px;
-}
-
-#vad-tuning .control-group {
-    margin-bottom: 0;
-}
-
-#vad-tuning .slider-label-value {
+/* --- 4. The Viz Orchestrator (GPU Focus Engine) --- */
+.viz-orchestrator {
     display: flex;
-    justify-content: flex-start;
-    align-items: center;
-    width: 100%;
-    margin-bottom: 2px;
-    font-size: 15px;
+    flex-direction: column;
+    height: 600px; /* Fixed height for the interactive stack */
+    gap: 6px;
+    background: #000;
+    padding: 4px;
+    border: 2px groove #808080;
+    overflow: hidden;
+    outline: none;
 }
 
-#vad-tuning .slider-label-value label {
-    font-size: 15px;
-}
-
-#vad-tuning .slider-label-value span {
-    margin-left: 6px;
-    font-size: 15px;
-}
-
-#vad-tuning input[type=range] {
-    margin: 4px 0 4px 0;
-    height: 21px;
-}
-
-
-/* --- Visualizations Section --- */
 .visualization {
-    margin-bottom: 8px;
-    border: 2px groove transparent;
-    border-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='5' height='5' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='gray' d='M0 0h4v1H0z'/%3E%3Cpath fill='gray' d='M0 0h1v4H0z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h2v1H1z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h1v2H1z'/%3E%3Cpath fill='%23fff' d='M0 4h5v1H0z'/%3E%3Cpath fill='%23fff' d='M4 0h1v5H4z'/%3E%3Cpath fill='%23dfdfdf' d='M3 1h1v3H3z'/%3E%3Cpath fill='%23dfdfdf' d='M1 3h3v1H1z'/%3E%3C/svg%3E") 2;
-    box-sizing: border-box;
-    padding: 7px 7px;
-    background-color: silver;
+    position: relative;
+    flex: 1;
+    transition: flex 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    background: #000;
+    border: 1px solid #333;
+}
+
+/* Focus States */
+.visualization.focused { flex: 10; }
+.visualization.squashed { flex: 1.5; }
+
+/* Labels that don't block interaction */
+.visualization h3 {
+    position: absolute;
+    top: 4px;
+    left: 8px;
+    margin: 0;
+    z-index: 100;
+    color: rgba(253, 231, 37, 0.8); /* Viridis Yellow */
+    font-size: 11px;
+    pointer-events: none;
+    text-shadow: 1px 1px 2px #000;
 }
 
 .canvas-container {
-    position: relative;
-}
-
-.visualization h3 {
-    margin: 0 0 4px 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: none;
-    font-size: 15px;
-}
-
-.visualization h3 small {
-    font-size: 15px;
-    font-weight: normal;
-}
-
-/* Removed .vad-indicator styles */
-canvas {
-    display: block;
     width: 100%;
-    height: 120px;
-    cursor: crosshair;
-    box-sizing: border-box;
-    border: 1px solid grey;
-    box-shadow: inset 1px 1px #dfdfdf, inset -1px -1px grey;
-    image-rendering: pixelated;
+    height: 100%;
 }
 
-#waveformCanvas {
-    background-color: #000;
+canvas {
+    width: 100% !important;
+    height: 100% !important;
+    display: block;
+    object-fit: fill; /* GPU stretches the 2048x512 texture */
+    image-rendering: auto;
 }
 
-#spectrogramCanvas {
-    height: 200px;
-    background-color: #000;
-}
-
-
-/* ---* --- Progress Bar Overlay --- */
-/* Container for the overlay elements */
+/* --- 5. Playback Indicators --- */
 .progress-bar {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    pointer-events: none; /* Allow clicks through */
-    box-sizing: border-box;
+    height: 100%;
+    pointer-events: none;
 }
 
-/* Match height to corresponding canvas */
-#waveformProgressBar {
-    height: 120px;
-}
-
-#spectrogramProgressBar {
-    height: 200px;
-}
-
-/* The actual red line indicator - uses the NEW class name */
 .playback-position-indicator {
     position: absolute;
     top: 0;
     bottom: 0;
-    left: 0px; /* Position set by JS */
-    width: 2px; /* Width of the red line */
-    background: rgba(255, 0, 0, 0.7); /* Semi-transparent red */
-    pointer-events: none; /* Allow clicks through */
-    /* Reset styles inherited from 98.css if necessary */
-    height: 100%; /* Make sure it spans full height */
-    padding: 0;
-    margin: 0;
+    width: 2px;
+    background: rgba(255, 0, 0, 0.9);
+    box-shadow: 0 0 4px #f00;
+    z-index: 50;
+}
+
+/* --- 6. Seek & Jump Bar --- */
+#playback-progress {
+    display: flex;
+    align-items: center;
+    padding: 4px 0;
+    background: none;
     box-shadow: none;
-    min-height: auto; /* Override 98.css min-height */
 }
 
-/* --- UI Elements --- */
-.spinner {
-    display: none;
-    font-size: 15px;
-    color: #222;
-    font-weight: normal;
+#seekBar {
+    flex-grow: 1;
+    margin: 0 10px;
 }
 
-#speechRegionsDisplay {
-    white-space: pre-wrap;
-    word-break: break-all;
-    max-height: 120px;
-    overflow-y: auto;
-    border: 2px groove transparent;
-    border-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='5' height='5' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='gray' d='M0 0h4v1H0z'/%3E%3Cpath fill='gray' d='M0 0h1v4H0z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h2v1H1z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h1v2H1z'/%3E%3Cpath fill='%23fff' d='M0 4h5v1H0z'/%3E%3Cpath fill='%23fff' d='M4 0h1v5H4z'/%3E%3Cpath fill='%23dfdfdf' d='M3 1h1v3H3z'/%3E%3Cpath fill='%23dfdfdf' d='M1 3h3v1H1z'/%3E%3C/svg%3E") 2;
-    background-color: #fff;
-    padding: 2px 3px;
+#timeDisplay {
     font-family: monospace;
-    font-size: 15px;
-    line-height: 1.2;
+    min-width: 100px;
+    text-align: right;
 }
 
-
-/* --- Keybinds Table --- */
-#keybinds {
-    margin-top: 8px;
+.jump-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    margin: 10px 0;
 }
 
-#keybinds table {
-    width: 100%;
-    border-collapse: collapse;
-    border: 2px groove transparent;
-    border-image: url("data:image/svg+xml;charset=utf-8,%3Csvg width='5' height='5' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='gray' d='M0 0h4v1H0z'/%3E%3Cpath fill='gray' d='M0 0h1v4H0z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h2v1H1z'/%3E%3Cpath fill='%230a0a0a' d='M1 1h1v2H1z'/%3E%3Cpath fill='%23fff' d='M0 4h5v1H0z'/%3E%3Cpath fill='%23fff' d='M4 0h1v5H4z'/%3E%3Cpath fill='%23dfdfdf' d='M3 1h1v3H3z'/%3E%3Cpath fill='%23dfdfdf' d='M1 3h3v1H1z'/%3E%3C/svg%3E") 2;
-    background-color: #fff;
-    font-size: 15px;
-}
-
-#keybinds th, #keybinds td {
-    padding: 2px 4px;
-    border-bottom: 1px solid silver;
-    text-align: left;
-    font-size: 15px;
-}
-
-#keybinds tr:last-child td {
-    border-bottom: none;
-}
-
-#keybinds th {
-    background: silver;
-    box-shadow: inset -1px -1px #0a0a0a, inset 1px 1px #fff, inset -2px -2px grey, inset 2px 2px #dfdfdf;
-    box-sizing: border-box;
-    font-weight: normal;
-    padding: 2px 4px;
-    border-bottom: 1px solid #0a0a0a;
-    font-size: 15px;
-}
-
-/* --- Small Tag --- */
-small {
-    font-size: 15px;
-}
-
-/* --- Drop Zone Overlay Styles --- */
-#dropZoneOverlay {
-    display: none; /* This ensures it's hidden initially */
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: rgba(0, 0, 0, 0.75);
-    z-index: 10000;
-    /* Flexbox for centering will be applied when JS changes display to 'flex' */
-    align-items: center; /* These are fine to keep for when it becomes flex */
-    justify-content: center; /* These are fine to keep for when it becomes flex */
-    color: white;
-    font-size: 1.5em;
+.jump-controls input[type=number] {
+    width: 50px;
     text-align: center;
 }
 
-#dropZoneMessage {
-    padding: 20px;
-    background-color: rgba(0, 0, 0, 0.5); /* Darker, slightly transparent background for the message box */
-    border-radius: 5px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); /* Optional: some shadow for the message box */
+/* --- 7. Utility & Overlays --- */
+#file-loader .field-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
 }
 
-/* Class to apply blur/grayscale effect to the background content */
+.spinner {
+    font-size: 12px;
+    color: #FDE725;
+    margin-left: 10px;
+}
+
+#dropZoneOverlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    z-index: 10000;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 20px;
+}
+
 .blurred-background {
-    filter: blur(4px) grayscale(50%);
-    /* transition: filter 0.3s ease-out; */ /* Optional: smooth transition for the filter effect */
+    filter: blur(4px);
 }
 
-/* /vibe-player/styles.css */
+#urlLoadingErrorDisplay {
+    color: #ff0000;
+    font-size: 12px;
+    display: block;
+    margin-top: 4px;
+}

@@ -4,44 +4,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vibe Player</title>
-    <!-- Add 98.css -->
+    <title>Vibe Player - Forensic Edition</title>
+    <!-- Classic Win98 Styles -->
     <link rel="stylesheet" href="css/98.css"/>
-    <!-- Your custom styles (load after 98.css) -->
+    <!-- Optimized Forensic Styles -->
     <link rel="stylesheet" href="css/styles.css">
-    <script src="js/sparkles.js"></script>
 </head>
 <body>
 
 <!-- === File Loading Section === -->
 <section id="file-loader">
     <h2>Load Audio File</h2>
-    <!-- Row for button, name, info -->
-    <div class="field-row" style="align-items: baseline;">
+    <div class="field-row">
         <button id="chooseFileButton">Choose File...</button>
-        <span id="fileNameDisplay" style="margin-left: 5px; flex-shrink: 1; min-width: 5px;"></span>
-        <p id="fileInfo" style="margin-left: 10px; flex-grow: 1; color: grey;"></p>
+        <span id="fileNameDisplay"></span>
+        <p id="fileInfo">No file selected.</p>
     </div>
-    <!-- Hidden actual file input -->
     <input type="file" id="hiddenAudioFile" accept="audio/*" style="display: none;">
 
-    <!-- New Row for URL input -->
     <div class="field-row" style="margin-top: 10px;">
-        <input type="text" id="audioUrlInput" placeholder="Enter audio URL" style="flex-grow: 1; margin-right: 5px;">
+        <input type="text" id="audioUrlInput" placeholder="Enter audio URL" style="flex-grow: 1;">
         <button id="loadUrlButton">Load from URL</button>
     </div>
-    <span id="urlLoadingErrorDisplay" style="color: red; display: block; margin-top: 5px;"></span>
+    <span id="urlLoadingErrorDisplay"></span>
 </section>
 
 <!-- === Controls Section === -->
 <section id="controls">
     <h2>Controls</h2>
 
-
-    <!-- Horizontal Slider Container -->
+    <!-- Horizontal Sliders for DSP Parameters -->
     <div class="horizontal-sliders">
-        <!-- Speed Control Unit -->
-        <div class="control-group slider-unit">
+        <!-- Speed Control -->
+        <div class="slider-unit">
             <div class="slider-label-value">
                 <label for="playbackSpeed">Speed:</label>
                 <span id="speedValue">1.00x</span>
@@ -55,8 +50,8 @@
             </div>
         </div>
 
-        <!-- Pitch Control Unit -->
-        <div class="control-group slider-unit">
+        <!-- Pitch Control -->
+        <div class="slider-unit">
             <div class="slider-label-value">
                 <label for="pitchControl">Pitch:</label>
                 <span id="pitchValue">1.00x</span>
@@ -70,224 +65,135 @@
             </div>
         </div>
 
-        <!-- Gain Control Unit -->
-        <div class="control-group slider-unit">
+        <!-- Gain Control -->
+        <div class="slider-unit">
             <div class="slider-label-value">
                 <label for="gainControl">Gain:</label>
                 <span id="gainValue">1.00x</span>
             </div>
             <input type="range" id="gainControl" min="1" max="5" value="1.0" step="0.01">
-            <!-- Gain enabled by default -->
             <div class="slider-markers" id="gainMarkers">
                 <span data-value="1.0">1x</span>
-                <span data-value="2.0">2x</span>
                 <span data-value="3.0">3x</span>
-                <span data-value="4.0">4x</span>
                 <span data-value="5.0">5x</span>
             </div>
         </div>
-    </div> <!-- End Horizontal Slider Container -->
+    </div>
 
-    <!-- Jump Controls -->
-    <div class="control-group jump-controls">
+    <!-- Playback Navigation -->
+    <div class="jump-controls">
         <button id="playPause" disabled>Play</button>
         <button id="jumpBack" disabled>◀◀ Back</button>
-        <input type="number" id="jumpTime" value="5" min="1" step="1" title="Seconds to jump"> seconds
-        <!-- Changed 's' to 'seconds' -->
+        <input type="number" id="jumpTime" value="5" min="1"> seconds
         <button id="jumpForward" disabled>Forward ▶▶</button>
     </div>
 
-    <!-- === Seek Bar and Time Display Section === -->
-    <section id="playback-progress">
-        <label for="seekBar" class="visually-hidden">Seek:</label> <!-- Hidden label for accessibility -->
+    <!-- Progress & Time Display -->
+    <div id="playback-progress">
         <input type="range" id="seekBar" min="0" max="1" value="0" step="any" disabled>
         <div id="timeDisplay">0:00 / 0:00</div>
+    </div>
+</section>
+
+<!-- === THE VIZ ORCHESTRATOR (GPU Focus Engine) === -->
+<div class="viz-orchestrator" id="vizContainer" tabindex="0">
+
+    <!-- Spectrogram: Defaults to Focused (Tall) -->
+    <section id="spectrogram-section" class="visualization focused">
+        <h3>Spectrogram <span id="spectrogramSpinner" class="spinner">(Computing...)</span></h3>
+        <div class="canvas-container">
+            <canvas id="spectrogramCanvas"></canvas>
+            <div id="spectrogramProgressBar" class="progress-bar">
+                <div id="spectrogramProgressIndicator" class="playback-position-indicator"></div>
+            </div>
+        </div>
     </section>
 
-</section>
-
-
-<!-- === Visualizations Section === -->
-<section class="visualization">
-    <h3>Spectrogram <span id="spectrogramSpinner" class="spinner">(Computing...)</span></h3>
-    <div class="canvas-container">
-        <canvas id="spectrogramCanvas"></canvas>
-        <div id="spectrogramProgressBar" class="progress-bar">
-            <div id="spectrogramProgressIndicator" class="playback-position-indicator"></div>
+    <!-- Waveform: Defaults to Squashed (Short) -->
+    <section id="waveform-section" class="visualization squashed">
+        <h3>Waveform <small>(Vocal Body in Yellow)</small></h3>
+        <div class="canvas-container">
+            <canvas id="waveformCanvas"></canvas>
+            <div id="waveformProgressBar" class="progress-bar">
+                <div id="waveformProgressIndicator" class="playback-position-indicator"></div>
+            </div>
         </div>
-    </div>
-</section>
+    </section>
 
-<section class="visualization">
-    <h3>Waveform <small>(Speech in Yellow)</small></h3>
-    <div class="canvas-container">
-        <canvas id="waveformCanvas"></canvas>
-        <div id="waveformProgressBar" class="progress-bar">
-            <div id="waveformProgressIndicator" class="playback-position-indicator"></div>
-        </div>
-    </div>
-</section>
+</div>
 
 <!-- === VAD Tuning Section === -->
 <section id="vad-tuning">
     <h2>Voice Activity Detection (Silero)</h2>
-
-    <!-- NEW: VAD Progress Bar using 98.css structure -->
-    <div id="vadProgressContainer" class="progress-indicator segmented vad-progress-indicator-container"
-         style="margin-top: 5px; margin-bottom: 5px;">
+    <div id="vadProgressContainer" class="progress-indicator segmented" style="height: 20px; margin: 5px 0;">
         <span id="vadProgressBar" class="progress-indicator-bar" style="width: 0;"></span>
-        <!-- Corrected width attribute -->
     </div>
-
-    <!-- Corrected Structure: Both VAD controls inside one horizontal container -->
     <div class="horizontal-sliders">
-        <div class="control-group slider-unit"> <!-- Unit for Positive -->
-            <div class="control-group">
-                <div class="slider-label-value">
-                    <label for="vadThreshold"
-                           title="Probability above which a frame is considered speech.">Positive Threshold:</label>
-                    <span id="vadThresholdValue">N/A</span>
-                </div>
-                <input type="range" id="vadThreshold" min="0.01" max="0.99" value="0.5" step="0.01">
+        <div class="slider-unit">
+            <div class="slider-label-value">
+                <label>Positive Threshold:</label>
+                <span id="vadThresholdValue">0.50</span>
             </div>
+            <input type="range" id="vadThreshold" min="0.01" max="0.99" value="0.5" step="0.01">
         </div>
-        <div class="control-group slider-unit"> <!-- Unit for Negative -->
-            <div class="control-group">
-                <div class="slider-label-value">
-                    <label for="vadNegativeThreshold"
-                           title="Probability below which non-speech frames trigger ending the segment (after redemption).">Negative
-                        Threshold:</label>
-                    <span id="vadNegativeThresholdValue">N/A</span>
-                </div>
-                <input type="range" id="vadNegativeThreshold" min="0.01" max="0.99" value="0.35" step="0.01">
+        <div class="slider-unit">
+            <div class="slider-label-value">
+                <label>Negative Threshold:</label>
+                <span id="vadNegativeThresholdValue">0.35</span>
             </div>
+            <input type="range" id="vadNegativeThreshold" min="0.01" max="0.99" value="0.35" step="0.01">
         </div>
-    </div> <!-- End horizontal-sliders for VAD -->
-
+    </div>
+    <pre id="speechRegionsDisplay" style="margin-top: 10px; max-height: 80px; overflow-y: auto;">No speech segments detected.</pre>
 </section>
 
-<!-- === Keyboard Shortcuts Section === -->
-<section id="keybinds">
-    <h2>Keyboard Shortcuts</h2>
-    <table>
-        <thead>
-        <tr>
-            <th>Key</th>
-            <th>Action</th>
-        </tr>
-        </thead>
-        <tbody>
-        <tr>
-            <td>Space</td>
-            <td>Play / Pause</td>
-        </tr>
-        <tr>
-            <td>Left Arrow</td>
-            <td>Jump Back (by specified seconds)</td>
-        </tr>
-        <tr>
-            <td>Right Arrow</td>
-            <td>Jump Forward (by specified seconds)</td>
-        </tr>
-        </tbody>
-    </table>
-</section>
-
-<!-- === DTMF Tones Section === -->
+<!-- === DTMF & Tone Detection === -->
 <section id="dtmf-tones">
-    <h2>Dual Tone Multi Frequency (Dial Tones) & Call Progress Tones </h2>
-    <div id="dtmfDisplay" style="min-height: 50px; background-color: #f0f0f0; border: 1px solid #ccc; padding: 5px;">
-        No DTMF tones detected yet.
-    </div>
-    <br>
-    <div id="cpt-display-content"
-         style="min-height: 50px; background-color: #f0f0f0; border: 1px solid #ccc; padding: 5px;">
-        No ringtones detected yet.
-    </div>
+    <h2>Tone Analysis</h2>
+    <div id="dtmfDisplay" class="status-bar-field" style="min-height: 20px; margin-bottom: 5px;">No DTMF detected.</div>
+    <div id="cpt-display-content" class="status-bar-field" style="min-height: 20px;">No ringtones detected.</div>
 </section>
 
 <!-- Drop Zone Overlay -->
 <div id="dropZoneOverlay">
-    <div id="dropZoneMessage"></div>
+    <div id="dropZoneMessage">Drop Audio File Here</div>
 </div>
 
-<!-- === SCRIPT LOADING ORDER (CRITICAL!) === -->
-<!-- External Libs -->
-<script src="lib/ort.min.js"></script> <!-- ONNX Runtime -->
-<script src="lib/fft.js"></script> <!-- FFT for Visualizer -->
+<!-- === SCRIPT LOADING ORDER (CRITICAL) === -->
 
-<!-- Core App Namespace & Foundational Modules -->
-<!-- 2. utils.js: Defines AudioApp.Utils. Needed by many modules. -->
+<!-- 1. External Libraries -->
+<script src="lib/ort.min.js"></script>
+<script src="lib/fft.js"></script>
+
+<!-- 2. Core Foundations -->
 <script src="js/utils.js"></script>
-<!-- 3. state/constants.js: Defines the new Constants class. Needed by many modules. -->
 <script src="js/state/constants.js"></script>
-<!-- 4. state/appState.js: Defines the AppState class for managing application state. -->
 <script src="js/state/appState.js"></script>
 
-<!-- 1. app.js: Establishes AudioApp IIFE structure. Other files attach to this. -->
+<!-- 3. The Controller (Initializes AudioApp namespace) -->
 <script src="js/app.js"></script>
 
-<!-- App Feature Modules & Components -->
-<!-- These may depend on AudioApp, Constants, Utils -->
-<!-- 5. goertzel.js: Defines AudioApp.GoertzelFilter & AudioApp.DTMFParser. May use Constants. DTMFParser is checked by app.js's init. -->
-<!-- 5. goertzel.js: Defines AudioApp.GoertzelFilter & AudioApp.DTMFParser. May use Constants. DTMFParser is checked by app.js's init. -->
+<!-- 4. Feature Modules -->
 <script src="js/goertzel.js"></script>
-<!-- 6. uiManager.js: Defines AudioApp.uiManager. Uses Utils. Checked by app.js's init. -->
 <script src="js/uiManager.js"></script>
-<!-- 7. player/audioEngine.js: Defines AudioApp.audioEngine. Uses Constants. Checked by app.js's init. -->
 <script src="js/player/audioEngine.js"></script>
 
-<!-- VAD Modules (Order within this group matters) -->
-<!-- 8. Load the new strategy files FIRST. -->
+<!-- 5. VAD Logic -->
 <script src="js/vad/RemoteApiStrategy.js"></script>
 <script src="js/vad/LocalWorkerStrategy.js"></script>
-
-<!-- 9. THEN load the analyzer that uses them. -->
 <script src="js/vad/vadAnalyzer.js"></script>
 
-<!-- 10. The original VAD modules are now loaded inside the worker, so we can remove them from here. -->
-<!-- REMOVE <script src="js/vad/sileroWrapper.js"></script> -->
-<!-- REMOVE <script src="js/vad/sileroProcessor.js"></script> -->
-
-<!-- Visualizer Modules -->
-<!-- 11. visualizers/waveformVisualizer.js: Defines AudioApp.waveformVisualizer. Uses Constants, Utils. Checked by app.js's init. -->
+<!-- 6. Forensic Visualizers -->
 <script src="js/visualizers/waveformVisualizer.js"></script>
-<!-- 12. visualizers/spectrogramVisualizer.js: Defines AudioApp.spectrogramVisualizer. Uses FFT, Constants, Utils. Checked by app.js's init. -->
 <script src="js/visualizers/spectrogramVisualizer.js"></script>
-<!-- <script src="js/visualizers/visualizer.js"></script> --> <!-- REMOVED OLD COMBINED VISUALIZER -->
 
-<!-- App Initialization -->
+<!-- Initialize -->
 <script>
-    // Ensure DOM is fully loaded before initializing the application
     document.addEventListener('DOMContentLoaded', () => {
-        // Check if core AudioApp is defined before init
         if (window.AudioApp && typeof window.AudioApp.init === 'function') {
-            AudioApp.init(); // Call the main init function
+            AudioApp.init();
         } else {
-            console.error("CRITICAL: AudioApp or AudioApp.init not defined! Check script loading order and errors.");
-            // Optionally display error to user in the UI
-            const fileInfo = document.getElementById('fileInfo');
-            if (fileInfo) fileInfo.textContent = "Fatal Error: Application failed to load. Check console.";
-        }
-    });
-</script>
-
-<!-- Sparkle when the filename is double-clicked -->
-<script>
-    document.addEventListener("DOMContentLoaded", () => {
-        // 1) Wire up dblclick → toggle sparkle
-        const fileSpan = document.getElementById("file-loader");
-        if (fileSpan) {
-            fileSpan.addEventListener("dblclick", () => {
-                sparkle(); // calling with no args toggles on/off
-            });
-        }
-
-        // 2) If today is April 1st, automatically enable on page load
-        const today = new Date();
-        if (today.getMonth() === 3 && today.getDate() === 1) {
-            // Month is zero-based: 3 = April
-            sparkle(true);
+            console.error("CRITICAL: AudioApp failed to initialize. Check script order.");
         }
     });
 </script>
